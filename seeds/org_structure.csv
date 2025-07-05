@@ -1,0 +1,139 @@
+Fleet Operations Division,Maritime Forces Atlantic,Royal Canadian Navy,CMB
+Naval Intelligence Division,Maritime Forces Atlantic,Royal Canadian Navy,INT
+Naval Engineering Division,Maritime Forces Atlantic,Royal Canadian Navy,ENG
+Naval Logistics Division,Maritime Forces Atlantic,Royal Canadian Navy,ADM
+Naval Communications Division,Maritime Forces Atlantic,Royal Canadian Navy,COM
+Naval Medical Division,Maritime Forces Atlantic,Royal Canadian Navy,MED
+Personnel Division,Maritime Forces Atlantic,Royal Canadian Navy,HR
+Training Division,Maritime Forces Atlantic,Royal Canadian Navy,MAN
+Security Division,Maritime Forces Atlantic,Royal Canadian Navy,CMB
+Maintenance Division,Maritime Forces Atlantic,Royal Canadian Navy,ENG
+Fleet Operations Division,Maritime Forces Pacific,Royal Canadian Navy,CMB
+Naval Intelligence Division,Maritime Forces Pacific,Royal Canadian Navy,INT
+Naval Engineering Division,Maritime Forces Pacific,Royal Canadian Navy,ENG
+Naval Logistics Division,Maritime Forces Pacific,Royal Canadian Navy,ADM
+Naval Communications Division,Maritime Forces Pacific,Royal Canadian Navy,COM
+Naval Medical Division,Maritime Forces Pacific,Royal Canadian Navy,MED
+Personnel Division,Maritime Forces Pacific,Royal Canadian Navy,HR
+Training Division,Maritime Forces Pacific,Royal Canadian Navy,MAN
+Security Division,Maritime Forces Pacific,Royal Canadian Navy,CMB
+Maintenance Division,Maritime Forces Pacific,Royal Canadian Navy,ENG
+Reserve Training Division,Naval Reserve,Royal Canadian Navy,MAN
+Reserve Operations Division,Naval Reserve,Royal Canadian Navy,CMB
+Reserve Intelligence Division,Naval Reserve,Royal Canadian Navy,INT
+Reserve Personnel Division,Naval Reserve,Royal Canadian Navy,HR
+Reserve Communications Division,Naval Reserve,Royal Canadian Navy,COM
+Reserve Logistics Division,Naval Reserve,Royal Canadian Navy,ADM
+Reserve Medical Division,Naval Reserve,Royal Canadian Navy,MED
+Infantry Operations Division,2nd Canadian Division,Canadian Army,CMB
+Artillery Operations Division,2nd Canadian Division,Canadian Army,CMB
+Armoured Operations Division,2nd Canadian Division,Canadian Army,CMB
+Engineering Division,2nd Canadian Division,Canadian Army,ENG
+Intelligence Division,2nd Canadian Division,Canadian Army,INT
+Logistics Division,2nd Canadian Division,Canadian Army,ADM
+Personnel Division,2nd Canadian Division,Canadian Army,HR
+Training Division,2nd Canadian Division,Canadian Army,MAN
+Communications Division,2nd Canadian Division,Canadian Army,COM
+Medical Division,2nd Canadian Division,Canadian Army,MED
+Security Division,2nd Canadian Division,Canadian Army,CMB
+Infantry Operations Division,3rd Canadian Division,Canadian Army,CMB
+Artillery Operations Division,3rd Canadian Division,Canadian Army,CMB
+Armoured Operations Division,3rd Canadian Division,Canadian Army,CMB
+Engineering Division,3rd Canadian Division,Canadian Army,ENG
+Intelligence Division,3rd Canadian Division,Canadian Army,INT
+Logistics Division,3rd Canadian Division,Canadian Army,ADM
+Personnel Division,3rd Canadian Division,Canadian Army,HR
+Training Division,3rd Canadian Division,Canadian Army,MAN
+Communications Division,3rd Canadian Division,Canadian Army,COM
+Medical Division,3rd Canadian Division,Canadian Army,MED
+Infantry Operations Division,4th Canadian Division,Canadian Army,CMB
+Artillery Operations Division,4th Canadian Division,Canadian Army,CMB
+Armoured Operations Division,4th Canadian Division,Canadian Army,CMB
+Engineering Division,4th Canadian Division,Canadian Army,ENG
+Intelligence Division,4th Canadian Division,Canadian Army,INT
+Logistics Division,4th Canadian Division,Canadian Army,ADM
+Personnel Division,4th Canadian Division,Canadian Army,HR
+Training Division,4th Canadian Division,Canadian Army,MAN
+Communications Division,4th Canadian Division,Canadian Army,COM
+Medical Division,4th Canadian Division,Canadian Army,MED
+Infantry Operations Division,5th Canadian Division,Canadian Army,CMB
+Artillery Operations Division,5th Canadian Division,Canadian Army,CMB
+Armoured Operations Division,5th Canadian Division,Canadian Army,CMB
+Engineering Division,5th Canadian Division,Canadian Army,ENG
+Intelligence Division,5th Canadian Division,Canadian Army,INT
+Logistics Division,5th Canadian Division,Canadian Army,ADM
+Personnel Division,5th Canadian Division,Canadian Army,HR
+Training Division,5th Canadian Division,Canadian Army,MAN
+Communications Division,5th Canadian Division,Canadian Army,COM
+Medical Division,5th Canadian Division,Canadian Army,MED
+Artillery Support Division,6th Canadian Combat Support Brigade,Canadian Army,CMB
+Engineering Support Division,6th Canadian Combat Support Brigade,Canadian Army,ENG
+Intelligence Support Division,6th Canadian Combat Support Brigade,Canadian Army,INT
+Electronic Warfare Division,6th Canadian Combat Support Brigade,Canadian Army,INT
+Influence Activities Division,6th Canadian Combat Support Brigade,Canadian Army,COM
+Signal Support Division,6th Canadian Combat Support Brigade,Canadian Army,COM
+Logistics Support Division,6th Canadian Combat Support Brigade,Canadian Army,ADM
+Fighter Operations Division,1 Canadian Air Division,Royal Canadian Air Force,CMB
+Transport Operations Division,1 Canadian Air Division,Royal Canadian Air Force,CMB
+Air Intelligence Division,1 Canadian Air Division,Royal Canadian Air Force,INT
+Air Engineering Division,1 Canadian Air Division,Royal Canadian Air Force,ENG
+Air Communications Division,1 Canadian Air Division,Royal Canadian Air Force,COM
+Air Logistics Division,1 Canadian Air Division,Royal Canadian Air Force,ADM
+Personnel Division,1 Canadian Air Division,Royal Canadian Air Force,HR
+Air Traffic Control Division,1 Canadian Air Division,Royal Canadian Air Force,COM
+Maintenance Division,1 Canadian Air Division,Royal Canadian Air Force,ENG
+Security Division,1 Canadian Air Division,Royal Canadian Air Force,CMB
+Medical Division,1 Canadian Air Division,Royal Canadian Air Force,MED
+Training Operations Division,2 Canadian Air Division,Royal Canadian Air Force,MAN
+Flight Training Division,2 Canadian Air Division,Royal Canadian Air Force,MAN
+Technical Training Division,2 Canadian Air Division,Royal Canadian Air Force,ENG
+Aircrew Training Division,2 Canadian Air Division,Royal Canadian Air Force,MAN
+Simulator Training Division,2 Canadian Air Division,Royal Canadian Air Force,ENG
+Training Support Division,2 Canadian Air Division,Royal Canadian Air Force,ADM
+Space Operations Division,3 Canadian Space Division,Royal Canadian Air Force,ENG
+Space Intelligence Division,3 Canadian Space Division,Royal Canadian Air Force,INT
+Space Communications Division,3 Canadian Space Division,Royal Canadian Air Force,COM
+Satellite Operations Division,3 Canadian Space Division,Royal Canadian Air Force,ENG
+Space Surveillance Division,3 Canadian Space Division,Royal Canadian Air Force,INT
+Air Power Innovation Division,RCAF Aerospace Warfare Centre,Royal Canadian Air Force,STR
+Tactics Development Division,RCAF Aerospace Warfare Centre,Royal Canadian Air Force,STR
+Doctrine Development Division,RCAF Aerospace Warfare Centre,Royal Canadian Air Force,STR
+Research Division,RCAF Aerospace Warfare Centre,Royal Canadian Air Force,STR
+Special Operations Division,Canadian Special Operations Forces Command,Canadian Special Operations Forces Command,CMB
+Special Intelligence Division,Canadian Special Operations Forces Command,Canadian Special Operations Forces Command,INT
+Special Training Division,Canadian Special Operations Forces Command,Canadian Special Operations Forces Command,MAN
+Special Operations Support Division,Canadian Special Operations Forces Command,Canadian Special Operations Forces Command,ADM
+Counter-Terrorism Division,Canadian Special Operations Forces Command,Canadian Special Operations Forces Command,CMB
+Operations Planning Division,Canadian Joint Operations Command,Canadian Joint Operations Command,STR
+Joint Intelligence Division,Canadian Joint Operations Command,Canadian Joint Operations Command,INT
+Joint Communications Division,Canadian Joint Operations Command,Canadian Joint Operations Command,COM
+Joint Logistics Division,Canadian Joint Operations Command,Canadian Joint Operations Command,ADM
+Regional Operations Division,Canadian Joint Operations Command,Canadian Joint Operations Command,CMB
+Operational Support Division,Canadian Joint Operations Command,Canadian Joint Operations Command,ADM
+Mission Planning Division,Canadian Joint Operations Command,Canadian Joint Operations Command,STR
+Imagery Intelligence Division,Canadian Forces Intelligence Command,Canadian Forces Intelligence Command,INT
+Counter-Intelligence Division,Canadian Forces Intelligence Command,Canadian Forces Intelligence Command,INT
+Meteorological Division,Canadian Forces Intelligence Command,Canadian Forces Intelligence Command,ENG
+Mapping and Charting Division,Canadian Forces Intelligence Command,Canadian Forces Intelligence Command,ENG
+Human Intelligence Division,Canadian Forces Intelligence Command,Canadian Forces Intelligence Command,INT
+Strategic Intelligence Division,Canadian Forces Intelligence Command,Canadian Forces Intelligence Command,STR
+Technical Intelligence Division,Canadian Forces Intelligence Command,Canadian Forces Intelligence Command,INT
+Signals Intelligence Division,Canadian Forces Intelligence Command,Canadian Forces Intelligence Command,INT
+Geospatial Intelligence Division,Canadian Forces Intelligence Command,Canadian Forces Intelligence Command,INT
+Personnel Policy Division,Military Personnel Command,Military Personnel Command,HR
+Recruiting Division,Military Personnel Command,Military Personnel Command,HR
+Personnel Support Division,Military Personnel Command,Military Personnel Command,HR
+Personnel Systems Division,Military Personnel Command,Military Personnel Command,IT
+Career Management Division,Military Personnel Command,Military Personnel Command,HR
+Training Standards Division,Military Personnel Command,Military Personnel Command,MAN
+Personnel Research Division,Military Personnel Command,Military Personnel Command,HR
+Strategic Planning Division,Strategic Joint Staff,Strategic Joint Staff,STR
+Strategic Analysis Division,Strategic Joint Staff,Strategic Joint Staff,STR
+Operations Coordination Division,Strategic Joint Staff,Strategic Joint Staff,STR
+Policy Development Division,Strategic Joint Staff,Strategic Joint Staff,STR
+International Relations Division,Strategic Joint Staff,Strategic Joint Staff,STR
+NORAD Operations Division,North American Aerospace Defense Command,North American Aerospace Defense Command,JOP
+NORAD Intelligence Division,North American Aerospace Defense Command,North American Aerospace Defense Command,INT
+NORAD Communications Division,North American Aerospace Defense Command,North American Aerospace Defense Command,COM
+NORAD Engineering Division,North American Aerospace Defense Command,North American Aerospace Defense Command,ENG
+NORAD Planning Division,North American Aerospace Defense Command,North American Aerospace Defense Command,STR

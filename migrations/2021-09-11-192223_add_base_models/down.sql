@@ -21,7 +21,8 @@ DROP TABLE IF EXISTS org_tier_ownerships;
 DROP TABLE IF EXISTS org_tiers;
 
 DROP TABLE IF EXISTS persons;
-DROP TYPE IF EXISTS hr_group;
+DROP TYPE IF EXISTS military_occupation;
+DROP TYPE IF EXISTS rank;
 
 DROP TABLE IF EXISTS organizations;
 

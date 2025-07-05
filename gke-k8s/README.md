@@ -43,7 +43,7 @@ kubectl apply -f postgres-volume.yaml
 # Bring up the database
 kubectl apply -f postgres.yaml
 # Connect to the database (exec) and run a psql command
-kubectl exec -it $(kubectl get pods -l app=postgres -o jsonpath='{.items[0].metadata.name}') -- psql -U christopherallison people_data_api
+kubectl exec -it $(kubectl get pods -l app=postgres -o jsonpath='{.items[0].metadata.name}') -- psql -U christopherallison workforce_analytics
 # Get a shell in the database pod
 kubectl exec -it $(kubectl get pods -l app=postgres -o jsonpath='{.items[0].metadata.name}') -- bash
 

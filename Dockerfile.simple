@@ -15,5 +15,5 @@ COPY . .
 
 RUN cargo build --release
 
-CMD ["./target/release/people_data_api"]
+CMD ["./target/release/workforce_analytics"]
 

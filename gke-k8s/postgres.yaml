@@ -21,7 +21,7 @@ spec:
             - name: POSTGRES_PASSWORD
               value: "12345"
             - name: POSTGRES_DB
-              value: "people_data_api"
+              value: "workforce_analytics"
             # This tells postgres where to store its data
             # We need a subdirectoy of /var/lib/postgresql/data
             # because  /var/lib/postgresql/data contains a lost+found directory

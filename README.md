@@ -22,7 +22,7 @@ It also includes :
 
 - Clone the repository
 - Create `.env` file with the following environmental variables:
-  - DATABASE_URL=postgres://christopherallison:12345@localhost/people_data_api?sslmode=disable
+  - DATABASE_URL=postgres://christopherallison:12345@localhost/workforce_analytics?sslmode=disable
   - SECRET_KEY=32CHARSECRETKEY
   - PASSWORD_SECRET_KEY=32CHARSECRETKEY
   - JWT_SECRET_KEY=32CHARSECRETKEY
@@ -47,7 +47,7 @@ brew link --force libpq
 cargo clean
 
 docker compose down; sleep 2; docker compose up -d db; sleep 10; diesel migration run
-docker compose exec -it db psql -U christopherallison -W people_data_api
+docker compose exec -it db psql -U christopherallison -W workforce_analytics
 docker compose logs -f
 
 time docker compose build people-data-api

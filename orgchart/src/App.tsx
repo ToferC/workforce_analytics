@@ -42,6 +42,11 @@ const GET_PEOPLE = gql`
         activeRoles {
           titleEnglish
         }
+        capabilities {
+          nameEn
+          domain
+          validatedLevel
+        }
       }
       parentOrganizationTier {
         id

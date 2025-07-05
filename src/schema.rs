@@ -6,10 +6,6 @@ pub mod sql_types {
     pub struct CapabilityLevel;
 
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
-    #[diesel(postgres_type(name = "hr_group"))]
-    pub struct HrGroup;
-
-    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "language_level"))]
     pub struct LanguageLevel;
 
@@ -18,8 +14,16 @@ pub mod sql_types {
     pub struct LanguageName;
 
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "military_occupation"))]
+    pub struct MilitaryOccupation;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "publication_status"))]
     pub struct PublicationStatus;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "rank"))]
+    pub struct Rank;
 
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "skill_domain"))]
@@ -226,7 +230,8 @@ diesel::table! {
 
 diesel::table! {
     use diesel::sql_types::*;
-    use super::sql_types::HrGroup;
+    use super::sql_types::MilitaryOccupation;
+    use super::sql_types::Rank;
 
     roles (id) {
         id -> Uuid,
@@ -238,8 +243,8 @@ diesel::table! {
         title_fr -> Varchar,
         effort -> Float8,
         active -> Bool,
-        hr_group -> HrGroup,
-        hr_level -> Int4,
+        military_occupation -> MilitaryOccupation,
+        rank -> Rank,
         start_datestamp -> Timestamp,
         end_date -> Nullable<Timestamp>,
         created_at -> Timestamp,

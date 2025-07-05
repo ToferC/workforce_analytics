@@ -7,7 +7,7 @@ services:
     environment:
       - POSTGRES_USER=christopherallison
       - POSTGRES_PASSWORD=12345
-      - POSTGRES_DB=people_data_api
+      - POSTGRES_DB=workforce_analytics
     ports:
       - 5432:5432
 
@@ -21,7 +21,7 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=8080
-      - DATABASE_URL=postgres://christopherallison:12345@db/people_data_api?sslmode=disable
+      - DATABASE_URL=postgres://christopherallison:12345@db/workforce_analytics?sslmode=disable
     env_file:
       - .env
     depends_on:

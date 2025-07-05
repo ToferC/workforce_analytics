@@ -31,8 +31,8 @@ pub struct Role {
     pub effort: f64,
     pub active: bool,
     // HR info - this will be another module - just here for expediency
-    pub hr_group: HrGroup,
-    pub hr_level: i32,
+    pub military_occupation: MilitaryOccupation,
+    pub rank: Rank,
 
     pub start_datestamp: NaiveDateTime,
     pub end_date: Option<NaiveDateTime>,
@@ -90,12 +90,12 @@ impl Role {
         Requirement::get_by_role_id(self.id)
     }
 
-    pub async fn hr_group(&self) -> Result<String> {
-        Ok(self.hr_group.to_string())
+    pub async fn military_occupation(&self) -> Result<String> {
+        Ok(self.military_occupation.to_string())
     }
 
-    pub async fn hr_level(&self) -> Result<i32> {
-        Ok(self.hr_level)
+    pub async fn rank(&self) -> Result<Rank> {
+        Ok(self.rank)
     }
 
     pub async fn start_date(&self) -> Result<String> {
@@ -297,8 +297,8 @@ pub struct NewRole {
     pub effort: f64,
     pub active: bool,
     // HR info - this will be another module - just here for expediency
-    pub hr_group: HrGroup,
-    pub hr_level: i32,
+    pub military_occupation: MilitaryOccupation,
+    pub rank: Rank,
     pub start_datestamp: NaiveDateTime,
     pub end_date: Option<NaiveDateTime>,
 }
@@ -312,8 +312,8 @@ impl NewRole {
         title_fr: String,
         effort: f64,
         active: bool,
-        hr_group: HrGroup,
-        hr_level: i32,
+        military_occupation: MilitaryOccupation,
+        rank: Rank,
         start_datestamp: NaiveDateTime,
         end_date: Option<NaiveDateTime>,
     ) -> Self {
@@ -324,8 +324,8 @@ impl NewRole {
             title_fr,
             effort,
             active,
-            hr_group,
-            hr_level,
+            military_occupation,
+            rank,
             start_datestamp,
             end_date,
         }
@@ -333,35 +333,185 @@ impl NewRole {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Enum, DbEnum, Copy, Display)]
-#[ExistingTypePath = "crate::schema::sql_types::HrGroup"]
-/// Represents a Government of Canada pay group
-pub enum HrGroup {
-    EC,
-    AS,
-    PM,
-    CR,
-    PE,
-    IS,
-    FI,
-    RES,
-    EX,
-    DM,
-    LotsMore,
+#[ExistingTypePath = "crate::schema::sql_types::Rank"]
+/// Represents military rank structure
+pub enum Rank {
+    Private,
+    Corporal,
+    MasterCorporal,
+    Sergeant,
+    WarrantOfficer,
+    MasterWarrantOfficer,
+    ChiefWarrantOfficer,
+    SecondLieutenant,
+    Lieutenant,
+    Captain,
+    Major,
+    LieutenantColonel,
+    Colonel,
+    BrigadierGeneral,
+    MajorGeneral,
+    LieutenantGeneral,
+    General,
 }
 
-impl Distribution<HrGroup> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> HrGroup {
-        match rng.gen_range(0..13) {
-            0..=4 => HrGroup::EC,
-            5 => HrGroup::AS,
-            6 => HrGroup::PM,
-            7 => HrGroup::CR,
-            8 => HrGroup::PE,
-            9 => HrGroup::IS,
-            10 => HrGroup::FI,
-            11..=12 => HrGroup::RES,
-            13 => HrGroup::EX,
-            _ => HrGroup::DM,
+impl Rank {
+    /// Returns the next rank (promotion)
+    /// Returns the same rank if already at the highest rank
+    pub fn next(&self) -> Rank {
+        match self {
+            // Non-Commissioned Member progression
+            Rank::Private => Rank::Corporal,
+            Rank::Corporal => Rank::MasterCorporal,
+            Rank::MasterCorporal => Rank::Sergeant,
+            Rank::Sergeant => Rank::WarrantOfficer,
+            Rank::WarrantOfficer => Rank::MasterWarrantOfficer,
+            Rank::MasterWarrantOfficer => Rank::ChiefWarrantOfficer,
+            Rank::ChiefWarrantOfficer => Rank::Lieutenant, // Highest NCM rank
+            
+            // Officer progression
+            Rank::SecondLieutenant => Rank::Lieutenant,
+            Rank::Lieutenant => Rank::Captain,
+            Rank::Captain => Rank::Major,
+            Rank::Major => Rank::LieutenantColonel,
+            Rank::LieutenantColonel => Rank::Colonel,
+            Rank::Colonel => Rank::BrigadierGeneral,
+            Rank::BrigadierGeneral => Rank::MajorGeneral,
+            Rank::MajorGeneral => Rank::LieutenantGeneral,
+            Rank::LieutenantGeneral => Rank::General,
+            Rank::General => Rank::General, // Highest rank
+        }
+    }
+
+    /// Returns the previous rank (demotion)
+    /// Returns the same rank if already at the lowest rank
+    pub fn previous(&self) -> Rank {
+        match self {
+            // Non-Commissioned Member regression
+            Rank::Private => Rank::Private, // Lowest rank
+            Rank::Corporal => Rank::Private,
+            Rank::MasterCorporal => Rank::Corporal,
+            Rank::Sergeant => Rank::MasterCorporal,
+            Rank::WarrantOfficer => Rank::Sergeant,
+            Rank::MasterWarrantOfficer => Rank::WarrantOfficer,
+            Rank::ChiefWarrantOfficer => Rank::MasterWarrantOfficer,
+            
+            // Officer regression
+            Rank::SecondLieutenant => Rank::SecondLieutenant, // Lowest officer rank
+            Rank::Lieutenant => Rank::SecondLieutenant,
+            Rank::Captain => Rank::Lieutenant,
+            Rank::Major => Rank::Captain,
+            Rank::LieutenantColonel => Rank::Major,
+            Rank::Colonel => Rank::LieutenantColonel,
+            Rank::BrigadierGeneral => Rank::Colonel,
+            Rank::MajorGeneral => Rank::BrigadierGeneral,
+            Rank::LieutenantGeneral => Rank::MajorGeneral,
+            Rank::General => Rank::LieutenantGeneral,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Enum, DbEnum, Copy, Display)]
+#[ExistingTypePath = "crate::schema::sql_types::MilitaryOccupation"]
+/// Represents Canadian Army military occupations
+pub enum MilitaryOccupation {
+    Infantry,
+    Armoured,
+    Artillery,
+    CombatEngineers,
+    Signals,
+    Intelligence,
+    MilitaryPolice,
+    LogisticsSupport,
+    MedicalTechnician,
+    Communications,
+    Electronics,
+    VehicleTechnician,
+    WeaponsTechnician,
+    SupplyTechnician,
+    CookSupport,
+    FinanceClerk,
+    HumanResourcesAdministrator,
+    MilitaryFirefighter,
+    MaterialsManagement,
+    GeomaticsTechnician,
+    MedicalAssistant,
+    DentalAssistant,
+    PharmacyTechnician,
+    Chaplain,
+    LegalOfficer,
+    Pilot,
+    AircrewSystems,
+    AirTrafficController,
+    WeatherTechnician,
+    ImageTechnician,
+    Musician,
+    PhysicalFitnessInstructor,
+    Cyber,
+    SpecialForces,
+    Officer,
+    Other,
+}
+
+impl MilitaryOccupation {
+    pub fn choose() -> MilitaryOccupation {
+        let choice: MilitaryOccupation = rand::random();
+        choice
+    }
+}
+
+impl Distribution<Rank> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Rank {
+        match rng.gen_range(0..100) {
+            0..=24 => Rank::Private,          // 25% - Entry level
+            25..=44 => Rank::Corporal,        // 20% - Junior NCO
+            45..=59 => Rank::MasterCorporal,  // 15% - Senior NCO
+            60..=74 => Rank::Sergeant,        // 15% - Staff NCO
+            75..=84 => Rank::WarrantOfficer,  // 10% - Warrant Officers
+            85..=89 => Rank::MasterWarrantOfficer,     // 5%
+            90..=92 => Rank::ChiefWarrantOfficer,      // 3%
+            93..=95 => Rank::SecondLieutenant,         // 3% - Junior Officers
+            96..=97 => Rank::Lieutenant,               // 2%
+            98 => Rank::Captain,                       // 1%
+            99 => Rank::Major,                         // 1% - Senior Officers
+            100 => Rank::LieutenantColonel,            // <1%
+            101 => Rank::Colonel,                      // <1%
+            102 => Rank::BrigadierGeneral,             // <1% - Flag Officers
+            103 => Rank::MajorGeneral,                 // <1%
+            104 => Rank::LieutenantGeneral,            // <1%
+            _ => Rank::General,                        // <1%
+        }
+    }
+}
+
+impl Distribution<MilitaryOccupation> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> MilitaryOccupation {
+        match rng.gen_range(0..100) {
+            0..=14 => MilitaryOccupation::Infantry,           // 15% - Core combat role
+            15..=24 => MilitaryOccupation::LogisticsSupport,  // 10% - Essential support
+            25..=32 => MilitaryOccupation::Communications,    // 8% - Critical infrastructure
+            33..=39 => MilitaryOccupation::VehicleTechnician, // 7% - Maintenance
+            40..=46 => MilitaryOccupation::SupplyTechnician,  // 7% - Supply chain
+            47..=52 => MilitaryOccupation::MedicalTechnician, // 6% - Healthcare
+            53..=58 => MilitaryOccupation::Artillery,         // 6% - Fire support
+            59..=63 => MilitaryOccupation::CombatEngineers,   // 5% - Engineering
+            64..=68 => MilitaryOccupation::Signals,           // 5% - Communications
+            69..=72 => MilitaryOccupation::Armoured,          // 4% - Armoured corps
+            73..=76 => MilitaryOccupation::Intelligence,      // 4% - Intel gathering
+            77..=80 => MilitaryOccupation::Electronics,       // 4% - Technical support
+            81..=83 => MilitaryOccupation::WeaponsTechnician, // 3% - Weapons maintenance
+            84..=86 => MilitaryOccupation::MilitaryPolice,    // 3% - Security
+            87..=89 => MilitaryOccupation::FinanceClerk,      // 3% - Administration
+            90..=91 => MilitaryOccupation::HumanResourcesAdministrator, // 2%
+            92 => MilitaryOccupation::CookSupport,       // 1% - Food services
+            93 => MilitaryOccupation::Officer,          // 1% - Officer
+            94 => MilitaryOccupation::MedicalAssistant,       // 1%
+            95 => MilitaryOccupation::GeomaticsTechnician,    // 1%
+            96 => MilitaryOccupation::MilitaryFirefighter,    // 1%
+            97 => MilitaryOccupation::Cyber,                  // 1% - Emerging field
+            98 => MilitaryOccupation::Pilot,                  // 1% - Specialized
+            99 => MilitaryOccupation::SpecialForces,          // 1% - Elite units
+            _ => MilitaryOccupation::Other,                   // <1% - Miscellaneous
         }
     }
 }

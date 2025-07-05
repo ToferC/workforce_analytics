@@ -8,7 +8,7 @@ use crate::progress::progress::ProgressLogger;
 use crate::database::{create_validations, generate_requirement};
 use crate::models::{Person, Organization, NewPerson, NewOrganization, 
     Role, NewRole, Team, NewTeam, OrgTier, NewOrgTier, OrgOwnership, NewOrgOwnership,
-    TeamOwnership, NewTeamOwnership, HrGroup, SkillDomain, Skill, NewWork, CapabilityLevel, WorkStatus, Work,
+    TeamOwnership, NewTeamOwnership, MilitaryOccupation, Rank, SkillDomain, Skill, NewWork, CapabilityLevel, WorkStatus, Work,
     NewRequirement, Requirement,
 };
 
@@ -30,7 +30,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
         "CAF".to_string(),
         "FAC".to_string(),
         "Military".to_string(),
-        "somehttps://www.canada.ca/en/department-national-defence.html_url".to_string(),
+        "https://www.canada.ca/en/department-national-defence.html_url".to_string(),
     );
 
     let org = Organization::create(&o).expect("Unable to create new organization");
@@ -68,7 +68,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
 
     let tt = NewOrgTier::new(
             org.id, 
-            1, 
+            0, 
             "Office of the Chief of Defence Staff".to_string(), 
             "Bureau de chef d’état-major de la Défense".to_string(), 
             SkillDomain::Leadership,
@@ -115,7 +115,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
         // Create branch and get id
         let adm = NewOrgTier::new(
             org.id, 
-            2, 
+            1, 
             branch.to_owned(), 
             branch.to_owned(),
             SkillDomain::Leadership,
@@ -131,7 +131,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
         // Create centre and get id
         let ctr = NewOrgTier::new(
             org.id, 
-            3, 
+            2, 
             centre.to_owned(), 
             centre.to_owned(),
             SkillDomain::Leadership,
@@ -146,7 +146,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
         // Create division and get id
         let div = NewOrgTier::new(
             org.id, 
-            4, 
+            3, 
             division.to_owned(), 
             division.to_owned(),
             domain,
@@ -159,11 +159,11 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
         org_tiers.push(div_tier.clone());
 
 
-        // Create 3 teams per division
+        // Create 5 teams per division
         for i in 1..=3 {
             let tm = NewOrgTier::new(
                 org.id, 
-                5, 
+                4, 
                 format!("{} Team {}", division.to_owned(), i), 
                 format!("{} Team {}", division.to_owned(), i),
                 domain,
@@ -234,7 +234,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
             uuid::Uuid::new_v4(),
             famn.to_owned(),
             gn.to_owned(),
-            format!("{}.{}_{}@phac-aspc.gc.ca", &gn, &famn, rng.gen_range(0..9999)).to_lowercase(),
+            format!("{}.{}_{}@forces.gc.ca", &gn, &famn, rng.gen_range(0..9999)).to_lowercase(),
             gen_rand_number(),
             addr[0].to_owned(),
             addr[1].to_owned(),
@@ -270,13 +270,13 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
 
 
     let roles: Vec<&str> = "
-        Sr. Policy Analyst; Policy Analyst; Jr. Policy Analyst; Epidemiologist; Administrative Officer; Designer; 
-        Sr. Data Analyst; Data Analyst; Jr. Data Analyst; Project Officer; Scientist; Researcher".split("; ").collect();
+        Squad Leader; Section Commander; Platoon Sergeant; Company Sergeant Major; Operations Specialist; Intelligence Analyst; 
+        Communications Operator; Logistics Coordinator; Medical Technician; Combat Engineer; Vehicle Operator; Weapons Specialist".split("; ").collect();
 
     let work_verbs: Vec<&str> = "
-        design; write; revise; audit; draft; review; approve; present; 
-        research; analyze data on; visualize data on; develop; plan; 
-        create mvp on; test; prototype; peer review on".split("; ").collect();
+        execute; coordinate; assess; secure; defend; 
+        deploy; train; maintain; surveil; support; 
+        command; protect; patrol; establish; monitor".split("; ").collect();
 
     // Set up OrgTierOwnership
     for ot in org_tiers.clone() {
@@ -289,15 +289,15 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
         let domain_skills = Skill::get_by_domain(ot.primary_domain)
                 .expect("Unable to get skills");
         
-        // set exec grp and level
+        // set officer occupation and rank and define levels of management
 
-        let (grp, level, num_members, title_str) = match ot.tier_level {
-            1 => (HrGroup::DM, 1, 2, "President"),
-            2 => (HrGroup::EX, 3, 2, "Vice President"),
-            3 => (HrGroup::EX, 2, 2, "Director General"),
-            4 => (HrGroup::EX, 1, 1, "Director"),
-            5 => (HrGroup::EC, 4, 4, "Manager"),
-            _ => (HrGroup::EC, 2, 3, "Special Advisor"),
+        let (occupation, rank, num_members, title_str) = match ot.tier_level {
+            0 => (MilitaryOccupation::choose(), Rank::General, 4, "Chief of Defence Staff"),
+            1 => (MilitaryOccupation::choose(), Rank::LieutenantGeneral, 4, "Commander"),
+            2 => (MilitaryOccupation::choose(), Rank::BrigadierGeneral, 3, "Director General"),
+            3 => (MilitaryOccupation::choose(), Rank::Colonel, 2, "Director"),
+            4 => (MilitaryOccupation::choose(), Rank::LieutenantColonel, 3, "Manager"),
+            _ => (MilitaryOccupation::choose(), Rank::Major, 4, "Special Advisor"),
         };
 
         let ownership = NewOrgOwnership::new(
@@ -332,8 +332,8 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
             format!("{} - {}", title_str, ot.name_fr.clone()), 
             0.80, 
             true,
-            grp,
-            level,
+            occupation,
+            rank,
             chrono::Utc::now().naive_utc(), 
             None
         );
@@ -347,7 +347,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
                     .collect();
 
         for skill_id in skill_ids {
-            let role_requirement = generate_requirement(role_res.id, skill_id, grp, level, &mut rng);
+            let role_requirement = generate_requirement(role_res.id, skill_id, occupation, rank, &mut rng);
             requirements_vec.push(role_requirement.clone());
         }
 
@@ -397,10 +397,9 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
 
             let role = *roles.choose(&mut rng).unwrap();
 
-            let grp: HrGroup = rand::random();
+            let occupation: MilitaryOccupation = rand::random();
 
-            let level = rng.gen_range(2..6);
-
+            let rank: Rank = rand::random();
             
             let start_date = chrono::Utc::now().naive_utc();
             let modifier = chrono::Duration::days(rng.gen_range(-300..300));
@@ -422,8 +421,8 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
                 format!("{}_FR", role.trim()), 
                 0.80, 
                 true,
-                grp,
-                level,
+                occupation,
+                rank,
                 start_date + modifier, 
                 None
             );
@@ -437,7 +436,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
                     .collect();
 
             for skill_id in skill_ids {
-                let role_requirement = generate_requirement(role_res.id, skill_id, grp, level, &mut rng);
+                let role_requirement = generate_requirement(role_res.id, skill_id, occupation, rank, &mut rng);
                 requirements_vec.push(role_requirement.clone());
             }
 
@@ -445,14 +444,14 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
                 0..=5 => continue,
                 6..=8 => {
                     nr.active = false;
-                    nr.hr_level -= 1;
+                    nr.rank.next();
                     nr.start_datestamp -= chrono::Duration::days(rng.gen_range(-300..-100));
                     role_vec.push(nr.clone())
                 },
                 9..=10 => {
                     for _i in 1..=3 {
                         nr.active = false;
-                        nr.hr_level -= 1;
+                        nr.rank.previous();
                         nr.start_datestamp -= chrono::Duration::days(rng.gen_range(-600..-150));
                         role_vec.push(nr.clone())
                     }
@@ -481,7 +480,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
                     format!("{} {}",
                         work_verbs.choose(&mut rng).unwrap().trim(),
                         task.title.trim()),
-                    Some("https://www.phac-aspc.ca/some_url".to_string()),
+                    Some("https://www.forces.ca/some_url".to_string()),
                     task.domain,
                     capability_level,
                     effort,

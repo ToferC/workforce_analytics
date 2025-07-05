@@ -141,17 +141,63 @@ CREATE TABLE IF NOT EXISTS teams (
 
 );
 
-CREATE TYPE hr_group AS ENUM (
-    'ec',
-    'as',
-    'pm',
-    'cr',
-    'pe',
-    'is',
-    'fi',
-    'res',
-    'ex',
-    'dm'
+CREATE TYPE military_occupation AS ENUM (
+    'infantry',
+    'armoured',
+    'artillery',
+    'combat_engineers',
+    'signals',
+    'intelligence',
+    'military_police',
+    'logistics_support',
+    'medical_technician',
+    'communications',
+    'electronics',
+    'vehicle_technician',
+    'weapons_technician',
+    'supply_technician',
+    'cook_support',
+    'finance_clerk',
+    'human_resources_administrator',
+    'military_firefighter',
+    'materials_management',
+    'geomatics_technician',
+    'medical_assistant',
+    'dental_assistant',
+    'pharmacy_technician',
+    'chaplain',
+    'legal_officer',
+    'pilot',
+    'aircrew_systems',
+    'air_traffic_controller',
+    'weather_technician',
+    'image_technician',
+    'musician',
+    'physical_fitness_instructor',
+    'cyber',
+    'special_forces',
+    'officer',
+    'other'
+);
+
+CREATE TYPE rank AS ENUM (
+    'private',
+    'corporal',
+    'master_corporal',
+    'sergeant',
+    'warrant_officer',
+    'master_warrant_officer',
+    'chief_warrant_officer',
+    'second_lieutenant',
+    'lieutenant',
+    'captain',
+    'major',
+    'lieutenant_colonel',
+    'colonel',
+    'brigadier_general',
+    'lieutenant_general',
+    'major_general',
+    'general'
 );
 
 CREATE TABLE IF NOT EXISTS roles (
@@ -170,8 +216,8 @@ CREATE TABLE IF NOT EXISTS roles (
     effort FLOAT NOT NULL,
     active bool NOT NULL,
 
-    hr_group hr_group NOT NULL,
-    hr_level INT NOT NULL,
+    military_occupation military_occupation NOT NULL,
+    rank rank NOT NULL,
 
     start_datestamp TIMESTAMP NOT NULL,
     end_date TIMESTAMP,

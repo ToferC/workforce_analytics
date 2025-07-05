@@ -5,10 +5,10 @@ use std::time::Instant;
 use tera::Tera;
 use tera_text_filters::snake_case;
 
-use people_data_api::database::{self, POOL};
-use people_data_api::graphql::create_schema_with_context;
-use people_data_api::handlers;
-use people_data_api::AppData;
+use workforce_analytics::database::{self, POOL};
+use workforce_analytics::graphql::create_schema_with_context;
+use workforce_analytics::handlers;
+use workforce_analytics::AppData;
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {

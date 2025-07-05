@@ -2,7 +2,7 @@ use async_graphql::Error;
 use rand::{seq::SliceRandom, rngs::ThreadRng, Rng};
 use uuid::Uuid;
 
-use crate::models::{NewTask, Task, SkillDomain, WorkStatus, NewRequirement, CapabilityLevel, HrGroup};
+use crate::models::{NewTask, Task, SkillDomain, WorkStatus, NewRequirement, CapabilityLevel, MilitaryOccupation, Rank};
 
 /// Generate dummy tasks based on some baseline data about the org
 pub fn generate_tasks(
@@ -14,15 +14,16 @@ pub fn generate_tasks(
 ) -> Result<Task, Error> {
 
     let work_nouns: Vec<&str> = "
-        briefing note; PowerPoint; Jupyter Notebook; memo; 
-        white paper; plan; project documentation; outline; 
-        data; research paper; meeting minutes; governance review; 
-        genomic data
+        operations order; intelligence briefing; tactical assessment; situation report; 
+        mission plan; reconnaissance report; training schedule; equipment manifest; 
+        security protocol; maintenance log; deployment order; field manual; 
+        threat analysis; combat readiness report; logistics plan; patrol route
     ".split("; ").collect();
 
     let outcome: Vec<&str> = "
-        socialize; inform; secure decision; inform action; communicate; 
-        create policy; respond to inquiry, respond to audit; manage; 
+        execute; coordinate; assess; secure; defend; 
+        deploy; train; maintain; surveil; support; 
+        command; protect; patrol; establish; monitor
     ".split("; ").collect();
 
     let title = format!("{} on {}", 
@@ -36,7 +37,7 @@ pub fn generate_tasks(
         *domain,
         outcome.choose(rng).unwrap().to_string(),
         tier_level,
-        "https://www.phac-aspc.ca/some_url".to_string(),
+        "https://www.forces.gc.ca/some_url".to_string(),
         chrono::Utc::now().naive_utc(),
         chrono::Utc::now().naive_utc(),
         WorkStatus::InProgress,
@@ -48,27 +49,46 @@ pub fn generate_tasks(
 }
 
 /// Generate requirement for a role based on a provided skilldomain
-pub fn generate_requirement(role_id: Uuid, skill_id: Uuid, hr_group: HrGroup, hr_level: i32, rng: &mut impl Rng) -> NewRequirement {
-    // Add requirements for each role based on the team Primary Domain
+pub fn generate_requirement(role_id: Uuid, skill_id: Uuid, military_occupation: MilitaryOccupation, rank: Rank, rng: &mut impl Rng) -> NewRequirement {
+    // Add requirements for each role based on military rank structure
 
     let req_level: CapabilityLevel;
 
-    if  hr_group == HrGroup::EX || hr_group == HrGroup::DM {
-        req_level = CapabilityLevel::Expert
-    } else {
+    // Two-tier system: Non-Commissioned Members (NCMs) and Officers
+    let base_level = match rank {
+        // Non-Commissioned Members (NCMs) - enlisted personnel
+        Rank::Private => 1,                    // New recruits
+        Rank::Corporal => 2,                   // Junior NCM
+        Rank::MasterCorporal => 3,             // Senior NCM
+        Rank::Sergeant => 5,                   // Staff NCM
+        Rank::WarrantOfficer => 8,             // Senior NCM leader
+        Rank::MasterWarrantOfficer => 10,       // Very experienced NCM
+        Rank::ChiefWarrantOfficer => 12,        // Most experienced NCM
+        
+        // Officers - commissioned personnel (start at higher base level)
+        Rank::SecondLieutenant => 5,           // New officer
+        Rank::Lieutenant => 6,                 // Junior officer
+        Rank::Captain => 7,                    // Company-level officer
+        Rank::Major => 8,                      // Senior officer
+        Rank::LieutenantColonel => 9,          // Battalion-level commander
+        Rank::Colonel => 10,                   // Senior commander
+        Rank::BrigadierGeneral => 11,          // General officer
+        Rank::MajorGeneral => 12,              // Senior general
+        Rank::LieutenantGeneral => 13,         // Very senior general
+        Rank::General => 14,                   // Highest rank
+    };
 
-        // Allow for random changes
-        let hr_level = hr_level + rng.gen_range(-2..=2);
+    // Allow for individual variation within rank expectations
+    let adjusted_level = base_level + rng.gen_range(-1..=1);
 
-        req_level = match hr_level {
-            0..=1 => CapabilityLevel::Desired,
-            2..=3 => CapabilityLevel::Novice,
-            4..=6 => CapabilityLevel::Experienced,
-            7..=8 => CapabilityLevel::Expert,
-            9..=10 => CapabilityLevel::Specialist,
-            _ => CapabilityLevel::Experienced,
-        };
-    }
+    req_level = match adjusted_level {
+        0..=2 => CapabilityLevel::Desired,     // New personnel
+        3..=4 => CapabilityLevel::Novice,      // Basic competency
+        5..=8 => CapabilityLevel::Experienced, // Standard military competency
+        9..=12 => CapabilityLevel::Expert,     // Leadership positions
+        13..=15 => CapabilityLevel::Specialist, // Strategic level
+        _ => CapabilityLevel::Experienced,     // Default fallback
+    };
 
     NewRequirement::new(
         role_id,

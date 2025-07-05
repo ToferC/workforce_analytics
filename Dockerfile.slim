@@ -40,7 +40,7 @@ RUN groupadd -r rusty && useradd --no-log-init -r -g rusty rusty
 WORKDIR /app
 
 # --chown=<user>:<group>
-COPY --from=builder /app/target/release/people_data_api .
+COPY --from=builder /app/target/release/workforce_analytics .
 
 # seed: These are needed in the final image for the image to seed the database
 COPY seeds seeds
@@ -57,4 +57,4 @@ COPY static static
 USER rusty
 EXPOSE 8080
 
-CMD ["./people_data_api"]
+CMD ["./workforce_analytics"]

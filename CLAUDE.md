@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Rust-based GraphQL API called "People Data Analytics" (package name: `people_data_api`) that models employee skills, capabilities, certifications, and organizational structures over time. It's built with:
+This is a Rust-based GraphQL API called "People Data Analytics" (package name: `workforce_analytics`) that models employee skills, capabilities, certifications, and organizational structures over time. It's built with:
 
 - **Backend**: Actix-web with async-graphql for GraphQL API
 - **Database**: PostgreSQL with Diesel ORM
@@ -78,7 +78,7 @@ cargo clean
 
 Create `.env` file with:
 ```
-DATABASE_URL=postgres://christopherallison:12345@localhost/people_data_api?sslmode=disable
+DATABASE_URL=postgres://christopherallison:12345@localhost/workforce_analytics?sslmode=disable
 SECRET_KEY=32CHARSECRETKEY
 PASSWORD_SECRET_KEY=32CHARSECRETKEY
 JWT_SECRET_KEY=32CHARSECRETKEY

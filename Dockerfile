@@ -14,8 +14,8 @@ RUN apt-get install -y -q \
 RUN cargo install diesel_cli --no-default-features --features postgres
 
 # Set default user
-RUN USER=root cargo new --bin people_data_api
-WORKDIR /people_data_api
+RUN USER=root cargo new --bin workforce_analytics
+WORKDIR /workforce_analytics
 
 # Copy over manifests
 COPY ./Cargo.lock ./Cargo.lock
@@ -36,23 +36,23 @@ RUN rm src/*.rs
 COPY ./src ./src
 
 # Build for release
-RUN rm ./target/release/deps/people_data_api*
+RUN rm ./target/release/deps/workforce_analytics*
 RUN cargo build --release
 
 # Final base
 FROM rust:latest
 
 # Copy final build artifact
-COPY --from=build /people_data_api/target/release/people_data_api .
+COPY --from=build /workforce_analytics/target/release/workforce_analytics .
 
 # Copy dummy data (.csv) files
-COPY --from=build /people_data_api/seeds seeds
+COPY --from=build /workforce_analytics/seeds seeds
 # Copy templates
-COPY --from=build /people_data_api/templates templates
+COPY --from=build /workforce_analytics/templates templates
 
 
 EXPOSE 8080
 
 # Set startup command
 
-CMD ["./people_data_api"]
+CMD ["./workforce_analytics"]

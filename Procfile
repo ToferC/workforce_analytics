@@ -1,1 +1,1 @@
-web: ./target/release/people_data_api
+web: ./target/release/workforce_analytics

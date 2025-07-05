@@ -298,7 +298,7 @@ impl TravelData {
         send_message(producer, "trips", trip_message, "CBSA".to_string()).await;
         */
 
-        // Call people_data_api
+        // Call workforce_analytics
         // Determine if traveller is referred for mandatory testing
         let mut rng = rand::thread_rng();
 

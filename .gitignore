@@ -20,6 +20,7 @@ orgchart/build
 .env.development.local
 .env.test.local
 .env.production.local
+*.dump
 
 orgchart/npm-debug.log*
 orgchart/yarn-debug.log*

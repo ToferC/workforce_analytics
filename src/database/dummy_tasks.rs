@@ -2,7 +2,7 @@ use async_graphql::Error;
 use rand::{seq::SliceRandom, rngs::ThreadRng, Rng};
 use uuid::Uuid;
 
-use crate::models::{NewTask, Task, SkillDomain, WorkStatus, NewRequirement, CapabilityLevel, MilitaryOccupation, Rank};
+use crate::models::{NewTask, Task, SkillDomain, WorkStatus, NewRequirement, CapabilityLevel, Rank};
 
 /// Generate dummy tasks based on some baseline data about the org
 pub fn generate_tasks(
@@ -27,7 +27,7 @@ pub fn generate_tasks(
     ".split("; ").collect();
 
     let title = format!("{} on {}", 
-        work_nouns.choose(rng).unwrap().clone().trim().to_string(),
+        work_nouns.choose(rng).unwrap().trim().to_string(),
         subject
     );
 
@@ -49,7 +49,7 @@ pub fn generate_tasks(
 }
 
 /// Generate requirement for a role based on a provided skilldomain
-pub fn generate_requirement(role_id: Uuid, skill_id: Uuid, military_occupation: MilitaryOccupation, rank: Rank, rng: &mut impl Rng) -> NewRequirement {
+pub fn generate_requirement(role_id: Uuid, skill_id: Uuid, rank: Rank, rng: &mut impl Rng) -> NewRequirement {
     // Add requirements for each role based on military rank structure
 
     let req_level: CapabilityLevel;

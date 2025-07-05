@@ -347,7 +347,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
                     .collect();
 
         for skill_id in skill_ids {
-            let role_requirement = generate_requirement(role_res.id, skill_id, occupation, rank, &mut rng);
+            let role_requirement = generate_requirement(role_res.id, skill_id, rank, &mut rng);
             requirements_vec.push(role_requirement.clone());
         }
 
@@ -436,7 +436,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
                     .collect();
 
             for skill_id in skill_ids {
-                let role_requirement = generate_requirement(role_res.id, skill_id, occupation, rank, &mut rng);
+                let role_requirement = generate_requirement(role_res.id, skill_id, rank, &mut rng);
                 requirements_vec.push(role_requirement.clone());
             }
 

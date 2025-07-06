@@ -1,0 +1,48 @@
+query OrganizationById($id:UUID!) {
+  organizationById(id:$id) {
+    nameEn
+    acronymEn
+    orgType
+    url
+    topOrgTier {
+      id
+      nameEn
+      primaryDomain
+      owner {
+        id
+        givenName
+        familyName
+        email
+      }
+    }
+    capabilityCounts {
+      domain
+      name
+      level
+      counts
+    }
+    publications {
+      id
+      title
+      publicationStatus
+      leadAuthor {
+        id
+        givenName
+        familyName
+      }
+    }
+    affiliations {
+      id
+      affiliationRole
+      organization {
+        id
+        nameEn
+      }
+      person {
+        id
+        givenName
+        familyName
+      }
+    }
+  }
+}

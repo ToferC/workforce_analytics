@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="Intersectional Data Survey & Analysis MVP">
+    <meta name="author" content="ToferC">
+    <meta property="og:title" content="Intersectional Data Survey & Analysis MVP">
+</head>
+<body>
+
+    <div class="col m-md-2 m-1">
+        <p>{{ fluent(key="hello", lang=lang )}}</p>
+        <p>{{ fluent(key="thank-you-for-participating", lang=lang )}}</p>
+        <p>{{ fluent(key="email-link-descriptions", lang=lang )}}</p>
+        <hr>
+        <h2>{{ fluent(key="important-links", lang=lang )}}</h2>
+        <ul>
+            <li><a href="{{ application_url }}/person/{{ person.code }}">{{ fluent(key="go-to-profile", lang=lang )}}</a></li>
+            <li><a href="{{ application_url }}/add_experience_form/{{ person.code }}">{{ fluent(key="add-experience", lang=lang )}}</a></li>
+            <li><a href="{{ application_url }}/community/{{ community.slug }}">{{ fluent(key="link-to-community", lang=lang )}} {{ phrases[community.tag] }}</a></li>
+            <li><a href="{{ application_url }}/delete_person/{{ person.code }}">{{ fluent(key="delete-my-profile", lang=lang )}}</a></li>
+            <li>---------------------</li>
+            <li><a href="{{ application_url }}">{{ fluent(key="return-to-application", lang=lang )}}</a></li>
+        </ul>
+        <hr>
+        
+        <h2>{{ fluent(key="community-information", lang=lang )}}</h2>
+        <p>{{ fluent(key="name", lang=lang )}} {{ phrases[community.tag] }}</p>
+        <p>{{ fluent(key="description", lang=lang )}} {{ phrases[community.description] }}</p>
+        <p>{{ fluent(key="data-policy", lang=lang )}} {{ phrases[community.data_use_case] }}</p>
+        <p>{{ fluent(key="administrator", lang=lang )}} <a href="mailto:{{ community.contact_email }}">{{ community.contact_email }}</a></p>
+
+        <hr>
+        <p>{{ fluent(key="thank-you-participating", lang=lang )}}</p>
+        <p>{{ fluent(key="sincere-regards", lang=lang )}}</p>
+        <p>{{ fluent(key="user-support-signature", lang=lang )}}</p>
+    </div>
+</body>
+</html>

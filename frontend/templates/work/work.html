@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ fluent(key="work", lang=lang )}}</title>
+{% endblock title %}
+
+{% block content %}
+
+<div class="col m-md-2 m-1">
+
+    <h1>{{ work.workDescription | title }}</h1>
+
+    <h3>Details</h3>
+    <li>Website: {{ work.url }}</li>
+    <li>Domain: {{ work.domain }} - {{ work.capabilityLevel }}</li>
+    <li>Task: <a href="/{{lang}}/task/{{work.task.id}}">{{ work.task.title }}</a></li>
+    <li>Target Completion Date: {{ work.task.targetCompletionDate }}</li>
+    
+    <hr>
+    <h5>Assigned by: <a href="/{{lang}}/person/{{work.task.createdBy.person.id}}">{{ work.task.createdBy.person.givenName }} {{ work.task.createdBy.person.familyName }}</a> - <a href="/{{ lang }}/role/{{ work.task.createdBy.id }}">{{ work.role.titleEnglish }} - {{ work.task.createdBy.militaryOccupation }}-{{ work.task.createdBy.rank }}</a></h5>
+    <li>Team: <a href="/{{lang}}/team/{{work.task.createdBy.team.id}}">{{ work.task.createdBy.team.nameEnglish }}</a></li>
+    <hr>
+
+    <h3>Assigned to</h3>
+    {% if work.role.person %}
+    <li><a href="/{{lang}}/person/{{work.role.person.id}}">{{ work.role.person.givenName }} {{ work.role.person.familyName }}</a></li>
+    <li>Role: <a href="/{{ lang }}/role/{{ work.role.id }}">{{ work.role.titleEnglish }} - {{ work.role.militaryOccupation }}-{{ work.role.rank }}</a></li>
+    <li>Address: {{ work.role.person.workAddress }}</li>
+    <li>Organization: <a href="/{{ lang }}/organization/{{ work.role.person.organization.id }}">{{ work.role.person.organization.nameEn }}</a></li>
+    <li>Email: {{ work.role.person.email }}</li>
+    <li>Phone: {{ work.role.person.phone }}</li>
+    {% else %}
+    <p>Not Assigned</p>
+    {% endif %}
+
+    <hr>
+
+</div>
+
+
+
+{% endblock content %}

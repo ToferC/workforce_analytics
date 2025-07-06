@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="Intersectional Data Survey & Analysis MVP">
+    <meta name="author" content="ToferC">
+    <meta property="og:title" content="Intersectional Data Survey & Analysis MVP">
+</head>
+<body>
+
+    <div class="card card-body">
+        <P>{{ fluent(key="hello", lang=lang )}}</P>
+        
+        <p>{{ fluent(key="email-registered-with", lang=lang )}} <a href="{{ application_url }}"> {{ fluent(key="intersectional-data", lang=lang )}}</a>. {{ fluent(key="registered-in-error", lang=lang )}}</p>
+
+        <p>{{ fluent(key="register-instructions", lang=lang )}} <a href="{{ application_url }}/email_verification">{{ fluent(key="verification-page", lang=lang )}}</a>.</p>
+
+        <p>{{ fluent(key="your-code", lang=lang )}}</p>
+
+        <div class="card-body">
+            <p><strong>{{ verification.activation_code }}</strong></p>
+        </div>
+
+        <p>{{ fluent(key="time-limit", lang=lang )}} <a href="{{ application_url }}/resend_email_verification">{{ fluent(key="request-another-code", lang=lang )}}</a>.</p>
+
+        <p>{{ fluent(key="thank-you", lang=lang )}}</p>
+
+        <p>{{ fluent(key="user-support-signature", lang=lang )}}</p>
+    </div>
+</body>
+</html>

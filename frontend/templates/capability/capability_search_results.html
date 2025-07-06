@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>Capability Search for {{ name }} and {{ level }}</title>
+{% endblock title %}
+
+{% block content %}
+
+<div class="col m-md-2 m-1">
+
+    <h1>Capability Search</h1>
+    <h2>{{ name }} and {{ level }}</h2>
+
+    <hr>
+
+    <h2>Matches</h2>
+    
+        {% for capability in capabilities %}
+            <h3><a href="/{{lang}}/person/{{capability.person.id}}">{{ capability.person.givenName }} {{ capability.person.familyName }}</a></h3>
+            <li>Phone: {{ capability.person.phone }}</li>
+            <li>Email: {{ capability.person.email }}</li>
+            <li>Current Role: 
+            {% for role in capability.person.activeRoles %}
+                <strong>{{ role.titleEnglish }}</strong> - {{ role.militaryOccupation }}-{{ role.rank }}
+            {% endfor %}</ul>
+            <br>
+            <h4>Capabilities</h4>
+            {% for cap in capability.person.capabilities %}
+                <li>{{ cap.nameEn }} ({{ cap.domain }}) - {{ cap.validatedLevel }}</li>
+            {% endfor %}
+            <hr>
+        {% endfor %}
+</div>
+
+
+
+{% endblock content %}

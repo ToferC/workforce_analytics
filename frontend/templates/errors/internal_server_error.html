@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ fluent(key="internal-server-error", lang=lang )}}</title>
+{% endblock title %}
+
+{% block content %}
+    <div class="col m-md-2 m-1">
+        <br>
+        <h1>{{ fluent(key="internal-server-error", lang=lang )}}</h1>
+        <p>{{ fluent(key="having-problems", lang=lang )}}</p>
+        <p><a href="/{{ lang }}">{{ fluent(key="go-home", lang=lang )}}</a></p>
+
+    </div>
+{% endblock content %}

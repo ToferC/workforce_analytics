@@ -1,0 +1,50 @@
+query WorkById($id:UUID!) {
+  workById(id:$id) {
+    id
+    workDescription
+    url
+    domain
+    capabilityLevel
+    effort
+    workStatus
+    task {
+      id
+      title
+      domain
+      targetCompletionDate
+      createdBy {
+        id
+        titleEnglish
+        militaryOccupation
+        rank
+        person {
+          id
+          givenName
+          familyName
+        }
+        team {
+          id
+          nameEnglish
+        }
+      }
+    }
+    role {
+      id
+      titleEnglish
+      militaryOccupation
+      rank
+      person {
+        id
+        familyName
+        givenName
+        workAddress
+        email
+        phone
+        organization {
+            id
+            nameEn
+        }
+      }
+    }
+  }
+}

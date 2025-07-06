@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ fluent(key="page-not-found", lang=lang )}}</title>
+{% endblock title %}
+
+{% block content %}
+    <div class="col m-md-2 m-1">
+        <br>
+        <h1>{{ fluent(key="page-not-found", lang=lang )}}</h1>
+        <p>{{ fluent(key="you-requested", lang=lang )}} <strong>https://intersectional-data.ca{{ path }}</strong> - {{ fluent(key="does-not-exist", lang=lang )}}</p>
+        <p>{{ fluent(key="wrong-turn", lang=lang )}}</p>
+        <p><a href="/">{{ fluent(key="go-home", lang=lang )}}</a></p>
+
+    </div>
+{% endblock content %}

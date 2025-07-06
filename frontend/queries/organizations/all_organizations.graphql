@@ -1,0 +1,9 @@
+query AllOrganizations {
+  allOrganizations {
+    id
+    nameEn
+    acronymEn
+    orgType
+    url
+  }
+}

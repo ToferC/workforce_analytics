@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ fluent(key="person", lang=lang )}}</title>
+{% endblock title %}
+
+{% block content %}
+
+<div class="col m-md-2 m-1">
+
+    <h1>{{ person.givenName }} {{ person.familyName }}</h1>
+    <h3><a href="/{{ lang }}/organization/{{ person.organization.id }}">{{ person.organization.nameEn }}</a></h3>
+
+    <hr>
+    
+    <h3>Contact Info</h3>
+    <li>{{ person.workAddress }}</li>
+    <li>{{ person.postalCode }}</li>
+    <li>{{ person.email }}</li>
+    <li>{{ person.phone }}</li>
+    
+    <hr>
+
+    <h3>Role</h3>
+    {% for role in person.activeRoles %}
+        <h5><a href="/{{lang}}/role/{{ role.id }}">{{ role.titleEnglish}} ({{ role.militaryOccupation }}-{{ role.rank}})</a></h5>
+        <h5>Current Effort: {{ role.effort }}</h5>
+
+        <hr>
+        <h3>Team</h3>
+        <li>Name: <a href="/{{lang}}/team/{{role.team.id}}">{{ role.team.nameEnglish }}</a></li>
+        
+        <li>Owner: <a href="/{{lang}}/person/{{role.team.owner.id}}">{{ role.team.owner.givenName }} {{ role.team.owner.familyName }}</a></li>
+        <li>Owner email: {{ role.team.owner.email }}</li>
+
+        <hr>
+        <h4>Work</h4>
+        {% if role.work %}
+            {% for work in role.work %}
+                <h5><strong><a href="/{{lang}}/work/{{work.id}}">{{ work.workDescription | title }}</a></strong></li></h5>
+                <li>Domain & Capability: {{ work.domain }} -> {{ work.capabilityLevel }}</li>
+                <li>Status: {{ work.workStatus}}</li>
+                <li>Effort: {{ work.effort }}</li>
+            {% endfor %}
+        {% else %}
+            <p>No Work Assigned</p>
+        {% endif %}
+
+        <hr>
+    {% endfor %}</h4>
+
+    <hr>
+    <h4>Past Roles</h4>
+    {% for role in person.inactiveRoles %}
+        <li><a href="/{{lang}}/role/{{ role.id }}">{{ role.titleEnglish}} ({{ role.militaryOccupation }}-{{ role.rank}})</a></li>
+    {% endfor %}
+
+    <hr>
+    <h3>Capabilities</h3>
+    {% for cap in person.capabilities %}
+        <li>{{ cap.nameEn }} ({{ cap.domain }}) - {{ cap.validatedLevel }}</li>
+    {% endfor %}
+
+    <hr>
+    <h3>Potential Job Matches</h3>
+    {% for match in person.findMatches %}
+        <h5><a href="/{{lang}}/role/{{match.id}}">{{ match.titleEnglish }} ({{ match.militaryOccupation }})-{{ match.rank }}</a></h5>
+        {% for req in match.requirements %}
+            <li>{{ req.nameEn }} ({{ req.domain }}) - {{ req.requiredLevel }}</li>
+        {% endfor %}
+        <br>
+    {% endfor %}
+    <hr>
+    
+
+    <h3>Affiliations</h3>
+    {% if person.affilations %}
+        {% for aff in person.affiliations %}
+            <li><a href="/{{lang}}/affiliation/{{aff.id}}">{{ aff.organization.nameEn }} - {{ aff.affiliationRole }}</a></li>
+        {% endfor %}
+    {% else %}
+        <li>None</li>
+    {% endif %}
+
+    <hr>
+
+    <h3>Publications</h3>
+    {% if person.publications %}
+        {% for pub in person.publications %}
+            <li><a href="/{{lang}}/publication/{{pub.id}}">{{ pub.title }} - {{ pub.subjectText }}</a></li>
+        {% endfor %}
+    {% else %}
+        <li>None</li>
+    {% endif %}
+
+</div>
+
+
+
+{% endblock content %}

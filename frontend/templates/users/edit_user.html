@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ fluent(key="edit-user-title", user=user.user_name, lang=lang )}}</title>
+{% endblock title %}
+
+{% block content %}
+    <div class="col m-md-2 m-1">
+        <br>
+        <h1>{{ fluent(key="edit-user-title", user=user.user_name, lang=lang )}}</h1>
+        <p>{{ fluent(key="edit-user-explain", lang=lang )}}</p>
+
+
+        <form name="UserForm" id="userForm" action=/{{ lang }}/edit_user/{{ user.slug }} method=POST>
+        
+            <label>
+                <strong>{{ fluent(key="email-address", lang=lang )}}</strong>
+                <input class="form-control form-control-lg" type="email" name="email" value="{{ user.email }}" required>
+                <small id="code_help" class="form-text text-muted">{{ fluent(key="email-address-helper", lang=lang )}}.</small>
+            </label>
+            <br>
+    
+            <label>
+                <strong>{{ fluent(key="user-name", lang=lang )}}</strong>
+                <input class="form-control form-control-lg" type="text" name="user_name" value="{{ user.user_name }}" required>
+                <small id="code_help" class="form-text text-muted">{{ fluent(key="user-name-helper", lang=lang )}}</small>
+            </label>
+            <br>
+    
+        <p><strong>{{ fluent(key="email-change-notice", lang=lang )}}</strong></p>
+
+        <hr>
+        <button 
+            class="btn g-recaptcha btn-dark" 
+            data-sitekey="6LfAltkZAAAAAN7rJGBvRUPm36M1aiL7q2a8SznA" 
+            data-callback='onSubmit' 
+            data-action='submit'
+            type=submit
+            >{{ fluent(key="update-button", lang=lang )}}</button>
+    </form>
+                
+    </div>
+{% endblock content %}
+
+{% block scripts %}
+<script>
+
+    window.onSubmit = onSubmit;
+
+    function onSubmit(token) {
+     document.getElementById("userForm").submit();
+   };
+
+</script>
+{% endblock scripts %}

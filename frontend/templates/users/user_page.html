@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ fluent(key="user-profile-for", lang=lang )}} {{ user.user_name }}</title>
+{% endblock title %}
+
+{% block content %}
+    <div class="col m-md-2 m-1">
+        <br>
+        <h1>{{ fluent(key="user-profile-for", lang=lang )}} {{ user.user_name }}</h1>
+        <div class="card card-body">
+            <p>{{ fluent(key="user-details", lang=lang )}}</p>
+    
+                <p>{{ user.user_name }}</p>
+    
+                <p>{{ user.email }}</p>
+
+                <h2>{{ fluent(key="account-options", lang=lang )}}</h2>
+                <p>
+                    {% if role == "admin" %}
+                    <a class="btn btn-dark" href="/{{ lang }}/admin_edit_user/{{ user.slug }}">{{ fluent(key="edit-as-admin", lang=lang )}}</a>
+                    {% else %}
+                    <a class="btn btn-dark" href="/{{ lang }}/edit_user/{{ user.slug }}">{{ fluent(key="change-username-email", lang=lang )}}</a>
+                    {% endif %}
+                    <a class="btn btn-dark" href="/{{ lang }}/request_password_reset">{{ fluent(key="reset-password", lang=lang )}}</a>
+                    <a class="btn btn-danger" href="/{{ lang }}/delete_user/{{ user.slug }}">{{ fluent(key="delete-user", lang=lang )}}</a>
+                </p>
+
+        </div>
+        <br>
+
+        <h2>Add Documents and Work here</h2>
+
+        <br>
+        {% if user.validated %}
+            <p>VALIDATED - Add Document Button</p>
+        {% else %}
+            <p><strong>{{ fluent(key="must-verify", lang=lang )}}</strong></p>
+            <a class="btn btn-dark" href="/{{ lang }}/resend_email_verification">{{ fluent(key="send-email-verification", lang=lang )}}</a>
+        {% endif %}
+
+    </div>
+{% endblock content %}
+
+{% block scripts %}
+<script>
+
+</script>
+{% endblock scripts %}

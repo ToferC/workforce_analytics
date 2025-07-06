@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ fluent(key="role", lang=lang )}}</title>
+{% endblock title %}
+
+{% block content %}
+
+<div class="col m-md-2 m-1">
+
+    <h1>{{ role.titleEnglish }} {{ role.militaryOccupation }}-{{ role.rank }}</h1>
+
+    {% if role.person %}
+        <h3><a href="/{{ lang }}/person/{{ role.person.id }}">{{ role.person.givenName }} {{ role.person.familyName }}</a></h3>
+        <h5>Current Effort: {{ role.effort }}</h5>
+
+        <hr>
+        <h3>Contact Info</h3>
+        <li>{{ role.person.email }}</li>
+        <li>{{ role.person.phone }}</li>
+    {% else %}
+        <h3>VACANT</h3>
+        <h3>Requirements</h3>
+        {% if role.requirements %}
+            {% for req in role.requirements %}
+                <li>{{ req.nameEn }} ({{ req.domain }}) - {{ req.requiredLevel }}</li>
+            {% endfor %}
+        {% else %}
+            <p>No Requirements</p>
+        {% endif %}
+        <hr>
+    {% endif %}
+
+    {% if role.person %}
+    <hr>
+    <h3>Team</h3>
+    <li>Name: <a href="/{{lang}}/team/{{role.team.id}}">{{ role.team.nameEnglish }}</a></li>
+    
+    <li>Owner: <a href="/{{lang}}/person/{{role.team.owner.id}}">{{ role.team.owner.givenName }} {{ role.team.owner.familyName }}</a></li>
+    <li>Owner email: {{ role.team.owner.email }}</li>
+
+    <hr>
+    <h3>Requirements</h3>
+    {% if role.requirements %}
+        {% for req in role.requirements %}
+            <li>Requirement: {{ req.nameEn }} ({{ req.domain }}) - {{ req.requiredLevel }}</li>
+        {% endfor %}
+    {% else %}
+        <p>No Requirements</p>
+    {% endif %}
+
+    <hr>
+    <h4>Work</h4>
+    {% if role.work %}
+        {% for work in role.work %}
+            <h5><strong><a href="/{{lang}}/work/{{work.id}}">{{ work.workDescription }}</a></strong></li></h5>
+            <li>Domain & Capability: {{ work.domain }} -> {{ work.capabilityLevel }}</li>
+            <li>Status: {{ work.workStatus}}</li>
+            <li>Effort: {{ work.effort }}</li>
+        {% endfor %}
+    {% else %}
+        <p>No Work</p>
+    {% endif %}
+    {% else %}
+        <h2>Potential Matches</h2>
+        <hr>
+        {% for person in role.findMatches%}
+            <h3><a href="/{{lang}}/person/{{person.id}}">{{ person.givenName }} {{ person.familyName }}</a></h3>
+            <li>Phone: {{ person.phone }}</li>
+            <li>Email: {{ person.email }}</li>
+            <li>Current Role: 
+            {% for role in person.activeRoles %}
+                {{ role.titleEnglish }} - {{ role.militaryOccupation }}-{{ role.rank }}
+            {% endfor %}</li>
+            <br>
+            <h5>Capabilities</h5>
+            {% for cap in person.capabilities %}
+                <li>{{ cap.nameEn }} ({{ cap.domain }}) - {{ cap.validatedLevel }}</li>
+            {% endfor %}
+            <hr>
+
+        {% endfor %}
+    {% endif %}
+    <hr>
+
+</div>
+
+{% endblock content %}

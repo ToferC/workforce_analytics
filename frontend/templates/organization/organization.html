@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ fluent(key="organization", lang=lang )}}</title>
+{% endblock title %}
+
+{% block content %}
+
+<div class="col m-md-2 m-1">
+
+    <h1>{{ organization.nameEn }} - {{ organization.acronymEn }}</h1>
+
+    <hr>
+    <h3>Details</h3>
+    <li>Organization Type: {{ organization.orgType }}</li>
+    <li>Web Page: {{ organization.url }}</li>
+
+    <hr>
+    <h3>Organizational Tiers</h3>
+    {% for ot in organization.topOrgTier %}
+        <p>Name: <a href="/{{lang}}/org_tier/{{ot.id}}">{{ ot.nameEn }}</a></p>
+        <li>Primary Domain: {{ ot.primaryDomain }}</li>
+        <li>Owner: <a href="/{{lang}}/person/{{ot.owner.id}}">{{ ot.owner.givenName }} {{ ot.owner.familyName }}</a></li>
+        <hr>
+    {% endfor %}
+
+    <hr>
+
+    <p>
+        <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#capabilitySummary" aria-expanded="false" aria-controls="collapseExample">
+        Organizational Capabilities
+        </button>
+    </p>
+    <div class="collapse" id="capabilitySummary">
+        <h3>Capability Summary</h3>
+            {% if organization.capabilityCounts %}
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Domain</th>
+                    <th>Level</th>
+                    <th>Count</th>
+                </tr>
+                {% for count in organization.capabilityCounts %}
+                    <tr>
+                        <td>{{ count.name }}</td>
+                        <td>{{ count.domain }}</td>
+                        <td>{{ count.level }}</td>
+                        <td>{{ count.counts }}</td>
+                    </tr>
+                {% endfor %}
+            </table>
+            {% else %}
+                <p>No Capability Count data</p>
+            {% endif %}
+      </div>
+    <hr>
+
+    <h3>Publications</h3>
+    {% if organization.publications %}
+        {% for pub in organization.publications %}
+            <p>Name: <a href="/{{lang}}/publication/{{pub.id}}">{{ pub.title }}</a></p>
+            <li>Status: {{ pub.publicationStatus }}</li>
+            <li>Lead Author: <a href="/{{lang}}/person/{{pub.leadAuthor.id}}">{{ pub.leadAuthor.givenName }} {{ pub.leadAuthor.familyName }}</a></li>
+            <hr>
+        {% endfor %}
+    {% else %}
+        <p>No Publications</p>
+    {% endif %}
+
+    <hr>
+
+    <h3>Affiliations</h3>
+    {% if organization.affiliations %}
+        {% for aff in organization.affiliations %}
+            <p><a href="/{{lang}}/person/{{aff.person.id}}">{{ aff.person.givenName }} {{ aff.person.familyName }}</a></p>
+            <li><a href="/{{lang}}/organization/{{aff.organization.id}}">{{ aff.organization.nameEn }}</a></li>
+            <li>Role: {{ aff.affiliationRole }}</li>
+            <hr>
+    {% endfor %}
+    {% else %}
+        <p>No Affiliations</p>
+    {% endif %}
+
+
+</div>
+
+
+
+{% endblock content %}

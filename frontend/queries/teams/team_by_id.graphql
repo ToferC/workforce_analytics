@@ -1,0 +1,38 @@
+query TeamById($id:UUID!) {
+  teamByID(id: $id) {
+    id
+    nameEnglish
+    descriptionEnglish
+    organizationLevel {
+      nameEn
+      id
+    }
+    organization {
+      id
+      nameEn
+    }
+    occupiedRoles {
+      titleEnglish
+      id
+      rank
+      militaryOccupation
+      person {
+        givenName
+        familyName
+        id
+      }
+    }
+    vacantRoles {
+      titleEnglish
+      id
+      rank
+      militaryOccupation
+    }
+    owner {
+      givenName
+      familyName
+      email
+      id
+    }
+  }
+}

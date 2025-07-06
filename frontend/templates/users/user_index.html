@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ fluent(key="user-index", lang=lang )}}</title>
+{% endblock title %}
+
+{% block content %}
+    <div class="col m-md-2 m-1">
+        <br>
+        <h1>{{ fluent(key="user-index", lang=lang )}}</h1>
+        <p>{{ fluent(key="active-users", lang=lang )}}</p>
+
+        <table>
+            <tr>
+                <th style="text-align: center;">{{ fluent(key="user", lang=lang )}}</th>
+                <th style="text-align: center;">{{ fluent(key="email", lang=lang )}}</th>
+                <th style="text-align: center;">{{ fluent(key="role", lang=lang )}}</th>
+                <th style="text-align: center;">{{ fluent(key="link", lang=lang )}}</th>
+                <th style="text-align: center;">{{ fluent(key="delete-button", lang=lang )}}</th>
+            </tr>
+            {% if users %}
+                {% for user in users %} 
+                
+                <tr>
+                    <td>{{ user.user_name }}</td>
+                    <td>{{ user.email }}</td>
+                    <td>{{ user.role }}</td>
+                    <td><a href="/{{ lang }}/user/{{ user.slug }}">{{ fluent(key="link", lang=lang )}}</a></td>
+                    <td><a style="color:red" href="/{{ lang }}/delete_user/{{ user.id }}">{{ fluent(key="delete-button", lang=lang )}}</a></td>
+                </tr>
+                        
+                {% endfor %}
+            {% else %}
+            <tr>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>N/A</td>
+            </tr>
+            {% endif %}
+        </table>
+
+        <hr>
+        <!-- Keep for potential move -- will allow users to self-register for now.
+            <h2>Invite User</h2>
+    
+            <form name="UserInviteForm" id="userInviteForm" action=/invite_user method=POST>
+            
+                <label>
+                    <strong>Email address</strong>
+                    <input class="form-control form-control-lg" type="email" name="email" placeholder="user_email@domain.com" required>
+                    <small id="code_help" class="form-text text-muted">Enter the email address for the user you would like to invite.</small>
+                </label>
+                <br>
+        
+                <button 
+                    class="btn g-recaptcha btn-dark" 
+                    data-sitekey="6LfAltkZAAAAAN7rJGBvRUPm36M1aiL7q2a8SznA" 
+                    data-callback='onSubmit' 
+                    data-action='submit'
+                    type=submit
+                    >Send Password Reset Email</button>
+                <hr>
+            </form>
+        -->
+
+    </div>
+{% endblock content %}
+
+{% block scripts %}
+<script>
+
+    window.onSubmit = onSubmit;
+
+    function onSubmit(token) {
+     document.getElementById("userInviteForm").submit();
+   };
+
+</script>
+{% endblock scripts %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ fluent(key="verify-email", lang=lang )}}</title>
+{% endblock title %}
+
+{% block content %}
+    <div class="col m-md-2 m-1">
+        <br>
+        <h1>{{ fluent(key="verify-email", lang=lang )}}</h1>
+        <p>{{ fluent(key="enter-key", useremail=user.email, lang=lang )}}</p>
+
+
+        <form name="VerifyForm" id="verifyForm" action=/{{ lang }}/verify_code method=POST>
+        
+        <label>
+            <strong>{{ fluent(key="code", lang=lang )}}</strong>
+            <input class="form-control form-control-lg" type="text" name="code" placeholder="EGH83" required>
+            <small id="code_help" class="form-text text-muted">{{ fluent(key="code-helper", lang=lang )}}</small>
+        </label>
+
+        <br>
+
+        <button 
+            class="btn g-recaptcha btn-dark" 
+            data-sitekey="6LfAltkZAAAAAN7rJGBvRUPm36M1aiL7q2a8SznA" 
+            data-callback='onSubmit' 
+            data-action='submit'
+            type=submit
+            >{{ fluent(key="verify", lang=lang )}}</button>
+    </form>
+                
+    </div>
+{% endblock content %}
+
+{% block scripts %}
+<script>
+
+    window.onSubmit = onSubmit;
+
+    function onSubmit(token) {
+     document.getElementById("verifyForm").submit();
+   };
+
+</script>
+{% endblock scripts %}

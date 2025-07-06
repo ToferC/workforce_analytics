@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ fluent(key="record-not-found", lang=lang )}}</title>
+{% endblock title %}
+
+{% block content %}
+    <div class="col m-md-2 m-1">
+        <br>
+        <h1>{{ fluent(key="record-not-found", lang=lang )}}</h1>
+        <p>{{ fluent(key="record-not-found-explain", lang=lang )}}</p>
+        <p>{{ fluent(key="go-back-or", lang=lang )}} <a href="/{{ lang }}">{{ fluent(key="return-main-page", lang=lang )}}</a></p>
+
+    </div>
+{% endblock content %}

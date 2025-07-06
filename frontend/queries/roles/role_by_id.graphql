@@ -1,0 +1,63 @@
+query RoleById($id:UUID!) {
+  	roleById(id:$id) {
+    id
+    titleEnglish
+    militaryOccupation
+    rank
+    startDate
+    endDate
+    person {
+      id
+      familyName
+      givenName
+      phone
+      email
+    }
+    team {
+      id
+      nameEnglish
+      organizationLevel {
+        nameEn
+        primaryDomain
+      }
+      owner {
+        id
+        givenName
+        familyName
+        email
+      }
+    }
+    effort
+    work {
+      id
+      workDescription
+      domain
+      capabilityLevel
+      workStatus
+      effort
+    }
+    requirements {
+      nameEn
+      domain
+      requiredLevel
+    }
+    findMatches {
+      id
+      givenName
+      familyName
+      phone
+      email
+      activeRoles {
+        id
+        militaryOccupation
+        rank
+        titleEnglish
+      }
+      capabilities {
+        nameEn
+        domain
+        validatedLevel
+      }
+    }
+  }
+}

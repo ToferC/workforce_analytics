@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="Intersectional Data Survey & Analysis MVP">
+    <meta name="author" content="ToferC">
+    <meta property="og:title" content="Intersectional Data Survey & Analysis MVP">
+</head>
+<body>
+
+    <div class="card card-body">
+        <p>{{ fluent(key="hello", lang=lang )}}</p>
+        <p>{{ fluent(
+                key="community-email-body", 
+                community=phrases[community.tag] | title,
+                lang=lang, 
+            )}}</p>
+        <p>{{ fluent(key="community-description", description=phrases[community.description] | capitalize, lang=lang )}}</p>
+        <p>{{ fluent(key="no-identifying-information", lang=lang )}}</p>
+        <p>{{ fluent(key="data-use-case", datause=phrases[community.data_use_case] | capitalize, lang=lang )}}</p>
+        <p>{{ fluent(key="access-complete", lang=lang )}}<a href="{{ add_community_profile_url }}"> {{ fluent(key="click-url", lang=lang )}}</a></p>
+        <p>{{ fluent(key="thank-you-reach-at", contact=community.contact_email, lang=lang )}}</p>
+    </div>
+</body>
+</html>

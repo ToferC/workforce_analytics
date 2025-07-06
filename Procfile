@@ -1,1 +1,1 @@
-web: ./target/release/workforce_analytics
+web: ./target/release/graphql_api

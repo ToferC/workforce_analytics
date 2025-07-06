@@ -1,0 +1,62 @@
+query TaskById($id:UUID!) {
+  taskById(id:$id) {
+    id
+    title
+    domain
+    intendedOutcome
+    finalOutcome
+    approvalTier
+    url
+    startDatestamp
+    targetCompletionDate
+    taskStatus
+    completedDate
+    effort
+    work {
+      id
+      workDescription
+      url
+      domain
+      capabilityLevel
+      effort
+      workStatus
+      role {
+        id
+        titleEnglish
+        militaryOccupation
+        rank
+        person {
+          id
+          familyName
+          givenName
+          email
+          phone
+          organization {
+            id
+            nameEn
+          }
+      	}
+    	}
+    }
+    createdBy {
+      id
+      titleEnglish
+      person {
+        id
+        givenName
+        familyName
+        email
+        phone
+        activeRoles {
+          id
+          titleEnglish
+        }
+      }
+      team {
+        id
+        nameEnglish
+      }
+    }
+    
+  }
+}

@@ -9,7 +9,7 @@ services:
       - POSTGRES_PASSWORD=12345
       - POSTGRES_DB=workforce_analytics
     ports:
-      - 5432:5432
+      - 5434:5434
 
   people-data-api:
     build:

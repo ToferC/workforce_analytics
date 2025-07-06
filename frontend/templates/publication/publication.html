@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ fluent(key="publication", lang=lang )}}</title>
+{% endblock title %}
+
+{% block content %}
+
+<div class="col m-md-2 m-1">
+
+    <h1>{{ publication.title }}</h1>
+
+    <h3>Details</h3>
+    <li>ID: {{ publication.publishingId }}</li>
+    <li>Subject: {{ publication.subjectText }}</li>
+    <li>Publication Status: {{ publication.publicationStatus }}</li>
+    <li>Publication Date: {{ publication.publishedDatestamp }}</li>
+    <li>Publishing Organization: <a href="/{{lang}}/organization/{{publication.publishingOrganization.id}}">{{ publication.publishingOrganization.nameEn }}</a></li>
+    
+    <hr>
+
+    <h3>Lead Author</h3>
+    <li><a href="/{{lang}}/person/{{publication.leadAuthor.id}}">{{ publication.leadAuthor.givenName }} {{ publication.leadAuthor.familyName }}</a></li>
+    <li>Role:
+        {% for role in publication.leadAuthor.activeRoles %}
+            <a href="/{{ lang }}/role/{{ role.id }}">{{ role.titleEnglish }}</a> - {{ role.militaryOccupation }}-{{ role.rank }}
+        {% endfor %}</li>
+    <li>Address: {{ publication.leadAuthor.workAddress }}</li>
+    <li>Organization: <a href="/{{ lang }}/organization/{{ publication.leadAuthor.organization.id }}">{{ publication.leadAuthor.organization.nameEn }}</a></li>
+    <li>Email: {{ publication.leadAuthor.email }}</li>
+    <li>Phone: {{ publication.leadAuthor.phone }}</li>
+
+    <hr>
+    <h4>Contributors</h4>
+    {% for contributor in publication.contributors %}
+        <li>
+            <a href="/{{lang}}/person/{{contributor.id}}">{{ contributor.givenName }} {{ contributor.familyName }}</a> - {{ contributor.organization.nameEn }} - {% if contributor.activeRoles %}{{ contributor.activeRoles.0.titleEnglish }} {% else %}No Role{% endif %}</li>
+        </li>
+    {% endfor %}
+
+    <hr>
+
+</div>
+
+
+
+{% endblock content %}

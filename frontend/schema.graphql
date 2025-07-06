@@ -1,0 +1,522 @@
+"""
+Indicates that an Input Object is a OneOf Input Object (and thus requires exactly one of its field be provided)
+"""
+directive @oneOf on INPUT_OBJECT
+
+type Affiliation {
+  id: UUID!
+  personId: UUID!
+  organizationId: UUID!
+  homeOrgId: UUID!
+  affiliationRole: String!
+  startDatestamp: NaiveDateTime!
+  endDate: NaiveDateTime
+  createdAt: NaiveDateTime!
+  updatedAt: NaiveDateTime!
+  person: Person!
+  organization: Organization!
+  homeOrganization: Organization!
+}
+
+"""
+A representation of a persons ability to use a skill at a specific level
+"""
+type Capability {
+  id: UUID!
+  nameEn: String!
+  nameFr: String!
+  domain: SkillDomain!
+  skillId: UUID!
+  organizationId: UUID!
+  selfIdentifiedLevel: CapabilityLevel!
+  validatedLevel: CapabilityLevel
+  createdAt: NaiveDateTime!
+  updatedAt: NaiveDateTime!
+  retiredAt: NaiveDateTime
+  person: Person!
+  skillName: String!
+  skill: Skill!
+
+  """Detailed view of validations for this capability"""
+  validations: [Validation!]!
+}
+
+type CapabilityCount {
+  name: String!
+  domain: SkillDomain!
+  level: String!
+  counts: Int!
+}
+
+"""Enums for Capability -> shift to 0 - 4"""
+enum CapabilityLevel {
+  DESIRED
+  NOVICE
+  EXPERIENCED
+  EXPERT
+  SPECIALIST
+}
+
+input LoginQuery {
+  email: String!
+  password: String!
+}
+
+type Mutation {
+  signIn(input: LoginQuery!): UserResponse!
+}
+
+"""
+ISO 8601 combined date and time without timezone.
+
+# Examples
+
+* `2015-07-01T08:59:60.123`,
+"""
+scalar NaiveDateTime
+
+"""
+Represents an organizational level starting at the top (CEO or President's office) as 0
+and then increasing in tier number as you go deeper into the organization.
+Used to model an organizational hierarchy independent of people
+"""
+type OrgTier {
+  id: UUID!
+  tierLevel: Int!
+  nameEn: String!
+  nameFr: String!
+  primaryDomain: SkillDomain!
+  createdAt: NaiveDateTime!
+  updatedAt: NaiveDateTime!
+  retiredAt: NaiveDateTime
+  organization: Organization!
+  parentOrganizationTier: OrgTier
+  childOrganizationTier: [OrgTier!]!
+  owner: Person!
+  teams: [Team!]!
+}
+
+"""
+Represents an organization as a core structure within which are
+Person(s), OrgTiers, Publications
+"""
+type Organization {
+  id: UUID!
+  nameEn: String!
+  nameFr: String!
+  acronymEn: String!
+  acronymFr: String!
+  orgType: String!
+  url: String!
+  createdAt: NaiveDateTime!
+  updatedAt: NaiveDateTime!
+  retiredAt: NaiveDateTime
+  affiliations: [Affiliation!]!
+  publications: [Publication!]!
+  orgTiers: [OrgTier!]!
+  topOrgTier: [OrgTier!]!
+  capabilityCounts: [CapabilityCount!]!
+}
+
+"""
+Represents a person working in an organization
+Referenced by Team
+Referenced by ReportingRelationship
+Will break out address and contact info soon
+"""
+type Person {
+  id: UUID!
+  email: String!
+  phone: String!
+  workAddress: String!
+  city: String!
+  province: String!
+  postalCode: String!
+  country: String!
+  organizationId: UUID!
+  orcidId: String!
+  createdAt: NaiveDateTime!
+  updatedAt: NaiveDateTime!
+  retiredAt: NaiveDateTime
+
+  """Returns the person's family or second name"""
+  familyName: String!
+
+  """Returns the persons given or first name"""
+  givenName: String!
+
+  """Returns the person's organization"""
+  organization: Organization!
+
+  """
+  Returns active or inactive roles depending on the active boolean of true or false
+  """
+  inactiveRoles: [Role!]!
+
+  """Returns active role"""
+  activeRoles: [Role!]!
+
+  """Returns person's affiliations with other organizations"""
+  affiliations: [Affiliation!]!
+
+  """Returns a vector of the teams owned by this person"""
+  ownedTeams: [Team!]!
+
+  """Returns a vector of the organizational tiers owned by this person"""
+  ownedOrgTiers: [OrgTier!]!
+
+  """Returns the persons capabilities"""
+  capabilities: [Capability!]!
+  publications: [Publication!]!
+  findMatches: [Role!]!
+}
+
+type Publication {
+  id: UUID!
+  title: String!
+  subjectText: String!
+  publicationStatus: PublicationStatus!
+  urlString: String
+  publishingId: String
+  submittedDate: NaiveDateTime
+  publishedDatestamp: NaiveDateTime
+  createdAt: NaiveDateTime!
+  updatedAt: NaiveDateTime!
+  leadAuthor: Person!
+  publishingOrganization: Organization!
+  contributors: [Person!]!
+}
+
+enum PublicationStatus {
+  PLANNING
+  IN_PROGRESS
+  DRAFT
+  SUBMITTED
+  PUBLISHED
+  REJECTED
+  CANCELLED
+}
+
+type Query {
+  """Returns count number of Capabilities in the system"""
+  capabilities(count: Int!): [Capability!]!
+
+  """Returns a capability by its Uuid"""
+  capabilityById(id: UUID!): Capability!
+
+  """
+  Accepts a String "name" and returns a vector of capabilities that
+  match in EN or FR against it
+  """
+  capabilitiesByName(name: String!): [Capability!]!
+
+  """
+  Accepts a String "name" and a CapabilityLevel and returns matches against both
+  """
+  capabilitiesByNameAndLevel(name: String!, level: CapabilityLevel!): [Capability!]!
+
+  """
+  Return a count of the number of people who have a capability at each level of the capability
+  """
+  capabilityCountsByName(name: String!): [CapabilityCount!]!
+
+  """Return a CapabilityCount by a specific SkillDomain (SCIENTIFIC, etc.)"""
+  capabilityCountsByDomain(domain: SkillDomain!): [CapabilityCount!]!
+
+  """Returns vector of all skills"""
+  skills: [Skill!]!
+
+  """Returns a specific skill by ID"""
+  skillById(id: UUID!): Skill!
+
+  """Returns a vector of skills matching some part of the name provided"""
+  skillByName(name: String!): [Skill!]!
+
+  """
+  Accepts argument of "count" and returns a vector of {count} persons ordered by
+  family name.D
+  """
+  allPeople: [Person!]!
+
+  """
+  Accepts argument of "count" and returns a vector of {count} persons ordered by
+  family name
+  """
+  People(count: Int!): [Person!]!
+
+  """
+  Accepts argument of "count" and returns a vector of {count} persons ordered by
+  family name
+  """
+  peopleCount: Int!
+  personById(id: UUID!): Person!
+  personByName(name: String!): [Person!]!
+
+  """Returns a vector of all travel groups"""
+  allTeams: [Team!]!
+
+  """Returns a specific travel group by its UUID"""
+  teamByID(id: UUID!): Team!
+  teamByName(name: String!): [Team!]!
+
+  """Returns a vector of all organizations"""
+  allOrganizations: [Organization!]!
+
+  """Accepts argument "count" and returns a vector of {count} organizations"""
+  organizations(count: Int!): [Organization!]!
+  organizationByName(name: String!): [Organization!]!
+  organizationById(id: UUID!): Organization!
+
+  """Returns a vector of all  org tiers"""
+  allOrgTiers: [OrgTier!]!
+
+  """Returns a vector of org tiers for a specific org ID"""
+  orgTiersByOrgId(id: UUID!): [OrgTier!]!
+
+  """Accepts argument "count" and returns a vector of {count} org tiers"""
+  OrgTiers(count: Int!): [OrgTier!]!
+  orgTierById(id: UUID!): OrgTier!
+  orgTierByName(name: String!): [OrgTier!]!
+  orgChart(id: UUID!): [String!]!
+
+  """
+  Accepts an argument of "count" and returns a vector of {count} active role
+  """
+  activeRoles(count: Int!): [Role!]!
+
+  """
+  Accepts an argument of "count" and returns a vector of {count} active role
+  """
+  vacantRoles(count: Int!): [Role!]!
+
+  """Returns a vector of all persons ordered by family name"""
+  allRoles: [Role!]!
+  roleById(id: UUID!): Role!
+
+  """returns a count of the total roles in the system"""
+  roleCount: Int!
+
+  """Returns a vector of all publications"""
+  allPublications: [Publication!]!
+
+  """Accepts argument "count" and returns a vector of {count} publications"""
+  publicationCount(count: Int!): [Publication!]!
+
+  """
+  Accepts argument "title" and returns a vector of publications with that title or subject
+  """
+  publicationByTitle(title: String!): [Publication!]!
+
+  """Accepts id and returns a publications"""
+  publicationById(id: UUID!): Publication!
+
+  """
+  Accepts argument of "count" and returns a vector of {count} tasks ordered by
+  family name.D
+  """
+  allTasks: [Task!]!
+
+  """
+  Accepts argument of "count" and returns a vector of {count} tasks ordered by
+  family name
+  """
+  Tasks(count: Int!): [Task!]!
+  taskById(id: UUID!): Task!
+  taskByName(name: String!): [Task!]!
+
+  """Accepts an argument of "count" and returns a vector of {count} work"""
+  work(count: Int!): [Work!]!
+
+  """Returns a vector of all persons ordered by family name"""
+  allWork: [Work!]!
+  workById(id: UUID!): Work!
+}
+
+"""Represents military rank structure"""
+enum Rank {
+  PRIVATE
+  CORPORAL
+  MASTER_CORPORAL
+  SERGEANT
+  WARRANT_OFFICER
+  MASTER_WARRANT_OFFICER
+  CHIEF_WARRANT_OFFICER
+  SECOND_LIEUTENANT
+  LIEUTENANT
+  CAPTAIN
+  MAJOR
+  LIEUTENANT_COLONEL
+  COLONEL
+  BRIGADIER_GENERAL
+  MAJOR_GENERAL
+  LIEUTENANT_GENERAL
+  GENERAL
+}
+
+"""A representation of a roles ability to use a skill at a specific level"""
+type Requirement {
+  id: UUID!
+  nameEn: String!
+  nameFr: String!
+  domain: SkillDomain!
+  skillId: UUID!
+  requiredLevel: CapabilityLevel!
+  createdAt: NaiveDateTime!
+  updatedAt: NaiveDateTime!
+  retiredAt: NaiveDateTime
+  role: Role!
+  skillName: String!
+  skill: Skill!
+}
+
+type Role {
+  id: UUID!
+  person: Person
+  team: Team!
+  titleEnglish: String!
+  titleFrench: String!
+
+  """
+  Returns the sum effort of all active work underway
+  Maximum work should be around 10
+  """
+  effort: Int!
+
+  """Returns a vector of the work undertaken by this role"""
+  work: [Work!]!
+  active: String!
+  requirements: [Requirement!]!
+  militaryOccupation: String!
+  rank: Rank!
+  startDate: String!
+  endDate: String!
+  createdAt: String!
+  updatedAt: String!
+  findMatches: [Person!]!
+}
+
+"""
+Should get this from an API or have standard data
+Now pre-loaded as prt of context
+"""
+type Skill {
+  id: UUID!
+  nameEn: String!
+  nameFr: String!
+  descriptionEn: String!
+  descriptionFr: String!
+  domain: SkillDomain!
+  createdAt: NaiveDateTime!
+  updatedAt: NaiveDateTime!
+  retiredAt: NaiveDateTime
+  capabilities: [Capability!]!
+}
+
+enum SkillDomain {
+  COMBAT
+  STRATEGY
+  INTELLIGENCE
+  INFORMATION_TECHNOLOGY
+  HUMAN_RESOURCES
+  FINANCE
+  COMMUNICATIONS
+  ADMINISTRATION
+  ENGINEERING
+  MEDICAL
+  MANAGEMENT
+  LEADERSHIP
+  JOINT_OPERATIONS
+}
+
+type Task {
+  id: UUID!
+  createdByRoleId: UUID!
+  title: String!
+  domain: SkillDomain!
+  intendedOutcome: String!
+  finalOutcome: String
+  approvalTier: Int!
+  url: String!
+  startDatestamp: NaiveDateTime!
+  targetCompletionDate: NaiveDateTime!
+  taskStatus: WorkStatus!
+  completedDate: NaiveDateTime
+  createdAt: NaiveDateTime!
+  updatedAt: NaiveDateTime!
+  work: [Work!]!
+  effort: Int!
+  createdBy: Role!
+}
+
+type Team {
+  id: UUID!
+  organization: Organization!
+  organizationLevel: OrgTier!
+  nameEnglish: String!
+  nameFrench: String!
+  descriptionEnglish: String!
+  descriptionFrench: String!
+  retiredAt: String!
+  createdAt: String!
+  updatedAt: String!
+  occupiedRoles: [Role!]!
+  vacantRoles: [Role!]!
+  roles: [Role!]!
+  owner: Person!
+}
+
+"""
+A UUID is a unique 128-bit number, stored as 16 octets. UUIDs are parsed as
+Strings within GraphQL. UUIDs are used to assign unique identifiers to
+entities without requiring a central allocating authority.
+
+# References
+
+* [Wikipedia: Universally Unique Identifier](http://en.wikipedia.org/wiki/Universally_unique_identifier)
+* [RFC4122: A Universally Unique Identifier (UUID) URN Namespace](http://tools.ietf.org/html/rfc4122)
+"""
+scalar UUID
+
+type UserResponse {
+  bearer: String!
+  role: String!
+  email: String!
+}
+
+"""Other people's validations of an individuals Capability"""
+type Validation {
+  id: UUID!
+  capabilityId: UUID!
+  validatedLevel: CapabilityLevel!
+  createdAt: NaiveDateTime!
+  updatedAt: NaiveDateTime!
+  validator: Person!
+}
+
+"""
+Data structure for a relationship between a person and work
+This is a many to many relationship as multiple people may be
+assigned to a specific piece of work and a person may be assigned
+to multiple pieces of work
+"""
+type Work {
+  id: UUID!
+  workDescription: String!
+  url: String
+  domain: SkillDomain!
+  capabilityLevel: CapabilityLevel!
+  effort: Int!
+  workStatus: WorkStatus!
+  createdAt: NaiveDateTime!
+  updatedAt: NaiveDateTime!
+  task: Task!
+  role: Role!
+}
+
+enum WorkStatus {
+  PLANNING
+  IN_PROGRESS
+  COMPLETED
+  BLOCKED
+  CANCELLED
+}

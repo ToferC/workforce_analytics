@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ fluent(key="delete-user", lang=lang )}} {{ user.user_name }}</title>
+{% endblock title %}
+
+{% block content %}
+    <div class="col m-md-2 m-1">
+        <br>
+        <h1>{{ fluent(key="delete-user", lang=lang )}} {{ user.user_name }}</h1>
+        <p>{{ fluent(key="delete-user-explain", lang=lang )}}</p>
+
+            <p>{{ user.user_name }}</p>
+
+            <p>{{ user.email }}</p>
+
+            <form name="DeleteForm" id="deleteForm" action=/{{ lang }}/delete_user/{{ user.slug }} method=POST>
+
+                <label>
+                    <strong>{{ fluent(key="delete-user-colon", lang=lang )}} {{ user.user_name }}</strong>
+                    <input class="form-control form-control-lg" type="text" name="verify" placeholder="{{ fluent(key="delete-user-placeholder", lang=lang )}}" required>
+                    <small id="code_help" class="form-text text-muted">{{ fluent(key="delete-user-helper", lang=lang )}}
+                    </small>
+                </label>
+                <br>
+        
+                <button 
+                    class="btn g-recaptcha btn-danger" 
+                    data-sitekey="6LfAltkZAAAAAN7rJGBvRUPm36M1aiL7q2a8SznA" 
+                    data-callback='onSubmit' 
+                    data-action='submit'
+                    type=submit
+                    >{{ fluent(key="delete-button", lang=lang )}}</button>
+
+                <button class="btn btn-dark" href="/{{ lang }}/user_index">{{ fluent(key="return-button", lang=lang )}}</button>
+            
+            </form>
+
+    </div>
+{% endblock content %}
+
+{% block scripts %}
+<script>
+
+    window.onSubmit = onSubmit;
+
+    function onSubmit(token) {
+    document.getElementById("deleteForm").submit();
+    };
+
+</script>
+{% endblock scripts %}

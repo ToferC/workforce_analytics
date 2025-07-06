@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ fluent(key="edit-user-admin-title", user=user.user_name, lang=lang )}}</title>
+{% endblock title %}
+
+{% block content %}
+    <div class="col m-md-2 m-1">
+        <br>
+        <h1>{{ fluent(key="edit-user-admin-title", user=user.user_name, lang=lang )}}</h1>
+        <p>{{ fluent(key="edit-user-admin-explain", lang=lang )}}</p>
+
+
+        <form name="AdminUserForm" id="adminUserForm" action=/{{ lang }}/admin_edit_user/{{ user.slug }} method=POST>
+        
+        <label>
+            <strong>{{ fluent(key="email-address", lang=lang )}}</strong>
+            <input class="form-control form-control-lg" type="email" name="email" value="{{ user.email }}" required>
+            <small id="code_help" class="form-text text-muted">{{ fluent(key="email-address-helper", lang=lang )}}.</small>
+        </label>
+        <br>
+
+        <label>
+            <strong>{{ fluent(key="user-name", lang=lang )}}</strong>
+            <input class="form-control form-control-lg" type="text" name="user_name" value="{{ user.user_name }}" required>
+            <small id="code_help" class="form-text text-muted">{{ fluent(key="user-name-helper", lang=lang )}}</small>
+        </label>
+        <br>
+
+        <label>
+            <strong>{{ fluent(key="role", lang=lang )}}</strong>
+            <select name="role">
+                <option value="user" {% if user.role == "user" %}selected{% endif %}>{{ fluent(key="user", lang=lang )}}</option>
+                <option value="admin" {% if user.role == "admin" %}selected{% endif %}>{{ fluent(key="admin", lang=lang )}}</option>
+              </select>
+            <small id="code_help" class="form-text text-muted">{{ fluent(key="role-helper", lang=lang )}}</small>
+        </label>
+        <br>
+
+        <label>
+            <strong>{{ fluent(key="validated", lang=lang )}}</strong>
+            <select name="validated">
+                <option value="true" {% if user.validated %}selected{% endif %}>{{ fluent(key="true", lang=lang )}}</option>
+                <option value="false" {% if not user.validated %}selected{% endif %}>{{ fluent(key="false", lang=lang )}}</option>
+              </select>
+            <small id="code_help" class="form-text text-muted">{{ fluent(key="validated-helper", lang=lang )}}</small>
+        </label>
+
+        <hr>
+        <button 
+            class="btn g-recaptcha btn-dark" 
+            data-sitekey="6LfAltkZAAAAAN7rJGBvRUPm36M1aiL7q2a8SznA" 
+            data-callback='onSubmit' 
+            data-action='submit'
+            type=submit
+            >{{ fluent(key="update-button", lang=lang )}}</button>
+    </form>
+                
+    </div>
+{% endblock content %}
+
+{% block scripts %}
+<script>
+
+    window.onSubmit = onSubmit;
+
+    function onSubmit(token) {
+     document.getElementById("adminUserForm").submit();
+   };
+
+</script>
+{% endblock scripts %}

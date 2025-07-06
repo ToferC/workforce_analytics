@@ -1,0 +1,25 @@
+query OrgTiersByOrgId($id:UUID!) {
+  orgTiersByOrgId(id:$id) {
+    id
+    nameEn
+    primaryDomain
+    tierLevel
+    parentOrganizationTier {
+      id
+      nameEn
+    }
+    organization {
+      id
+      nameEn
+    }
+    owner {
+      id
+      givenName
+      familyName
+    }
+    teams {
+      nameEnglish
+      id
+    }
+  }
+}

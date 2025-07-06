@@ -1,6 +1,6 @@
 # Build stage
 #  Base rust image vaiant: rust:1.68-slim requires other dependencies
-FROM rust:1.85 as builder
+FROM rust:latest as builder
 
 RUN apt-get -qq update && apt-get install -y -q \
     libclang-dev \

@@ -1,0 +1,26 @@
+query CapabilityByNameAndLevel($name: String!, $level: String!) {
+  capabilitiesByNameAndLevel(name: $name, level:$level) {
+    id
+    nameEn
+    domain
+    validatedLevel
+    person {
+      id
+      givenName
+      familyName
+      phone
+      email
+      activeRoles {
+        id
+        militaryOccupation
+        rank
+        titleEnglish
+      }
+      capabilities {
+        nameEn
+        domain
+        validatedLevel
+      }
+    }
+  }
+}

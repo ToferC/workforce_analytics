@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ fluent(key="registration-error", lang=lang )}}</title>
+{% endblock title %}
+
+{% block content %}
+    <div class="col m-md-2 m-1">
+        <br>
+        <h1>{{ fluent(key="registration-error", lang=lang )}}</h1>
+        <p>{{ fluent(key="problem-with-registration", lang=lang )}} {{ fluent(key="you-can-login", lang=lang )}} <a href="log_in">{{ fluent(key="here", lang=lang )}}</a> {{ fluent(key="or-try-register", lang=lang )}}</p>
+
+
+        <form name="RegisterForm" id="registerForm" action=/{{ lang }}/register method=POST>
+        
+        <label>
+            <strong>{{ fluent(key="email-address", lang=lang )}}</strong>
+            <input class="form-control form-control-lg" type="email" name="email" placeholder="{{ fluent(key="email-placeholder", lang=lang )}}" required>
+            <small id="code_help" class="form-text text-muted">{{ fluent(key="email-address-helper", lang=lang )}}</small>
+        </label>
+        <br>
+
+        <label>
+            <strong>{{ fluent(key="user-name", lang=lang )}}</strong>
+            <input class="form-control form-control-lg" type="text" name="user_name" placeholder="{{ fluent(key="user-name-placeholder", lang=lang )}}" required>
+            <small id="code_help" class="form-text text-muted">{{ fluent(key="user-name-helper", lang=lang )}}</small>
+        </label>
+        <br>
+
+        <label>
+            <strong>{{ fluent(key="password", lang=lang )}}</strong>
+            <input 
+                class="form-control form-control-lg" 
+                type="password" 
+                name="password" 
+                placeholder="{{ fluent(key="password-placeholder", lang=lang )}}"
+                minlength=12
+                required
+            >
+            <small id="code_help" class="form-text text-muted">{{ fluent(key="password-helper", lang=lang )}}</small>
+        </label>
+
+        <br>
+        <p><strong>{{ fluent(key="email-coming-notice", lang=lang )}}</strong></p>
+
+        <hr>
+        <button 
+            class="btn g-recaptcha btn-dark" 
+            data-sitekey="6LfAltkZAAAAAN7rJGBvRUPm36M1aiL7q2a8SznA" 
+            data-callback='onSubmit' 
+            data-action='submit'
+            type=submit
+            >{{ fluent(key="register", lang=lang )}}</button>
+    </form>
+                
+    </div>
+{% endblock content %}
+
+{% block scripts %}
+<script>
+
+    window.onSubmit = onSubmit;
+
+    function onSubmit(token) {
+     document.getElementById("registerForm").submit();
+   };
+
+</script>
+{% endblock scripts %}

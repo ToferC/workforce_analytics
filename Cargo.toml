@@ -1,11 +1,10 @@
 [workspace]
 members = [
     "graphql_api",
-    "frontend",
     "errors"
 ]
 
 resolver = "3"
 
-default-members = ["graphql_api", "frontend"]
+default-members = ["graphql_api"]
 

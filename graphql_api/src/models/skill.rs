@@ -212,7 +212,7 @@ impl Skill {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset)]
+#[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, InputObject)]
 #[table_name = "skills"]
 /// Represents an insertable Skill
 pub struct NewSkill {
@@ -228,12 +228,27 @@ impl NewSkill {
         name_en: String,
         name_fr: String,
         domain: SkillDomain,
+        description_en: Option<String>,
+        description_fr: Option<String>,
     ) -> Self {
+
+        let en_result = if let Some(x) = description_en {
+            x 
+        } else {
+            "Default EN".to_string()
+        };
+
+        let fr_result = if let Some(x) = description_fr {
+            x 
+        } else {
+            "Default FR".to_string()
+        };
+
         NewSkill {
             name_en,
             name_fr,
-            description_en: "Default EN".to_string(),
-            description_fr: "Default FR".to_string(),
+            description_en: en_result,
+            description_fr: fr_result,
             domain,
         }
     }

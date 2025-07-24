@@ -18,6 +18,8 @@ pub fn pre_populate_skills() -> Result<(), Error> {
             s.trim().to_string(),
             format!("{}_FR", s.trim().to_string()),
             SkillDomain::Combat,
+            None,
+            None
         );
 
         let _res = Skill::create(&ns)?;
@@ -32,6 +34,8 @@ pub fn pre_populate_skills() -> Result<(), Error> {
             s.trim().to_string(),
             format!("{}_FR", s.trim().to_string()),
             SkillDomain::Strategy,
+            None,
+            None,
         );
 
         let _res = Skill::create(&ns)?;
@@ -46,6 +50,8 @@ pub fn pre_populate_skills() -> Result<(), Error> {
             s.trim().to_string(),
             format!("{}_FR", s.trim().to_string()),
             SkillDomain::Intelligence,
+            None,
+            None,
         );
 
         let _res = Skill::create(&ns)?;
@@ -60,6 +66,8 @@ pub fn pre_populate_skills() -> Result<(), Error> {
             s.trim().to_string(),
             format!("{}_FR", s.trim().to_string()),
             SkillDomain::InformationTechnology,
+            None,
+            None,
         );
 
         let _res = Skill::create(&ns)?;
@@ -74,6 +82,8 @@ pub fn pre_populate_skills() -> Result<(), Error> {
             s.trim().to_string(),
             format!("{}_FR", s.trim().to_string()),
             SkillDomain::HumanResources,
+            None,
+            None,
         );
 
         let _res = Skill::create(&ns)?;
@@ -88,6 +98,8 @@ pub fn pre_populate_skills() -> Result<(), Error> {
             s.trim().to_string(),
             format!("{}_FR", s.trim().to_string()),
             SkillDomain::Finance,
+            None,
+            None,
         );
 
         let _res = Skill::create(&ns)?;
@@ -102,6 +114,8 @@ pub fn pre_populate_skills() -> Result<(), Error> {
             s.trim().to_string(),
             format!("{}_FR", s.trim().to_string()),
             SkillDomain::Communications,
+            None,
+            None,
         );
 
         let _res = Skill::create(&ns)?;
@@ -116,6 +130,8 @@ pub fn pre_populate_skills() -> Result<(), Error> {
             s.trim().to_string(),
             format!("{}_FR", s.trim().to_string()),
             SkillDomain::Administration,
+            None,
+            None,
         );
 
         let _res = Skill::create(&ns)?;
@@ -130,6 +146,8 @@ pub fn pre_populate_skills() -> Result<(), Error> {
             s.trim().to_string(),
             format!("{}_FR", s.trim().to_string()),
             SkillDomain::Engineering,
+            None,
+            None,
         );
 
         let _res = Skill::create(&ns)?;
@@ -144,6 +162,8 @@ pub fn pre_populate_skills() -> Result<(), Error> {
             s.trim().to_string(),
             format!("{}_FR", s.trim().to_string()),
             SkillDomain::Medical,
+            None,
+            None,
         );
 
         let _res = Skill::create(&ns)?;
@@ -158,6 +178,8 @@ pub fn pre_populate_skills() -> Result<(), Error> {
             s.trim().to_string(),
             format!("{}_FR", s.trim().to_string()),
             SkillDomain::Management,
+            None,
+            None,
         );
 
         let _res = Skill::create(&ns)?;
@@ -172,6 +194,8 @@ pub fn pre_populate_skills() -> Result<(), Error> {
             s.trim().to_string(),
             format!("{}_FR", s.trim().to_string()),
             SkillDomain::Leadership,
+            None,
+            None,
         );
 
         let _res = Skill::create(&ns)?;
@@ -186,6 +210,8 @@ pub fn pre_populate_skills() -> Result<(), Error> {
             s.trim().to_string(),
             format!("{}_FR", s.trim().to_string()),
             SkillDomain::JointOperations,
+            None,
+            None,
         );
 
         let _res = Skill::create(&ns)?;

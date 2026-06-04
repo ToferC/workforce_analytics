@@ -12,7 +12,8 @@ The existing `SkillDomain` enum and seed skills reflect a military force structu
 (Combat, Strategy, Intelligence, Engineering, etc.). The current `InformationTechnology` domain
 contains only seven skills (Cloud Admin, Cloud Architecture, Python, DB Admin, Networking,
 Back-end Dev, Front-end Dev), and there are no domains for product management, user experience,
-DevOps, or agile delivery.
+DevOps, agile delivery, procurement, vendor management, or the governance and leadership
+disciplines needed to run a civilian digital organisation.
 
 A civilian digital and technology organisation supporting defence forces will typically employ:
 
@@ -24,9 +25,14 @@ A civilian digital and technology organisation supporting defence forces will ty
 - Agile coaches and Scrum practitioners
 - Cyber security specialists
 - Enterprise and solution architects
+- Procurement officers and contract managers
+- Vendor relationship and performance managers
+- Executives, people leaders, and organisational coaches
+- Governance, policy, privacy, and information management specialists
 
-The recommendations below expand the existing `InformationTechnology` domain and introduce
-**six new `SkillDomain` values**.
+The recommendations below expand the existing `InformationTechnology` and `Leadership` domains,
+expand or supplement the existing `Management`, `HumanResources`, and `Administration` domains,
+and introduce **eight new `SkillDomain` values**.
 
 ---
 
@@ -34,12 +40,16 @@ The recommendations below expand the existing `InformationTechnology` domain and
 
 ```rust
 // Add to the SkillDomain enum in src/models/skill.rs
-DataAndAnalytics,        // Data engineering, data science, ML, BI, governance
-CyberSecurity,           // Security engineering, threat modelling, GRC
-ProductManagement,       // Product ownership, roadmapping, stakeholder engagement
-UserExperience,          // UX research, service design, accessibility
-DevOpsAndPlatform,       // CI/CD, IaC, container orchestration, SRE
-AgileDelivery,           // Scrum, Kanban, SAFe, delivery management
+DataAndAnalytics,            // Data engineering, data science, ML, BI, governance
+CyberSecurity,               // Security engineering, threat modelling, GRC
+ProductManagement,           // Product ownership, roadmapping, stakeholder engagement
+UserExperience,              // UX research, service design, accessibility
+DevOpsAndPlatform,           // CI/CD, IaC, container orchestration, SRE
+AgileDelivery,               // Scrum, Kanban, SAFe, delivery management
+ProcurementAndContracting,   // Government procurement, contracting, strategic sourcing
+VendorManagement,            // Vendor relationships, performance, third-party risk
+OrganisationalLeadership,    // People leadership, executive skills, inclusive leadership
+Governance,                  // IT governance, policy, privacy, information management, audit
 ```
 
 ---
@@ -194,19 +204,164 @@ Replace the current seven IT skills with the following expanded set.
 
 ---
 
+## New Domain: `ProcurementAndContracting`
+
+Government procurement in a defence context follows strict frameworks (e.g. Treasury Board
+Contracting Policy, PSPC standing offers, TBIPS, ProServices). The skills below cover the
+full procurement lifecycle from planning through contract close-out.
+
+| name_en | name_fr | description_en |
+|---|---|---|
+| Procurement Strategy & Planning | Stratégie et planification des achats | Develop annual procurement plans aligned to programme roadmaps and departmental spending authority |
+| Government Contracting Frameworks | Cadres d'approvisionnement gouvernementaux | Apply Treasury Board and PSPC contracting policies, standing offers, and supply arrangements |
+| Statement of Work Development | Élaboration de l'énoncé des travaux | Write clear, measurable statements of work and evaluation criteria for competitive solicitations |
+| RFx Development | Élaboration de demandes de soumissions | Prepare Requests for Proposal, Quotation, and Information that comply with competitive procurement rules |
+| Bid Evaluation & Selection | Évaluation des soumissions et sélection | Lead technical and financial evaluation of bids against defined criteria; document selection rationale |
+| Contract Negotiation | Négociation de contrats | Negotiate commercial terms, pricing, deliverables, and risk allocation with prospective suppliers |
+| Contract Administration | Administration des contrats | Manage active contracts including amendments, invoicing, deliverable acceptance, and dispute resolution |
+| Strategic Sourcing | Approvisionnement stratégique | Analyse market supply, total cost of ownership, and consolidation opportunities to optimise sourcing decisions |
+| Software Licensing & Asset Management | Gestion des licences logicielles et des actifs | Track, rationalise, and renew software licences; manage enterprise agreements with major vendors |
+| Procurement Analytics | Analytique des achats | Analyse spend data to identify savings opportunities, compliance gaps, and supplier concentration risk |
+| Indigenous & Diversity Procurement | Approvisionnement autochtone et diversifié | Apply mandatory set-asides, Procurement Strategy for Indigenous Business, and supplier diversity targets |
+| Procurement Compliance & Audit | Conformité et vérification des achats | Ensure procurement activities meet departmental policy, ATIP obligations, and internal audit standards |
+
+---
+
+## New Domain: `VendorManagement`
+
+| name_en | name_fr | description_en |
+|---|---|---|
+| Vendor Relationship Management | Gestion des relations avec les fournisseurs | Build and maintain productive working relationships with strategic technology and service suppliers |
+| SLA & KPI Management | Gestion des niveaux de service et des ICP | Define, monitor, and enforce service level agreements and key performance indicators with vendors |
+| Vendor Performance Reviews | Revues de performance des fournisseurs | Conduct regular structured reviews of vendor delivery against contractual commitments |
+| Third-Party Risk Management | Gestion des risques liés aux tiers | Assess, monitor, and remediate security, operational, and financial risks introduced by suppliers |
+| Vendor Onboarding & Offboarding | Intégration et départ des fournisseurs | Manage the end-to-end process for bringing new vendors onto and off the organisation's technology estate |
+| Escrow & Continuity Planning | Planification de l'entiercement et de la continuité | Establish software escrow arrangements and transition plans to reduce lock-in and ensure continuity |
+| Multi-Vendor Coordination | Coordination multi-fournisseurs | Manage interdependencies and integration obligations across multiple concurrent vendor engagements |
+| Commercial & Pricing Analysis | Analyse commerciale et tarifaire | Benchmark pricing, analyse commercial proposals, and identify opportunities to reduce unit costs |
+| Vendor Consolidation & Rationalisation | Consolidation et rationalisation des fournisseurs | Assess the vendor landscape and consolidate suppliers to reduce overhead and improve leverage |
+| IT Asset & License Lifecycle Management | Gestion du cycle de vie des actifs et des licences TI | Track hardware and software assets from procurement through retirement and disposal |
+
+---
+
+## New Domain: `OrganisationalLeadership`
+
+The existing `Leadership` domain captures military leadership skills (Vision Setting, Foresight,
+Political Influence, etc.). This new domain addresses the distinct people-leadership, culture,
+and executive capabilities needed to run a civilian digital organisation.
+
+| name_en | name_fr | description_en |
+|---|---|---|
+| People Leadership | Leadership des personnes | Inspire, develop, and retain talent; build team cohesion and psychological safety |
+| Inclusive Leadership | Leadership inclusif | Lead in ways that actively value diversity, remove systemic barriers, and ensure equitable outcomes |
+| Executive Communication | Communication exécutive | Communicate strategy, decisions, and complex technical concepts clearly to senior and political audiences |
+| Strategic Thinking | Réflexion stratégique | Synthesise complex information to identify long-term opportunities and translate vision into direction |
+| Managing Through Ambiguity | Gestion dans l'ambiguïté | Maintain team focus and productivity when operating in uncertain, fast-changing environments |
+| Talent Development & Coaching | Développement des talents et coaching | Grow individual capabilities through coaching, mentoring, structured feedback, and career conversations |
+| Building High-Performing Teams | Constitution d'équipes performantes | Recruit, structure, and develop teams that deliver consistently and improve over time |
+| Conflict Resolution | Résolution des conflits | Mediate disagreements constructively and build consensus across competing interests |
+| Negotiation | Négociation | Reach workable agreements with peers, partners, and senior stakeholders through principled negotiation |
+| Employee Wellbeing & Mental Health | Bien-être des employés et santé mentale | Recognise stress indicators, apply wellness frameworks, and create conditions for sustainable performance |
+| Digital Leadership | Leadership numérique | Champion digital transformation, model modern ways of working, and build digital confidence in the organisation |
+| Organisational Design | Conception organisationnelle | Design reporting structures, spans of control, and team topologies that enable effective delivery |
+| Succession Planning | Planification de la relève | Identify critical roles and develop pipelines of talent to ensure leadership continuity |
+
+---
+
+## New Domain: `Governance`
+
+This domain covers the formal governance, policy, privacy, information management, and audit
+capabilities that a civilian organisation operating in a government or defence context must maintain.
+
+### IT & Digital Governance
+
+| name_en | name_fr | description_en |
+|---|---|---|
+| IT Governance (COBIT / ITIL) | Gouvernance des TI (COBIT / ITIL) | Apply COBIT or ITIL frameworks to align IT decisions with organisational strategy and risk appetite |
+| Digital Policy Development | Élaboration de politiques numériques | Research, draft, and consult on policies governing the use of digital tools, data, and AI within the organisation |
+| Enterprise Risk Management | Gestion intégrée des risques | Identify, assess, and report on enterprise risks using a structured framework aligned to TB policy |
+| IT Audit & Assurance | Vérification et assurance des TI | Plan and execute IT audits; assess controls, produce findings, and track management action plans |
+| Business Continuity Planning | Planification de la continuité des activités | Develop and test business continuity and disaster recovery plans for critical digital services |
+| Change Management & Change Advisory | Gestion des changements et comité consultatif | Operate a change advisory board process to govern risk to live services from planned changes |
+
+### Privacy & Information Management
+
+| name_en | name_fr | description_en |
+|---|---|---|
+| Privacy & Access to Information (ATIP) | Protection des renseignements personnels et AIPRP | Process and respond to Access to Information and Privacy requests under the Privacy Act and ATIP legislation |
+| Privacy Impact Assessment | Évaluation des facteurs relatifs à la vie privée | Conduct PIAs for new programmes, tools, and data uses; identify and mitigate privacy risks |
+| Information Management | Gestion de l'information | Apply government IM frameworks for creation, capture, classification, retention, and disposal of records |
+| Records Management | Gestion des documents | Manage official records in compliance with the Library and Archives Canada Act and departmental IM policy |
+| Security Classification Management | Gestion de la classification de sécurité | Apply government security classification schemes (Protected A/B/C, Secret, Top Secret) to information assets |
+| Open Government & Transparency | Gouvernement ouvert et transparence | Manage proactive disclosure obligations, open data publishing, and departmental transparency commitments |
+
+### Corporate Governance
+
+| name_en | name_fr | description_en |
+|---|---|---|
+| Corporate Planning & Reporting | Planification et rapports organisationnels | Lead departmental planning cycles (DPR, DP, MAF) and produce results-based performance reports |
+| Treasury Board Submissions | Présentations au Conseil du Trésor | Develop TB submissions, Memoranda to Cabinet, and other central-agency approval documents |
+| Internal Audit | Vérification interne | Plan and execute internal audits against the TB Policy on Internal Audit; report to the audit committee |
+| Evaluation | Évaluation | Design and conduct programme evaluations aligned to the TB Policy on Results |
+| Legal & Policy Interpretation | Interprétation juridique et des politiques | Interpret legislation, regulations, and policy instruments to advise programme and delivery teams |
+| Official Languages Management | Gestion des langues officielles | Ensure compliance with the Official Languages Act in service delivery, staffing, and workplace communications |
+
+---
+
+## Expanded Domain Notes: Existing Domains
+
+### `Leadership` (existing — recommended expansions)
+The current seed skills (Vision Setting, Innovation, Foresight, Political Influence, Mobilizing People)
+remain valid for senior leadership. Consider adding:
+
+| name_en | name_fr | description_en |
+|---|---|---|
+| Servant Leadership | Leadership serviteur | Prioritise the needs of the team; remove blockers and enable others to do their best work |
+| Systems Thinking | Pensée systémique | Analyse interdependencies across complex sociotechnical systems to understand second-order effects |
+| Psychological Safety | Sécurité psychologique | Create conditions where team members feel safe to speak up, experiment, and learn from failure |
+
+### `Management` (existing — recommended expansions)
+Current skills: People Management, Action Management, Financial Management, Performance Management. Add:
+
+| name_en | name_fr | description_en |
+|---|---|---|
+| Workforce Planning | Planification des effectifs | Forecast and plan for the talent, skills, and headcount needed to meet future delivery commitments |
+| Resource & Capacity Management | Gestion des ressources et de la capacité | Allocate people, budget, and tooling across competing priorities to maximise delivery throughput |
+| Knowledge Management | Gestion des connaissances | Design systems to capture, share, and reuse institutional knowledge across the organisation |
+
+### `HumanResources` (existing — recommended expansions)
+Current skills: Staffing, Classification, Recruiting, Pay and Compensation. Add:
+
+| name_en | name_fr | description_en |
+|---|---|---|
+| Learning & Development | Apprentissage et perfectionnement | Design and manage programmes that build the skills and capabilities the organisation needs over time |
+| Talent Management | Gestion des talents | Identify high-potential employees, manage succession pipelines, and reduce attrition risk |
+| Equity, Diversity & Inclusion | Équité, diversité et inclusion | Design and implement EDI strategies that address systemic barriers and improve workforce representation |
+| Employee Relations | Relations avec les employés | Manage labour relations, grievances, and collective agreement obligations in a unionised environment |
+| Occupational Health & Safety | Santé et sécurité au travail | Administer OHS obligations, workplace accommodation, and return-to-work programmes |
+
+---
+
 ## Summary of Changes to `SkillDomain` Enum
 
-| Action | Domain | Rationale |
-|---|---|---|
-| Expand | `InformationTechnology` | Add 15 skills across software engineering, cloud/platform, and enterprise architecture |
-| Add | `DataAndAnalytics` | 12 skills covering the full data and AI/ML stack |
-| Add | `CyberSecurity` | 10 skills for security engineering, operations, and GRC |
-| Add | `ProductManagement` | 10 skills for product ownership and portfolio governance |
-| Add | `UserExperience` | 10 skills for research, design, and accessibility |
-| Add | `DevOpsAndPlatform` | 10 skills for CI/CD, IaC, SRE, and FinOps |
-| Add | `AgileDelivery` | 12 skills for Scrum, SAFe, coaching, and programme delivery |
+| Action | Domain | Skills | Rationale |
+|---|---|---|---|
+| Expand | `InformationTechnology` | ~22 | Software engineering, cloud/platform, and enterprise architecture |
+| Add | `DataAndAnalytics` | 12 | Full data and AI/ML stack |
+| Add | `CyberSecurity` | 10 | Security engineering, operations, and GRC |
+| Add | `ProductManagement` | 10 | Product ownership and portfolio governance |
+| Add | `UserExperience` | 10 | Research, design, and accessibility |
+| Add | `DevOpsAndPlatform` | 10 | CI/CD, IaC, SRE, and FinOps |
+| Add | `AgileDelivery` | 12 | Scrum, SAFe, coaching, and programme delivery |
+| Add | `ProcurementAndContracting` | 12 | Government procurement lifecycle, strategic sourcing, compliance |
+| Add | `VendorManagement` | 10 | Vendor relationships, SLAs, third-party risk, commercial analysis |
+| Add | `OrganisationalLeadership` | 13 | People leadership, executive communication, inclusive leadership |
+| Add | `Governance` | 15 | IT governance, privacy/ATIP, information management, corporate governance |
+| Expand | `Leadership` | +3 | Servant leadership, systems thinking, psychological safety |
+| Expand | `Management` | +3 | Workforce planning, capacity management, knowledge management |
+| Expand | `HumanResources` | +5 | L&D, talent management, EDI, employee relations, OHS |
 
-**Total new skills: ~79** (compared to 7 currently in IT domain)
+**Total new / updated skills: ~147** across 14 domains (compared to the original 7 IT-only skills)
 
 ---
 
@@ -223,6 +378,10 @@ ALTER TYPE skill_domain ADD VALUE IF NOT EXISTS 'ProductManagement';
 ALTER TYPE skill_domain ADD VALUE IF NOT EXISTS 'UserExperience';
 ALTER TYPE skill_domain ADD VALUE IF NOT EXISTS 'DevOpsAndPlatform';
 ALTER TYPE skill_domain ADD VALUE IF NOT EXISTS 'AgileDelivery';
+ALTER TYPE skill_domain ADD VALUE IF NOT EXISTS 'ProcurementAndContracting';
+ALTER TYPE skill_domain ADD VALUE IF NOT EXISTS 'VendorManagement';
+ALTER TYPE skill_domain ADD VALUE IF NOT EXISTS 'OrganisationalLeadership';
+ALTER TYPE skill_domain ADD VALUE IF NOT EXISTS 'Governance';
 ```
 
 Note: PostgreSQL `ALTER TYPE … ADD VALUE` is not transactional in older versions (< 12).
@@ -235,8 +394,24 @@ expressions (particularly in `dummy_capability_data.rs` and anywhere `SkillDomai
 ### Seed Data
 Add the skills listed above to `src/database_utils/dummy_capability_data.rs`. The function that
 selects random domains for person generation should include the new domains with appropriate
-weighting (e.g. `DataAndAnalytics: 10%`, `DevOpsAndPlatform: 8%`, `AgileDelivery: 7%`,
-`ProductManagement: 6%`, `UserExperience: 5%`, `CyberSecurity: 5%`).
+weighting — for example:
+
+| Domain | Suggested weight |
+|---|---|
+| `DataAndAnalytics` | 10% |
+| `DevOpsAndPlatform` | 8% |
+| `AgileDelivery` | 7% |
+| `ProductManagement` | 6% |
+| `UserExperience` | 5% |
+| `CyberSecurity` | 5% |
+| `ProcurementAndContracting` | 4% |
+| `VendorManagement` | 3% |
+| `OrganisationalLeadership` | 5% |
+| `Governance` | 4% |
+
+Roles such as executives, directors, and branch heads should skew toward
+`OrganisationalLeadership` and `Governance`; procurement officers toward
+`ProcurementAndContracting` and `VendorManagement`.
 
 ### Bilingual Names
 All skills above include `name_en` and `name_fr`. Descriptions in French (`description_fr`)

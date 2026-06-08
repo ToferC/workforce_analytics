@@ -140,14 +140,13 @@ pub fn pre_populate_skills() -> Result<(), Error> {
         (SkillDomain::ProcurementAndVendorManagement, "Commercial & Risk Analysis",                 "Analyse commerciale et des risques"),
         (SkillDomain::ProcurementAndVendorManagement, "Vendor & Asset Lifecycle Management",        "Gestion du cycle de vie des fournisseurs et des actifs"),
 
-        // ── People & Organisational Leadership (21 → 7, capability clusters) ─
-        (SkillDomain::PeopleAndOrganisationalLeadership, "Strategic & Visionary Leadership",          "Leadership stratégique et visionnaire"),
-        (SkillDomain::PeopleAndOrganisationalLeadership, "Political Acuity & Executive Influence",    "Acuité politique et influence exécutive"),
-        (SkillDomain::PeopleAndOrganisationalLeadership, "People Leadership & Inclusion",             "Leadership des personnes et inclusion"),
-        (SkillDomain::PeopleAndOrganisationalLeadership, "Team Performance & Psychological Safety",   "Performance d'équipe et sécurité psychologique"),
-        (SkillDomain::PeopleAndOrganisationalLeadership, "Talent & Performance Development",          "Développement des talents et du rendement"),
-        (SkillDomain::PeopleAndOrganisationalLeadership, "Organisational Design & Workforce Planning","Conception organisationnelle et planification des effectifs"),
-        (SkillDomain::PeopleAndOrganisationalLeadership, "Organisational Change Leadership",          "Leadership du changement organisationnel"),
+        // ── People & Organisational Leadership (GoC Key Leadership Competencies) ─
+        (SkillDomain::PeopleAndOrganisationalLeadership, "Create Vision and Strategy",                "Créer une vision et une orientation stratégiques"),
+        (SkillDomain::PeopleAndOrganisationalLeadership, "Mobilize People",                           "Mobiliser les personnes"),
+        (SkillDomain::PeopleAndOrganisationalLeadership, "Uphold Integrity and Respect",              "Promouvoir l'intégrité et le respect"),
+        (SkillDomain::PeopleAndOrganisationalLeadership, "Collaborate with Partners and Stakeholders","Collaborer avec les partenaires et les intervenants"),
+        (SkillDomain::PeopleAndOrganisationalLeadership, "Promote Innovation and Guide Change",       "Promouvoir l'innovation et orienter le changement"),
+        (SkillDomain::PeopleAndOrganisationalLeadership, "Achieve Results",                           "Obtenir des résultats"),
 
         // ── Governance & Compliance (18 → 7, capability clusters) ──────────
         (SkillDomain::Governance, "IT & Digital Governance",                       "Gouvernance des TI et du numérique"),

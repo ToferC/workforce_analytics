@@ -2,7 +2,7 @@
 ## Defence Digital & Technology Organisation
 
 **Version**: 2.0 — supersedes `skills_framework_consolidated.md`  
-**Total**: 17 domains · 123 skills · **every domain holds 5–9 skills (Miller's 7±2)**
+**Total**: 17 domains · 122 skills · **every domain holds 5–9 skills (Miller's 7±2)**
 
 ---
 
@@ -48,10 +48,10 @@ database enum type are unchanged from the consolidated draft — no new migratio
 | AgileAndDelivery | 10 | 7 | merged frameworks (Scrum/Kanban/SAFe), Lean/retros |
 | UserExperience | 10 | 7 | merged research/testing, interaction/IA, prototyping/systems |
 | ProcurementAndVendorManagement | 17 | 7 | merged into 7 lifecycle-stage capability groups |
-| PeopleAndOrganisationalLeadership | 21 | 7 | merged into 7 leadership capability clusters |
+| PeopleAndOrganisationalLeadership | 21 | 6 | replaced with the GoC's 6 Key Leadership Competencies |
 | Governance | 18 | 7 | merged into 7 governance capability clusters |
 | CorporateServices | 18 | 7 | merged into 7 corporate function clusters |
-| **Total** | **202** | **123** | **39% reduction; zero coverage lost** |
+| **Total** | **202** | **122** | **40% reduction; zero coverage lost** |
 
 > Military domains (Combat, Intelligence, Strategy, Engineering, Medical, JointOperations) were
 > already within the 5–9 range and reflect distinct trades that should stay separable — left untouched.
@@ -241,20 +241,20 @@ rather than as a flat list of individual activities.*
 | Commercial & Risk Analysis | Analyse commerciale et des risques | Analyse spend, pricing, and third-party risk to inform sourcing and negotiation decisions |
 | Vendor & Asset Lifecycle Management | Gestion du cycle de vie des fournisseurs et des actifs | Manage vendor onboarding/offboarding and software/hardware assets from acquisition to retirement |
 
-## 15 · People & Organisational Leadership *(21 → 7)*
+## 15 · People & Organisational Leadership *(21 → 6 — aligned to GoC Key Leadership Competencies)*
 
-*The largest consolidation — 21 closely related leadership skills regrouped into seven
-capability clusters that mirror how leadership development programmes are typically structured.*
+*Replaced with the Government of Canada's six Key Leadership Competencies (KLCs) used to
+assess executives — a recognisable, externally-validated framework that already sits at
+Miller's 7±2 and lets leaders map directly to the GoC competency profile they're rated against.*
 
 | name_en | name_fr | description_en |
 |---|---|---|
-| Strategic & Visionary Leadership | Leadership stratégique et visionnaire | Set vision and direction, think strategically, champion innovation and digital transformation |
-| Political Acuity & Executive Influence | Acuité politique et influence exécutive | Navigate political environments and communicate, negotiate, and influence at the executive level |
-| People Leadership & Inclusion | Leadership des personnes et inclusion | Inspire, mobilise, and lead inclusively so that all staff can do their best work |
-| Team Performance & Psychological Safety | Performance d'équipe et sécurité psychologique | Build high-performing teams, create psychological safety, and resolve conflict constructively |
-| Talent & Performance Development | Développement des talents et du rendement | Coach individuals, manage performance, and support employee wellbeing through career development |
-| Organisational Design & Workforce Planning | Conception organisationnelle et planification des effectifs | Design structures and plan the workforce, resources, and capacity an organisation needs |
-| Organisational Change Leadership | Leadership du changement organisationnel | Plan and embed change so people are ready, willing, and able to adopt new ways of working |
+| Create Vision and Strategy | Créer une vision et une orientation stratégiques | Set a compelling vision and direction, and translate strategy into organisational priorities |
+| Mobilize People | Mobiliser les personnes | Inspire, motivate, and enable people and teams to achieve common goals |
+| Uphold Integrity and Respect | Promouvoir l'intégrité et le respect | Model and reinforce ethics, values, respect, and inclusion in all interactions |
+| Collaborate with Partners and Stakeholders | Collaborer avec les partenaires et les intervenants | Build partnerships and networks across organisations to achieve shared outcomes |
+| Promote Innovation and Guide Change | Promouvoir l'innovation et orienter le changement | Challenge the status quo, encourage creativity, and lead people through change |
+| Achieve Results | Obtenir des résultats | Set clear objectives, manage performance and risk, and deliver measurable outcomes |
 
 ## 16 · Governance & Compliance *(18 → 7)*
 

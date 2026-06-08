@@ -2,7 +2,7 @@
 ## Defence Digital & Technology Organisation
 
 **Version**: 2.0 — supersedes `skills_framework_consolidated.md`  
-**Total**: 16 domains · 115 skills · **every domain holds 5–9 skills (Miller's 7±2)**
+**Total**: 16 domains · 116 skills · **every domain holds 5–9 skills (Miller's 7±2)**
 
 ---
 
@@ -50,9 +50,9 @@ enum are unchanged from the consolidated draft.
 | UserExperience | 10 | 7 | merged research/testing, interaction/IA, prototyping/systems |
 | ProcurementAndVendorManagement | 17 | 7 | merged into 7 lifecycle-stage capability groups |
 | PeopleAndOrganisationalLeadership | 21 | 6 | replaced with the GoC's 6 Key Leadership Competencies |
-| Governance | 18 | 7 | merged into 7 governance capability clusters |
+| Governance | 18 | 8 | merged into capability clusters; Policy Development split out from Legal Affairs |
 | CorporateServices | 18 | 7 | merged into 7 corporate function clusters |
-| **Total** | **202** | **115** | **43% reduction; zero coverage lost** |
+| **Total** | **202** | **116** | **43% reduction; zero coverage lost** |
 
 > Military domains (Combat, Intelligence, Strategy, Engineering, Medical, JointOperations) were
 > already within the 5–9 range and reflect distinct trades that should stay separable — left untouched.
@@ -253,7 +253,7 @@ Miller's 7±2 and lets leaders map directly to the GoC competency profile they'r
 | Promote Innovation and Guide Change | Promouvoir l'innovation et orienter le changement | Challenge the status quo, encourage creativity, and lead people through change |
 | Achieve Results | Obtenir des résultats | Set clear objectives, manage performance and risk, and deliver measurable outcomes |
 
-## 15 · Governance & Compliance *(18 → 7)*
+## 15 · Governance & Compliance *(18 → 8 — Policy Development split out from Legal Affairs)*
 
 | name_en | name_fr | description_en |
 |---|---|---|
@@ -263,7 +263,8 @@ Miller's 7±2 and lets leaders map directly to the GoC competency profile they'r
 | Privacy & Access to Information | Protection des renseignements personnels et accès à l'information | Process ATIP requests and conduct Privacy Impact Assessments under the Privacy Act |
 | Information & Records Management | Gestion de l'information et des documents | Manage records, classification, and information assets per government IM frameworks |
 | Corporate Planning & Reporting | Planification et rapports organisationnels | Lead departmental planning, performance reporting, Treasury Board submissions, and transparency obligations |
-| Legal, Policy & Official Languages | Affaires juridiques, politiques et langues officielles | Interpret legislation and policy and ensure compliance with the Official Languages Act |
+| Policy Development & Advice | Élaboration de politiques et conseils stratégiques | Research options, draft policy instruments and briefing material, and advise decision-makers on public policy |
+| Legal Affairs & Official Languages | Affaires juridiques et langues officielles | Interpret legislation and provide legal guidance, and ensure compliance with the Official Languages Act |
 
 ## 16 · Corporate Services *(18 → 7)*
 
@@ -295,7 +296,7 @@ consolidated draft.
 
 ### Code change scope
 `pre_populate_skills()` in `dummy_capability_data.rs` needs its skill vector replaced with the
-115-skill list above (down from 202), and any `SkillDomain::ProductManagement` /
+116-skill list above (down from 202), and any `SkillDomain::ProductManagement` /
 `SkillDomain::AgileAndDelivery` references updated to `SkillDomain::ProductAgileAndDelivery`.
 All downstream logic (capability generation, validations, requirements) is domain-driven and
 requires no further changes.

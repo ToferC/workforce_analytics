@@ -146,7 +146,8 @@ pub fn pre_populate_skills() -> Result<(), Error> {
         (SkillDomain::Governance, "Privacy & Access to Information",               "Protection des renseignements personnels et accès à l'information"),
         (SkillDomain::Governance, "Information & Records Management",              "Gestion de l'information et des documents"),
         (SkillDomain::Governance, "Corporate Planning & Reporting",                "Planification et rapports organisationnels"),
-        (SkillDomain::Governance, "Legal, Policy & Official Languages",            "Affaires juridiques, politiques et langues officielles"),
+        (SkillDomain::Governance, "Policy Development & Advice",                   "Élaboration de politiques et conseils stratégiques"),
+        (SkillDomain::Governance, "Legal Affairs & Official Languages",            "Affaires juridiques et langues officielles"),
 
         // ── Corporate Services (18 → 7, corporate function clusters) ───────
         (SkillDomain::CorporateServices, "Financial Management & Reporting",       "Gestion financière et rapports"),

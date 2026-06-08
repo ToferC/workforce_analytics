@@ -3,13 +3,14 @@ use async_graphql::*;
 // use rdkafka::producer::FutureProducer;
 // use crate::kafka::send_message;
 
-use crate::graphql::{mutation::{CapabilityMutation, PersonMutation, RoleMutation, UserMutation}, SkillMutation};
+use crate::graphql::{mutation::{CapabilityMutation, PersonMutation, RoleMutation, UserMutation}, SkillMutation, ValidationMutation};
 
 #[derive(MergedObject, Default)]
 pub struct Mutation(
-    UserMutation, 
+    UserMutation,
     PersonMutation,
     RoleMutation,
     CapabilityMutation,
     SkillMutation,
+    ValidationMutation,
 );

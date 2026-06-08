@@ -60,8 +60,7 @@ pub enum SkillDomain {
     DataAnalyticsAndAi,
     CyberSecurity,
     // Delivery & design domains
-    ProductManagement,
-    AgileAndDelivery,
+    ProductAgileAndDelivery,
     UserExperience,
     // Organisational domains
     ProcurementAndVendorManagement,
@@ -83,8 +82,7 @@ impl Distribution<SkillDomain> for Standard {
             51..=57 => SkillDomain::CloudPlatformDevOps,
             58..=63 => SkillDomain::DataAnalyticsAndAi,
             64..=67 => SkillDomain::CyberSecurity,
-            68..=72 => SkillDomain::AgileAndDelivery,
-            73..=76 => SkillDomain::ProductManagement,
+            68..=76 => SkillDomain::ProductAgileAndDelivery,
             77..=79 => SkillDomain::UserExperience,
             80..=82 => SkillDomain::ProcurementAndVendorManagement,
             83..=87 => SkillDomain::PeopleAndOrganisationalLeadership,

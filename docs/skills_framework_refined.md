@@ -2,7 +2,7 @@
 ## Defence Digital & Technology Organisation
 
 **Version**: 2.0 — supersedes `skills_framework_consolidated.md`  
-**Total**: 17 domains · 122 skills · **every domain holds 5–9 skills (Miller's 7±2)**
+**Total**: 16 domains · 115 skills · **every domain holds 5–9 skills (Miller's 7±2)**
 
 ---
 
@@ -25,8 +25,10 @@ they serve, until each domain reads as a single coherent "mental page" of 5–9 
 useful, the broadened skill's description names the common specialisations it covers, so detail
 isn't lost — it just isn't a separate row to scan.
 
-This pass touches **only the skill lists**. Domain names, the `SkillDomain` enum, and the
-database enum type are unchanged from the consolidated draft — no new migration is required.
+This pass is primarily about the **skill lists** within each domain. The one structural change
+is folding `ProductManagement` and `AgileAndDelivery` into a single `ProductAgileAndDelivery`
+domain (see Implementation Notes) — every other domain name and the rest of the `SkillDomain`
+enum are unchanged from the consolidated draft.
 
 ---
 
@@ -44,14 +46,13 @@ database enum type are unchanged from the consolidated draft — no new migratio
 | CloudPlatformDevOps | 19 | 7 | merged cloud providers, DevOps practices, architecture |
 | DataAnalyticsAndAi | 12 | 7 | merged governance/quality, BI/viz, ML/AI/MLOps |
 | CyberSecurity | 10 | 7 | merged engineering/threat modelling, offensive/vuln mgmt |
-| ProductManagement | 10 | 7 | merged roadmap/portfolio, backlog/stories, business case/benefits |
-| AgileAndDelivery | 10 | 7 | merged frameworks (Scrum/Kanban/SAFe), Lean/retros |
+| ProductManagement + AgileAndDelivery → ProductAgileAndDelivery | 10 + 10 | 7 | domains merged (heavy overlap) and rationalised to 7 |
 | UserExperience | 10 | 7 | merged research/testing, interaction/IA, prototyping/systems |
 | ProcurementAndVendorManagement | 17 | 7 | merged into 7 lifecycle-stage capability groups |
 | PeopleAndOrganisationalLeadership | 21 | 6 | replaced with the GoC's 6 Key Leadership Competencies |
 | Governance | 18 | 7 | merged into 7 governance capability clusters |
 | CorporateServices | 18 | 7 | merged into 7 corporate function clusters |
-| **Total** | **202** | **122** | **40% reduction; zero coverage lost** |
+| **Total** | **202** | **115** | **43% reduction; zero coverage lost** |
 
 > Military domains (Combat, Intelligence, Strategy, Engineering, Medical, JointOperations) were
 > already within the 5–9 range and reflect distinct trades that should stay separable — left untouched.
@@ -190,31 +191,27 @@ architecture skills are each consolidated into single broad capabilities.*
 | Cloud & Infrastructure Security | Sécurité infonuagique et de l'infrastructure | Apply cloud security baselines and manage security posture across infrastructure |
 | Cryptography & PKI | Cryptographie et ICP | Implement and manage cryptographic controls, certificate authorities, and key management |
 
-## 11 · Product Management *(10 → 7)*
+## 11 · Product, Agile & Delivery *(Product Management 10 + Agile & Delivery 10 → 7, domains merged)*
+
+*Product Management and Agile & Delivery overlap heavily — both describe how digital work is
+shaped, planned, and shipped. Folded into a single domain (`ProductAgileAndDelivery`) and
+rationalised from a combined 14 skills down to 7, so "do we have product/delivery capability?"
+is answerable from one list instead of two. The `SkillDomain` enum value `agile_and_delivery`
+was renamed to `product_agile_and_delivery`; `product_management` was retired and its skills
+folded in — both changes were made directly to the original migration files since this is a
+pre-production schema with no live data to migrate.*
 
 | name_en | name_fr | description_en |
 |---|---|---|
 | Product Strategy & Vision | Stratégie et vision produit | Define and communicate product direction aligned to user and organisational needs |
-| Roadmapping & Portfolio Prioritisation | Feuille de route et priorisation du portefeuille | Build outcome-oriented roadmaps and prioritise a portfolio of investments against strategy |
-| Backlog & Requirements Management | Gestion du carnet de travail et des exigences | Prioritise backlogs and write clear, testable user stories and acceptance criteria |
-| Market & User Research | Recherche marché et utilisateurs | Gather market intelligence, competitor analysis, and user feedback to inform product decisions |
-| Stakeholder Engagement | Engagement des parties prenantes | Map and manage relationships across delivery, policy, and senior leadership audiences |
-| Business Case & Benefits Management | Gestion des dossiers d'analyse de rentabilisation et des avantages | Build investment cases and track delivery of planned benefits through to realisation |
-| Outcome Measurement (OKRs & KPIs) | Mesure des résultats (OKR et ICP) | Define and track Objectives, Key Results, and KPIs that show whether products deliver value |
-
-## 12 · Agile & Delivery *(10 → 7)*
-
-| name_en | name_fr | description_en |
-|---|---|---|
-| Agile Frameworks (Scrum, Kanban, SAFe) | Cadres agiles (Scrum, Kanban, SAFe) | Facilitate and apply agile frameworks and ceremonies at team and programme scale |
-| Lean & Continuous Improvement | Amélioration continue et pensée Lean | Apply Lean principles and facilitate retrospectives that generate sustained improvement |
-| Delivery Management | Gestion de la livraison | Track and unblock delivery for one or more teams; manage impediments and team-level risk |
-| Programme Management | Gestion de programme | Plan, govern, and report on related products or projects toward shared strategic outcomes |
-| Project Management | Gestion de projet | Manage scope, schedule, budget, and quality for defined-scope projects |
-| Agile Coaching | Coaching agile | Coach teams and leaders toward higher agile maturity and sustained self-organisation |
+| Roadmapping, Prioritisation & Backlog Management | Feuille de route, priorisation et gestion du carnet de travail | Build outcome-oriented roadmaps, prioritise the portfolio, and manage backlogs with clear, testable requirements |
+| Agile Delivery & Coaching | Livraison agile et coaching | Facilitate agile frameworks (Scrum, Kanban, SAFe), apply Lean thinking, and coach teams toward higher agile maturity |
+| Programme & Project Management | Gestion de programmes et de projets | Plan, govern, and report on programmes, projects, and team-level delivery toward shared outcomes |
+| Market & User Research and Stakeholder Engagement | Recherche marché et utilisateurs et engagement des parties prenantes | Gather market and user insight and manage relationships across delivery, policy, and leadership audiences |
+| Business Case, Benefits & Outcome Measurement | Analyse de rentabilisation, gestion des avantages et mesure des résultats | Build investment cases, track benefits realisation, and define OKRs/KPIs that show whether work delivers value |
 | Delivery Risk & Dependency Management | Gestion des risques et des dépendances de livraison | Identify, communicate, and mitigate delivery risks, constraints, and cross-team dependencies |
 
-## 13 · User Experience & Design *(10 → 7)*
+## 12 · User Experience & Design *(10 → 7)*
 
 | name_en | name_fr | description_en |
 |---|---|---|
@@ -226,7 +223,7 @@ architecture skills are each consolidated into single broad capabilities.*
 | Content Design | Conception de contenu | Write and structure interface copy, error messages, and notifications that guide users |
 | UX Strategy | Stratégie UX | Define UX maturity, investment, research programme, and tooling strategy aligned to goals |
 
-## 14 · Procurement & Vendor Management *(17 → 7)*
+## 13 · Procurement & Vendor Management *(17 → 7)*
 
 *Reframed around the **lifecycle stages** a procurement or vendor manager moves through,
 rather than as a flat list of individual activities.*
@@ -241,7 +238,7 @@ rather than as a flat list of individual activities.*
 | Commercial & Risk Analysis | Analyse commerciale et des risques | Analyse spend, pricing, and third-party risk to inform sourcing and negotiation decisions |
 | Vendor & Asset Lifecycle Management | Gestion du cycle de vie des fournisseurs et des actifs | Manage vendor onboarding/offboarding and software/hardware assets from acquisition to retirement |
 
-## 15 · People & Organisational Leadership *(21 → 6 — aligned to GoC Key Leadership Competencies)*
+## 14 · People & Organisational Leadership *(21 → 6 — aligned to GoC Key Leadership Competencies)*
 
 *Replaced with the Government of Canada's six Key Leadership Competencies (KLCs) used to
 assess executives — a recognisable, externally-validated framework that already sits at
@@ -256,7 +253,7 @@ Miller's 7±2 and lets leaders map directly to the GoC competency profile they'r
 | Promote Innovation and Guide Change | Promouvoir l'innovation et orienter le changement | Challenge the status quo, encourage creativity, and lead people through change |
 | Achieve Results | Obtenir des résultats | Set clear objectives, manage performance and risk, and deliver measurable outcomes |
 
-## 16 · Governance & Compliance *(18 → 7)*
+## 15 · Governance & Compliance *(18 → 7)*
 
 | name_en | name_fr | description_en |
 |---|---|---|
@@ -268,7 +265,7 @@ Miller's 7±2 and lets leaders map directly to the GoC competency profile they'r
 | Corporate Planning & Reporting | Planification et rapports organisationnels | Lead departmental planning, performance reporting, Treasury Board submissions, and transparency obligations |
 | Legal, Policy & Official Languages | Affaires juridiques, politiques et langues officielles | Interpret legislation and policy and ensure compliance with the Official Languages Act |
 
-## 17 · Corporate Services *(18 → 7)*
+## 16 · Corporate Services *(18 → 7)*
 
 | name_en | name_fr | description_en |
 |---|---|---|
@@ -284,14 +281,24 @@ Miller's 7±2 and lets leaders map directly to the GoC competency profile they'r
 
 ## Implementation Notes
 
-### No schema or enum changes required
-Domain names and the `SkillDomain` enum are unchanged from the consolidated draft — this
-revision only replaces the **skill seed list**. No new database migration is needed.
+### Domain merge: ProductManagement + AgileAndDelivery → ProductAgileAndDelivery
+The two domains were folded into one (`product_agile_and_delivery`) because their skill sets
+overlapped heavily. Since this is a pre-production schema with no live data, the rename/removal
+was made **directly in the original migration files** (`2026-06-04-000001_update_skill_domain_enum`)
+rather than as an additive follow-up migration — `product_management` was dropped from the
+`ALTER TYPE ... ADD VALUE` list and `agile_and_delivery` was renamed to `product_agile_and_delivery`.
+The Rust `SkillDomain` enum and its weighted `Distribution` impl were updated to match
+(combined weight range `68..=76`, replacing the two previous ranges).
+
+Every other domain name and the rest of the `SkillDomain` enum are unchanged from the
+consolidated draft.
 
 ### Code change scope
-Only `pre_populate_skills()` in `dummy_capability_data.rs` needs its skill vector replaced
-with the 123-skill list above (down from 202). All downstream logic (capability generation,
-validations, requirements) is domain-driven and requires no changes.
+`pre_populate_skills()` in `dummy_capability_data.rs` needs its skill vector replaced with the
+115-skill list above (down from 202), and any `SkillDomain::ProductManagement` /
+`SkillDomain::AgileAndDelivery` references updated to `SkillDomain::ProductAgileAndDelivery`.
+All downstream logic (capability generation, validations, requirements) is domain-driven and
+requires no further changes.
 
 ### Bilingual descriptions
 Descriptions above are intentionally broader than the consolidated draft's — each one names

@@ -104,23 +104,14 @@ pub fn pre_populate_skills() -> Result<(), Error> {
         (SkillDomain::CyberSecurity, "Cloud & Infrastructure Security",                    "Sécurité infonuagique et de l'infrastructure"),
         (SkillDomain::CyberSecurity, "Cryptography & PKI",                                 "Cryptographie et ICP"),
 
-        // ── Product Management (10 → 7, roadmap/backlog/business case merged) ─
-        (SkillDomain::ProductManagement, "Product Strategy & Vision",                  "Stratégie et vision produit"),
-        (SkillDomain::ProductManagement, "Roadmapping & Portfolio Prioritisation",     "Feuille de route et priorisation du portefeuille"),
-        (SkillDomain::ProductManagement, "Backlog & Requirements Management",          "Gestion du carnet de travail et des exigences"),
-        (SkillDomain::ProductManagement, "Market & User Research",                     "Recherche marché et utilisateurs"),
-        (SkillDomain::ProductManagement, "Stakeholder Engagement",                     "Engagement des parties prenantes"),
-        (SkillDomain::ProductManagement, "Business Case & Benefits Management",        "Gestion des dossiers d'analyse de rentabilisation et des avantages"),
-        (SkillDomain::ProductManagement, "Outcome Measurement (OKRs & KPIs)",          "Mesure des résultats (OKR et ICP)"),
-
-        // ── Agile & Delivery (10 → 7, frameworks/Lean/retros merged) ───────
-        (SkillDomain::AgileAndDelivery, "Agile Frameworks (Scrum, Kanban, SAFe)",  "Cadres agiles (Scrum, Kanban, SAFe)"),
-        (SkillDomain::AgileAndDelivery, "Lean & Continuous Improvement",           "Amélioration continue et pensée Lean"),
-        (SkillDomain::AgileAndDelivery, "Delivery Management",                     "Gestion de la livraison"),
-        (SkillDomain::AgileAndDelivery, "Programme Management",                    "Gestion de programme"),
-        (SkillDomain::AgileAndDelivery, "Project Management",                      "Gestion de projet"),
-        (SkillDomain::AgileAndDelivery, "Agile Coaching",                          "Coaching agile"),
-        (SkillDomain::AgileAndDelivery, "Delivery Risk & Dependency Management",   "Gestion des risques et des dépendances de livraison"),
+        // ── Product, Agile & Delivery (14 → 7, PM + Agile/Delivery merged) ─
+        (SkillDomain::ProductAgileAndDelivery, "Product Strategy & Vision",                       "Stratégie et vision produit"),
+        (SkillDomain::ProductAgileAndDelivery, "Roadmapping, Prioritisation & Backlog Management","Feuille de route, priorisation et gestion du carnet de travail"),
+        (SkillDomain::ProductAgileAndDelivery, "Agile Delivery & Coaching",                       "Livraison agile et coaching"),
+        (SkillDomain::ProductAgileAndDelivery, "Programme & Project Management",                  "Gestion de programmes et de projets"),
+        (SkillDomain::ProductAgileAndDelivery, "Market & User Research and Stakeholder Engagement","Recherche marché et utilisateurs et engagement des parties prenantes"),
+        (SkillDomain::ProductAgileAndDelivery, "Business Case, Benefits & Outcome Measurement",   "Analyse de rentabilisation, gestion des avantages et mesure des résultats"),
+        (SkillDomain::ProductAgileAndDelivery, "Delivery Risk & Dependency Management",           "Gestion des risques et des dépendances de livraison"),
 
         // ── User Experience & Design (10 → 7, research/IA/prototyping merged) ─
         (SkillDomain::UserExperience, "User Research & Usability Testing",     "Recherche utilisateurs et tests d'utilisabilité"),

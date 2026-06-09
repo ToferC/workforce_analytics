@@ -47,38 +47,48 @@ impl Skill {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, DbEnum, Serialize, Deserialize, Enum)]
 #[ExistingTypePath = "crate::schema::sql_types::SkillDomain"]
 pub enum SkillDomain {
+    // Military domains
     Combat,
-    Strategy,
     Intelligence,
-    InformationTechnology,
-    HumanResources,
-    Finance,
-    Communications,
-    Administration,
+    Strategy,
     Engineering,
     Medical,
-    Management,
-    Leadership,
     JointOperations,
+    // Technology domains
+    SoftwareEngineering,
+    CloudPlatformDevOps,
+    DataAnalyticsAndAi,
+    CyberSecurity,
+    // Delivery & design domains
+    ProductAgileAndDelivery,
+    UserExperience,
+    // Organisational domains
+    ProcurementAndVendorManagement,
+    PeopleAndOrganisationalLeadership,
+    Governance,
+    CorporateServices,
 }
 
 impl Distribution<SkillDomain> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SkillDomain {
-        match rng.gen_range(0..20) {
-            0..=3 => SkillDomain::Combat,
-            4..=5 => SkillDomain::Strategy,
-            6 => SkillDomain::Intelligence,
-            7 => SkillDomain::InformationTechnology,
-            8 => SkillDomain::HumanResources,
-            9 => SkillDomain::Finance,
-            10 => SkillDomain::Communications,
-            11 => SkillDomain::Administration,
-            12..=14 => SkillDomain::Engineering,
-            15..=16 => SkillDomain::Medical,
-            17 => SkillDomain::Management,
-            18 => SkillDomain::Leadership,
-            19 => SkillDomain::JointOperations,
-            _ => SkillDomain::Strategy,
+        match rng.gen_range(0..100) {
+            0..=14  => SkillDomain::Combat,
+            15..=22 => SkillDomain::Engineering,
+            23..=29 => SkillDomain::Strategy,
+            30..=34 => SkillDomain::Intelligence,
+            35..=39 => SkillDomain::Medical,
+            40..=42 => SkillDomain::JointOperations,
+            43..=50 => SkillDomain::SoftwareEngineering,
+            51..=57 => SkillDomain::CloudPlatformDevOps,
+            58..=63 => SkillDomain::DataAnalyticsAndAi,
+            64..=67 => SkillDomain::CyberSecurity,
+            68..=76 => SkillDomain::ProductAgileAndDelivery,
+            77..=79 => SkillDomain::UserExperience,
+            80..=82 => SkillDomain::ProcurementAndVendorManagement,
+            83..=87 => SkillDomain::PeopleAndOrganisationalLeadership,
+            88..=90 => SkillDomain::Governance,
+            91..=99 => SkillDomain::CorporateServices,
+            _       => SkillDomain::Strategy,
         }
     }
 }

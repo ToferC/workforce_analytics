@@ -71,7 +71,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
             0, 
             "Office of the Chief of Defence Staff".to_string(), 
             "Bureau de chef d’état-major de la Défense".to_string(), 
-            SkillDomain::Leadership,
+            SkillDomain::PeopleAndOrganisationalLeadership,
             None);
 
     let top_tier = OrgTier::create(&tt).unwrap();
@@ -93,20 +93,20 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
         let domain: String = String::from(&record[3]);
 
         let domain: SkillDomain = match domain.as_str() {
-            "FIN" => SkillDomain::Finance,
-            "HR" => SkillDomain::HumanResources,
-            "COM" => SkillDomain::Communications,
-            "STR" => SkillDomain::Strategy,
-            "CMB" => SkillDomain::Combat,
-            "JOP" => SkillDomain::JointOperations,
-            "MAN" => SkillDomain::Management,
-            "LEAD" => SkillDomain::Leadership,
-            "ADM" => SkillDomain::Administration,
-            "INT" => SkillDomain::Intelligence,
-            "IT" => SkillDomain::InformationTechnology,
-            "ENG" => SkillDomain::Engineering,
-            "MED" => SkillDomain::Medical,
-            _ => SkillDomain::Combat,
+            "FIN"  => SkillDomain::CorporateServices,
+            "HR"   => SkillDomain::CorporateServices,
+            "COM"  => SkillDomain::CorporateServices,
+            "ADM"  => SkillDomain::CorporateServices,
+            "STR"  => SkillDomain::Strategy,
+            "CMB"  => SkillDomain::Combat,
+            "JOP"  => SkillDomain::JointOperations,
+            "MAN"  => SkillDomain::PeopleAndOrganisationalLeadership,
+            "LEAD" => SkillDomain::PeopleAndOrganisationalLeadership,
+            "INT"  => SkillDomain::Intelligence,
+            "IT"   => SkillDomain::CloudPlatformDevOps,
+            "ENG"  => SkillDomain::Engineering,
+            "MED"  => SkillDomain::Medical,
+            _      => SkillDomain::Combat,
         };
 
         println!("Creating Org Tiers for: {}", branch);
@@ -118,7 +118,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
             1, 
             branch.to_owned(), 
             branch.to_owned(),
-            SkillDomain::Leadership,
+            SkillDomain::PeopleAndOrganisationalLeadership,
             Some(top_tier.id),
         );
     
@@ -134,7 +134,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
             2, 
             centre.to_owned(), 
             centre.to_owned(),
-            SkillDomain::Leadership,
+            SkillDomain::PeopleAndOrganisationalLeadership,
             Some(adm_tier.id),
         );
     

@@ -95,6 +95,16 @@ impl LanguageData {
         Ok(res)
     }
 
+    pub fn get_by_id(id: &Uuid) -> Result<Self> {
+        let mut conn = connection()?;
+
+        let res = language_datas::table
+            .filter(language_datas::id.eq(id))
+            .first(&mut conn)?;
+
+        Ok(res)
+    }
+
     pub fn get_by_person_id(id: Uuid) -> Result<Vec<Self>> {
         let mut conn = connection()?;
 
@@ -123,7 +133,7 @@ impl LanguageData {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset)]
+#[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, InputObject)]
 #[table_name = "language_datas"]
 /// Represents an insertable Language
 pub struct NewLanguageData {

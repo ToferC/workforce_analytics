@@ -18,7 +18,7 @@ use crate::models::{CapabilityCount, CapabilityLevel, Affiliation, SkillDomain, 
 
 use super::OrgTier;
 
-#[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, SimpleObject)]
+#[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, AsChangeset, SimpleObject)]
 #[table_name = "organizations"]
 #[graphql(complex)]
 /// Represents an organization as a core structure within which are
@@ -122,6 +122,17 @@ impl Organization {
         let res = organizations::table
             .filter(organizations::name_en.ilike(format!("%{}%", name)).or(organizations::name_fr.ilike(format!("%{}%", name))))
             .load::<Organization>(&mut conn)?;
+
+        Ok(res)
+    }
+
+    pub fn update(&self) -> Result<Organization> {
+        let mut conn = connection()?;
+
+        let res = diesel::update(organizations::table)
+            .filter(organizations::id.eq(&self.id))
+            .set(self)
+            .get_result(&mut conn)?;
 
         Ok(res)
     }

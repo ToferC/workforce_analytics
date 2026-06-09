@@ -120,7 +120,7 @@ impl PublicationContributor {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Insertable, SimpleObject)]
+#[derive(Debug, Clone, Deserialize, Serialize, Insertable, SimpleObject, InputObject)]
 #[table_name = "publication_contributors"]
 pub struct NewPublicationContributor {
     pub publication_id: Uuid, // Publication

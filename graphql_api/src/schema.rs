@@ -320,6 +320,7 @@ diesel::table! {
         completed_date -> Nullable<Timestamp>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        product_id -> Nullable<Uuid>,
     }
 }
 
@@ -406,7 +407,7 @@ diesel::table! {
 
     works (id) {
         id -> Uuid,
-        task_id -> Nullable<Uuid>,
+        task_id -> Uuid,
         role_id -> Nullable<Uuid>,
         #[max_length = 256]
         work_description -> Varchar,
@@ -418,7 +419,6 @@ diesel::table! {
         work_status -> WorkStatus,
         created_at -> Timestamp,
         updated_at -> Timestamp,
-        product_id -> Nullable<Uuid>,
     }
 }
 
@@ -441,6 +441,7 @@ diesel::joinable!(requirements -> roles (role_id));
 diesel::joinable!(requirements -> skills (skill_id));
 diesel::joinable!(roles -> persons (person_id));
 diesel::joinable!(roles -> teams (team_id));
+diesel::joinable!(tasks -> products (product_id));
 diesel::joinable!(tasks -> roles (created_by_role_id));
 diesel::joinable!(team_ownerships -> persons (person_id));
 diesel::joinable!(team_ownerships -> teams (team_id));
@@ -449,7 +450,6 @@ diesel::joinable!(teams -> organizations (organization_id));
 diesel::joinable!(users -> valid_roles (role));
 diesel::joinable!(validations -> capabilities (capability_id));
 diesel::joinable!(validations -> persons (validator_id));
-diesel::joinable!(works -> products (product_id));
 diesel::joinable!(works -> roles (role_id));
 diesel::joinable!(works -> tasks (task_id));
 

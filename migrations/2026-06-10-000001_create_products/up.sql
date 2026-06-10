@@ -1,5 +1,6 @@
--- Products group Work elements for organization and delivery in product
--- management cycles. Work is planned under a product with its capability
+-- Products group Tasks for organization and delivery in product management
+-- cycles. Tasks flow under a product, and multiple people do Work as part
+-- of a task that contributes to the product. Work carries its capability
 -- requirement (domain and capability_level) so people with the required
 -- capabilities can be identified and matched to the work.
 
@@ -29,10 +30,10 @@ CREATE TABLE IF NOT EXISTS products (
     retired_at TIMESTAMP
 );
 
--- Work may now be planned under a product before a task or role is known,
--- so task_id and role_id become optional and product_id is added.
-ALTER TABLE works ALTER COLUMN task_id DROP NOT NULL;
-ALTER TABLE works ALTER COLUMN role_id DROP NOT NULL;
-
-ALTER TABLE works ADD COLUMN product_id UUID
+-- Tasks may flow under a product
+ALTER TABLE tasks ADD COLUMN product_id UUID
     REFERENCES products(id) ON DELETE RESTRICT;
+
+-- Work may now be planned with its capability requirement before a
+-- person (role) is matched to it, so role_id becomes optional.
+ALTER TABLE works ALTER COLUMN role_id DROP NOT NULL;

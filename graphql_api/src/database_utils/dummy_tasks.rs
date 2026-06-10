@@ -41,6 +41,7 @@ pub fn generate_tasks(
         chrono::Utc::now().naive_utc(),
         chrono::Utc::now().naive_utc(),
         WorkStatus::InProgress,
+        None,
     );
 
     let task = Task::create(&nt);

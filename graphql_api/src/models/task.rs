@@ -12,7 +12,7 @@ use crate::database::connection;
 
 use crate::models::{SkillDomain, WorkStatus};
 
-use super::{Work, Role};
+use super::{Work, Role, Product};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, SimpleObject)]
 #[graphql(complex)]
@@ -32,6 +32,8 @@ pub struct Task {
     pub completed_date: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    #[graphql(skip)]
+    pub product_id: Option<Uuid>, // Product
 }
 
 #[ComplexObject]
@@ -40,12 +42,25 @@ impl Task {
         Work::get_by_task_id(&self.id)
     }
 
+    /// Work under this task not yet assigned to a role
+    pub async fn vacant_work(&self) -> Result<Vec<Work>> {
+        Work::get_vacant_by_task_id(&self.id)
+    }
+
     pub async fn effort(&self) -> Result<i32> {
         Work::sum_task_effort(&self.id)
     }
 
     pub async fn created_by(&self) -> Result<Role> {
         Role::get_by_id(&self.created_by_role_id)
+    }
+
+    /// The product this task contributes to, if any
+    pub async fn product(&self) -> Result<Option<Product>> {
+        match self.product_id {
+            Some(id) => Ok(Some(Product::get_by_id(&id)?)),
+            None => Ok(None),
+        }
     }
 }
 
@@ -115,6 +130,17 @@ impl Task {
         Ok(res)
     }
 
+    pub fn get_by_product_id(product_id: &Uuid) -> Result<Vec<Task>> {
+        let mut conn = connection()?;
+
+        let res = tasks::table
+            .filter(tasks::product_id.eq(product_id))
+            .order_by(tasks::created_at)
+            .load::<Task>(&mut conn)?;
+
+        Ok(res)
+    }
+
     pub fn get_by_title(title: &String) -> Result<Vec<Task>> {
         let mut conn = connection()?;
 
@@ -149,6 +175,7 @@ pub struct NewTask {
     pub start_datestamp: NaiveDateTime,
     pub target_completion_date: NaiveDateTime,
     pub task_status: WorkStatus,
+    pub product_id: Option<Uuid>, // Product
 }
 
 impl NewTask {
@@ -163,6 +190,7 @@ impl NewTask {
         start_datestamp: NaiveDateTime,
         target_completion_date: NaiveDateTime,
         task_status: WorkStatus,
+        product_id: Option<Uuid>, // Product
 
     ) -> Self {
         NewTask {
@@ -175,6 +203,7 @@ impl NewTask {
             start_datestamp,
             target_completion_date,
             task_status,
+            product_id,
         }
     }
 }

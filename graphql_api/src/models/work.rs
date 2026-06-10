@@ -12,22 +12,22 @@ use uuid::Uuid;
 use async_graphql::*;
 
 use crate::schema::*;
-use crate::models::{SkillDomain, Role, Task, Capability, CapabilityLevel, Product};
+use crate::models::{SkillDomain, Role, Task, Capability, CapabilityLevel};
 use crate::database::connection;
 
 /// Data structure for a relationship between a person and work
 /// This is a many to many relationship as multiple people may be
 /// assigned to a specific piece of work and a person may be assigned
 /// to multiple pieces of work
-/// Work may be planned under a task or a product with its capability
-/// requirement (domain and capability_level) before a role is assigned
+/// Work may be planned under a task with its capability requirement
+/// (domain and capability_level) before a role is assigned
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, SimpleObject)]
 #[graphql(complex)]
 #[table_name = "works"]
 pub struct Work {
     pub id: Uuid,
     #[graphql(skip)]
-    pub task_id: Option<Uuid>,
+    pub task_id: Uuid,
     #[graphql(skip)]
     pub role_id: Option<Uuid>,
     pub work_description: String,
@@ -38,29 +38,17 @@ pub struct Work {
     pub work_status: WorkStatus,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
-    #[graphql(skip)]
-    pub product_id: Option<Uuid>,
 }
 
 #[ComplexObject]
 impl Work {
-    pub async fn task(&self) -> Result<Option<Task>> {
-        match self.task_id {
-            Some(id) => Ok(Some(Task::get_by_id(&id)?)),
-            None => Ok(None),
-        }
+    pub async fn task(&self) -> Result<Task> {
+        Task::get_by_id(&self.task_id)
     }
 
     pub async fn role(&self) -> Result<Option<Role>> {
         match self.role_id {
             Some(id) => Ok(Some(Role::get_by_id(&id)?)),
-            None => Ok(None),
-        }
-    }
-
-    pub async fn product(&self) -> Result<Option<Product>> {
-        match self.product_id {
-            Some(id) => Ok(Some(Product::get_by_id(&id)?)),
             None => Ok(None),
         }
     }
@@ -202,23 +190,12 @@ impl Work {
         Ok(res)
     }
 
-    pub fn get_by_product_id(product_id: &Uuid) -> Result<Vec<Self>> {
+    /// Return work under a task that has not yet been assigned to a role
+    pub fn get_vacant_by_task_id(task_id: &Uuid) -> Result<Vec<Self>> {
         let mut conn = connection()?;
 
         let res = works::table
-            .filter(works::product_id.eq(product_id))
-            .order_by(works::created_at)
-            .load::<Work>(&mut conn)?;
-
-        Ok(res)
-    }
-
-    /// Return work planned under a product that has not yet been assigned to a role
-    pub fn get_vacant_by_product_id(product_id: &Uuid) -> Result<Vec<Self>> {
-        let mut conn = connection()?;
-
-        let res = works::table
-            .filter(works::product_id.eq(product_id))
+            .filter(works::task_id.eq(task_id))
             .filter(works::role_id.is_null())
             .order_by(works::created_at)
             .load::<Work>(&mut conn)?;
@@ -226,12 +203,42 @@ impl Work {
         Ok(res)
     }
 
-    /// Return the numeric indicator of the total effort allocated to a product.
+    /// Return all work under a product's tasks
+    pub fn get_by_product_id(product_id: &Uuid) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let res = works::table
+            .inner_join(tasks::table)
+            .filter(tasks::product_id.eq(product_id))
+            .select(works::all_columns)
+            .order_by(works::created_at)
+            .load::<Work>(&mut conn)?;
+
+        Ok(res)
+    }
+
+    /// Return work under a product's tasks that has not yet been assigned to a role
+    pub fn get_vacant_by_product_id(product_id: &Uuid) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let res = works::table
+            .inner_join(tasks::table)
+            .filter(tasks::product_id.eq(product_id))
+            .filter(works::role_id.is_null())
+            .select(works::all_columns)
+            .order_by(works::created_at)
+            .load::<Work>(&mut conn)?;
+
+        Ok(res)
+    }
+
+    /// Return the numeric indicator of the total effort allocated to a product's tasks.
     pub fn sum_product_effort(product_id: &Uuid) -> Result<i32> {
         let mut conn = connection()?;
 
         let res = works::table
-            .filter(works::product_id.eq(product_id))
+            .inner_join(tasks::table)
+            .filter(tasks::product_id.eq(product_id))
             .filter(works::work_status.ne_all(vec![WorkStatus::Cancelled, WorkStatus::Completed]))
             .select(works::effort)
             .load::<i32>(&mut conn)?;
@@ -257,9 +264,8 @@ impl Work {
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, InputObject)]
 #[table_name = "works"]
 pub struct NewWork {
-    pub task_id: Option<Uuid>,
+    pub task_id: Uuid,
     pub role_id: Option<Uuid>,
-    pub product_id: Option<Uuid>,
     pub work_description: String,
     pub url: Option<String>,
     pub domain: SkillDomain,
@@ -271,9 +277,8 @@ pub struct NewWork {
 impl NewWork {
 
     pub fn new(
-        task_id: Option<Uuid>,
+        task_id: Uuid,
         role_id: Option<Uuid>,
-        product_id: Option<Uuid>,
         work_description: String,
         url: Option<String>,
         domain: SkillDomain,
@@ -284,7 +289,6 @@ impl NewWork {
         NewWork {
             task_id,
             role_id,
-            product_id,
             work_description,
             url,
             domain,

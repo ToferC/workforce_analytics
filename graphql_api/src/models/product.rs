@@ -10,15 +10,16 @@ use async_graphql::*;
 use crate::schema::*;
 use crate::database::connection;
 
-use crate::models::{Organization, Role, SkillDomain, Work, WorkStatus};
+use crate::models::{Organization, Role, SkillDomain, Task, Work, WorkStatus};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, Insertable, AsChangeset, SimpleObject, Associations)]
 #[diesel(belongs_to(Organization))]
 #[diesel(table_name = products)]
 #[graphql(complex)]
 /// A product or service delivered by an organization.
-/// Work elements are planned under a product with their capability
-/// requirements so that people with the required capabilities can be
+/// Tasks flow under a product, and multiple people do Work as part of
+/// a task that contributes to the product. Work carries its capability
+/// requirement so that people with the required capabilities can be
 /// identified and matched to the work.
 pub struct Product {
     pub id: Uuid,
@@ -54,17 +55,22 @@ impl Product {
         Role::get_by_id(&self.product_owner_role_id)
     }
 
-    /// All work elements planned under this product
+    /// The tasks that flow under this product
+    pub async fn tasks(&self) -> Result<Vec<Task>> {
+        Task::get_by_product_id(&self.id)
+    }
+
+    /// All work elements planned under this product's tasks
     pub async fn work(&self) -> Result<Vec<Work>> {
         Work::get_by_product_id(&self.id)
     }
 
-    /// Work elements under this product not yet assigned to a role
+    /// Work elements under this product's tasks not yet assigned to a role
     pub async fn vacant_work(&self) -> Result<Vec<Work>> {
         Work::get_vacant_by_product_id(&self.id)
     }
 
-    /// Total effort of active work planned under this product
+    /// Total effort of active work planned under this product's tasks
     pub async fn effort(&self) -> Result<i32> {
         Work::sum_product_effort(&self.id)
     }

@@ -475,9 +475,8 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
                 let task_status: WorkStatus = rand::random();
 
                 let nw = NewWork::new(
-                    Some(task.id),
+                    task.id,
                     Some(role_res.id),
-                    None,
                     format!("{} {}",
                         work_verbs.choose(&mut rng).unwrap().trim(),
                         task.title.trim()),

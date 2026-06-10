@@ -38,17 +38,13 @@ impl WorkMutation {
         let mut work = Work::get_by_id(&data.id)?;
 
         if let Some(s) = data.task_id {
-            work.task_id = Some(s);
+            work.task_id = s;
         };
 
         // Assign a role (person) identified as having the required
         // capabilities to this work
         if let Some(s) = data.role_id {
             work.role_id = Some(s);
-        };
-
-        if let Some(s) = data.product_id {
-            work.product_id = Some(s);
         };
 
         if let Some(s) = data.work_description {
@@ -86,7 +82,6 @@ pub struct WorkData {
     pub id: Uuid,
     pub task_id: Option<Uuid>,
     pub role_id: Option<Uuid>,
-    pub product_id: Option<Uuid>,
     pub work_description: Option<String>,
     pub url: Option<String>,
     pub domain: Option<SkillDomain>,

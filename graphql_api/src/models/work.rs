@@ -12,7 +12,7 @@ use uuid::Uuid;
 use async_graphql::*;
 
 use crate::schema::*;
-use crate::models::{SkillDomain, Role, Task, Capability, CapabilityLevel};
+use crate::models::{SkillDomain, Role, Task, Capability, CapabilityLevel, Skill};
 use crate::database::connection;
 
 /// Data structure for a relationship between a person and work
@@ -38,6 +38,8 @@ pub struct Work {
     pub work_status: WorkStatus,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    #[graphql(skip)]
+    pub skill_id: Option<Uuid>,
 }
 
 #[ComplexObject]
@@ -53,10 +55,25 @@ impl Work {
         }
     }
 
+    /// The specific skill this work requires, if one is set
+    pub async fn skill(&self) -> Result<Option<Skill>> {
+        match self.skill_id {
+            Some(id) => Ok(Some(Skill::get_by_id(&id)?)),
+            None => Ok(None),
+        }
+    }
+
     /// Capabilities (and through them, people) validated at or above
-    /// the level required by this work in its domain
-    pub async fn capability_matches(&self) -> Result<Vec<Capability>> {
-        Capability::get_matches_by_domain_and_level(&self.domain, self.capability_level)
+    /// the level required by this work, ordered by validated level.
+    /// Matches on the work's specific skill when one is set, otherwise
+    /// on its domain. Accepts an optional count (default 10).
+    pub async fn capability_matches(&self, count: Option<i64>) -> Result<Vec<Capability>> {
+        let count = count.unwrap_or(10);
+
+        match self.skill_id {
+            Some(skill_id) => Capability::get_matches_by_skill_id_and_level(&skill_id, self.capability_level, count),
+            None => Capability::get_matches_by_domain_and_level(&self.domain, self.capability_level, count),
+        }
     }
 }
 
@@ -155,6 +172,24 @@ impl Work {
 
         let res = works::table
             .filter(works::role_id.eq(role_id))
+            .filter(works::work_status.ne_all(vec![WorkStatus::Cancelled, WorkStatus::Completed]))
+            .select(works::effort)
+            .load::<i32>(&mut conn)?;
+
+        let total_effort = res.into_iter()
+            .sum();
+
+        Ok(total_effort)
+    }
+
+    /// Return the total effort of active work across a person's active roles.
+    pub fn sum_person_active_effort(person_id: &Uuid) -> Result<i32> {
+        let mut conn = connection()?;
+
+        let res = works::table
+            .inner_join(roles::table)
+            .filter(roles::person_id.eq(person_id))
+            .filter(roles::active.eq(true))
             .filter(works::work_status.ne_all(vec![WorkStatus::Cancelled, WorkStatus::Completed]))
             .select(works::effort)
             .load::<i32>(&mut conn)?;
@@ -269,6 +304,7 @@ pub struct NewWork {
     pub work_description: String,
     pub url: Option<String>,
     pub domain: SkillDomain,
+    pub skill_id: Option<Uuid>,
     pub capability_level: CapabilityLevel,
     pub effort: i32,
     pub work_status: WorkStatus,
@@ -282,6 +318,7 @@ impl NewWork {
         work_description: String,
         url: Option<String>,
         domain: SkillDomain,
+        skill_id: Option<Uuid>,
         capability_level: CapabilityLevel,
         effort: i32,
         work_status: WorkStatus,
@@ -292,6 +329,7 @@ impl NewWork {
             work_description,
             url,
             domain,
+            skill_id,
             capability_level,
             effort,
             work_status,

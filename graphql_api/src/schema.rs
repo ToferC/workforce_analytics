@@ -419,6 +419,7 @@ diesel::table! {
         work_status -> WorkStatus,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        skill_id -> Nullable<Uuid>,
     }
 }
 
@@ -451,6 +452,7 @@ diesel::joinable!(users -> valid_roles (role));
 diesel::joinable!(validations -> capabilities (capability_id));
 diesel::joinable!(validations -> persons (validator_id));
 diesel::joinable!(works -> roles (role_id));
+diesel::joinable!(works -> skills (skill_id));
 diesel::joinable!(works -> tasks (task_id));
 
 diesel::allow_tables_to_appear_in_same_query!(

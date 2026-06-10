@@ -37,3 +37,8 @@ ALTER TABLE tasks ADD COLUMN product_id UUID
 -- Work may now be planned with its capability requirement before a
 -- person (role) is matched to it, so role_id becomes optional.
 ALTER TABLE works ALTER COLUMN role_id DROP NOT NULL;
+
+-- Work may optionally target a specific skill for precise capability
+-- matching; otherwise matching falls back to the work's domain.
+ALTER TABLE works ADD COLUMN skill_id UUID
+    REFERENCES skills(id) ON DELETE RESTRICT;

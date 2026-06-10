@@ -59,6 +59,10 @@ impl WorkMutation {
             work.domain = s;
         };
 
+        if let Some(s) = data.skill_id {
+            work.skill_id = Some(s);
+        };
+
         if let Some(s) = data.capability_level {
             work.capability_level = s;
         };
@@ -85,6 +89,7 @@ pub struct WorkData {
     pub work_description: Option<String>,
     pub url: Option<String>,
     pub domain: Option<SkillDomain>,
+    pub skill_id: Option<Uuid>,
     pub capability_level: Option<CapabilityLevel>,
     pub effort: Option<i32>,
     pub work_status: Option<WorkStatus>,

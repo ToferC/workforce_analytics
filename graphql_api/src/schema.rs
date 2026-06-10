@@ -172,6 +172,31 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::SkillDomain;
+    use super::sql_types::WorkStatus;
+
+    products (id) {
+        id -> Uuid,
+        organization_id -> Uuid,
+        product_owner_role_id -> Uuid,
+        #[max_length = 256]
+        name_en -> Varchar,
+        #[max_length = 256]
+        name_fr -> Varchar,
+        description_en -> Text,
+        description_fr -> Text,
+        primary_domain -> SkillDomain,
+        #[max_length = 256]
+        url -> Nullable<Varchar>,
+        product_status -> WorkStatus,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+        retired_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
     publication_contributors (id) {
         id -> Uuid,
         publication_id -> Uuid,
@@ -381,8 +406,8 @@ diesel::table! {
 
     works (id) {
         id -> Uuid,
-        task_id -> Uuid,
-        role_id -> Uuid,
+        task_id -> Nullable<Uuid>,
+        role_id -> Nullable<Uuid>,
         #[max_length = 256]
         work_description -> Varchar,
         #[max_length = 256]
@@ -393,6 +418,7 @@ diesel::table! {
         work_status -> WorkStatus,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        product_id -> Nullable<Uuid>,
     }
 }
 
@@ -405,6 +431,8 @@ diesel::joinable!(org_tier_ownerships -> org_tiers (org_tier_id));
 diesel::joinable!(org_tier_ownerships -> persons (owner_id));
 diesel::joinable!(org_tiers -> organizations (organization_id));
 diesel::joinable!(persons -> organizations (organization_id));
+diesel::joinable!(products -> organizations (organization_id));
+diesel::joinable!(products -> roles (product_owner_role_id));
 diesel::joinable!(publication_contributors -> persons (contributor_id));
 diesel::joinable!(publication_contributors -> publications (publication_id));
 diesel::joinable!(publications -> organizations (publishing_organization_id));
@@ -421,6 +449,7 @@ diesel::joinable!(teams -> organizations (organization_id));
 diesel::joinable!(users -> valid_roles (role));
 diesel::joinable!(validations -> capabilities (capability_id));
 diesel::joinable!(validations -> persons (validator_id));
+diesel::joinable!(works -> products (product_id));
 diesel::joinable!(works -> roles (role_id));
 diesel::joinable!(works -> tasks (task_id));
 
@@ -432,6 +461,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     org_tiers,
     organizations,
     persons,
+    products,
     publication_contributors,
     publications,
     requirements,

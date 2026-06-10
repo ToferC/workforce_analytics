@@ -1,2 +1,0 @@
--- This migration remaps data; original per-row values are not recoverable.
--- To roll back fully, restore from a pre-migration database snapshot.

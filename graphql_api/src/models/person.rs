@@ -2,9 +2,11 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 
 use chrono::{prelude::*};
+use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use diesel::{self, Insertable, Queryable, ExpressionMethods, PgTextExpressionMethods, BoolExpressionMethods};
 use diesel::{RunQueryDsl, QueryDsl};
+use rand::{distributions::{Distribution, Standard}, Rng};
 use uuid::Uuid;
 use async_graphql::*;
 
@@ -59,9 +61,36 @@ pub struct Person {
     pub peoplesoft_id: String,
     pub orcid_id: String,
 
+    /// Distinguishes military members from civilian employees,
+    /// contractors, students and others
+    pub personnel_type: PersonnelType,
+
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub retired_at: Option<NaiveDateTime>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Enum, DbEnum, Copy, Display)]
+#[ExistingTypePath = "crate::schema::sql_types::PersonnelType"]
+/// Represents the employment category of a person within the organization
+pub enum PersonnelType {
+    Military,
+    Civilian,
+    Contractor,
+    Student,
+    Other,
+}
+
+impl Distribution<PersonnelType> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> PersonnelType {
+        match rng.gen_range(0..100) {
+            0..=54 => PersonnelType::Military,    // 55% - Military members
+            55..=89 => PersonnelType::Civilian,   // 35% - Civilian employees
+            90..=95 => PersonnelType::Contractor, // 6%  - Contractors
+            96..=97 => PersonnelType::Student,    // 2%  - Students
+            _ => PersonnelType::Other,            // 2%  - Other
+        }
+    }
 }
 
 
@@ -318,6 +347,7 @@ pub struct NewPerson {
     pub organization_id: Uuid, // Organization
     pub peoplesoft_id: String,
     pub orcid_id: String,
+    pub personnel_type: PersonnelType,
 }
 
 impl NewPerson {
@@ -336,6 +366,7 @@ impl NewPerson {
         organization_id: Uuid, // Organization
         peoplesoft_id: String,
         orcid_id: String,
+        personnel_type: PersonnelType,
     ) -> Self {
         NewPerson {
             user_id,
@@ -351,6 +382,7 @@ impl NewPerson {
             organization_id,
             peoplesoft_id,
             orcid_id,
+            personnel_type,
         }
     }
 }

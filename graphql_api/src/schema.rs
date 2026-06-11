@@ -18,6 +18,14 @@ pub mod sql_types {
     pub struct MilitaryOccupation;
 
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "occupational_group"))]
+    pub struct OccupationalGroup;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "personnel_type"))]
+    pub struct PersonnelType;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "publication_status"))]
     pub struct PublicationStatus;
 
@@ -143,6 +151,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::PersonnelType;
+
     persons (id) {
         id -> Uuid,
         user_id -> Uuid,
@@ -165,6 +176,7 @@ diesel::table! {
         organization_id -> Uuid,
         peoplesoft_id -> Varchar,
         orcid_id -> Varchar,
+        personnel_type -> PersonnelType,
         created_at -> Timestamp,
         updated_at -> Timestamp,
         retired_at -> Nullable<Timestamp>,
@@ -232,6 +244,7 @@ diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::MilitaryOccupation;
     use super::sql_types::Rank;
+    use super::sql_types::OccupationalGroup;
 
     roles (id) {
         id -> Uuid,
@@ -243,8 +256,10 @@ diesel::table! {
         title_fr -> Varchar,
         effort -> Float8,
         active -> Bool,
-        military_occupation -> MilitaryOccupation,
-        rank -> Rank,
+        military_occupation -> Nullable<MilitaryOccupation>,
+        rank -> Nullable<Rank>,
+        occupational_group -> Nullable<OccupationalGroup>,
+        occupational_level -> Nullable<Int4>,
         start_datestamp -> Timestamp,
         end_date -> Nullable<Timestamp>,
         created_at -> Timestamp,

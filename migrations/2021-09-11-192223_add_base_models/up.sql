@@ -49,6 +49,14 @@ CREATE TABLE IF NOT EXISTS organizations (
     retired_at TIMESTAMP DEFAULT NULL
 );
 
+CREATE TYPE personnel_type AS ENUM (
+    'military',
+    'civilian',
+    'contractor',
+    'student',
+    'other'
+);
+
 CREATE TABLE IF NOT EXISTS persons (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID UNIQUE NOT NULL,
@@ -69,7 +77,9 @@ CREATE TABLE IF NOT EXISTS persons (
 
     peoplesoft_id VARCHAR NOT NULL,
     orcid_id VARCHAR NOT NULL,
-    
+
+    personnel_type personnel_type NOT NULL DEFAULT 'civilian',
+
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     retired_at TIMESTAMP
@@ -204,6 +214,21 @@ CREATE TYPE rank AS ENUM (
     'general'
 );
 
+CREATE TYPE occupational_group AS ENUM (
+    'administrative_services',
+    'computer_systems',
+    'economics_and_social_science',
+    'engineering',
+    'executive',
+    'financial_management',
+    'human_resources',
+    'information_services',
+    'program_administration',
+    'research',
+    'technical_services',
+    'other'
+);
+
 CREATE TABLE IF NOT EXISTS roles (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
 
@@ -220,8 +245,13 @@ CREATE TABLE IF NOT EXISTS roles (
     effort FLOAT NOT NULL,
     active bool NOT NULL,
 
-    military_occupation military_occupation NOT NULL,
-    rank rank NOT NULL,
+    -- HR attributes for the role holder: military personnel use
+    -- military_occupation and rank; civilian personnel use
+    -- occupational_group and occupational_level
+    military_occupation military_occupation,
+    rank rank,
+    occupational_group occupational_group,
+    occupational_level INT,
 
     start_datestamp TIMESTAMP NOT NULL,
     end_date TIMESTAMP,

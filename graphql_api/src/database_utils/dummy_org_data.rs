@@ -1,4 +1,6 @@
 
+use std::collections::HashMap;
+
 use rand::Rng;
 use rand::{seq::SliceRandom};
 use async_graphql::Error;
@@ -6,9 +8,9 @@ use uuid::Uuid;
 
 use crate::progress::progress::ProgressLogger;
 use super::{create_validations, generate_requirement};
-use crate::models::{Person, Organization, NewPerson, NewOrganization, 
+use crate::models::{Person, Organization, NewPerson, NewOrganization,
     Role, NewRole, Team, NewTeam, OrgTier, NewOrgTier, OrgOwnership, NewOrgOwnership,
-    TeamOwnership, NewTeamOwnership, MilitaryOccupation, Rank, SkillDomain, Skill, NewWork, CapabilityLevel, WorkStatus, Work,
+    TeamOwnership, NewTeamOwnership, MilitaryOccupation, OccupationalGroup, PersonnelType, Rank, SkillDomain, Skill, NewWork, CapabilityLevel, WorkStatus, Work,
     NewRequirement, Requirement,
 };
 
@@ -244,6 +246,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
             org.id,
             gen_rand_number(),
             gen_rand_number(),
+            rand::random::<PersonnelType>(),
         );
         new_people.push(p);
     }
@@ -255,7 +258,16 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
     println!("Inserted {} people.", r);
     progress_people.done();
 
-    let mut people_ids = Person::get_all_ids()?;
+    let people = Person::get_all()?;
+
+    // Track each person's personnel type so roles can be created with the
+    // matching military or civilian HR fields
+    let personnel_types: HashMap<Uuid, PersonnelType> = people
+        .iter()
+        .map(|p| (p.id, p.personnel_type))
+        .collect();
+
+    let mut people_ids: Vec<Uuid> = people.iter().map(|p| p.id).collect();
 
     let mut progress_cap = ProgressLogger::new("Inserting Capabilities".to_owned(),people_ids.len());
 
@@ -300,6 +312,19 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
             _ => (MilitaryOccupation::choose(), Rank::Major, 4, "Special Advisor"),
         };
 
+        // Owners may be military or civilian; set the HR fields matching
+        // their personnel type. Civilian leaders are executives with a
+        // level matching their org tier (EX-5 at the top, EX-1 at the bottom)
+        let owner_personnel_type = personnel_types
+            .get(&owner_id)
+            .copied()
+            .unwrap_or(PersonnelType::Civilian);
+
+        let (mil_occupation, mil_rank, occ_group, occ_level) = match owner_personnel_type {
+            PersonnelType::Military => (Some(occupation), Some(rank), None, None),
+            _ => (None, None, Some(OccupationalGroup::Executive), Some((5 - ot.tier_level).max(1))),
+        };
+
         let ownership = NewOrgOwnership::new(
             owner_id,
             ot.id,
@@ -326,15 +351,17 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
         // if owner, also set management role for team at that tier
 
         let nr = NewRole::new(
-            Some(owner_id), 
-            team.id, 
-            format!("{} - {}", title_str, ot.name_en.clone()), 
-            format!("{} - {}", title_str, ot.name_fr.clone()), 
-            0.80, 
+            Some(owner_id),
+            team.id,
+            format!("{} - {}", title_str, ot.name_en.clone()),
+            format!("{} - {}", title_str, ot.name_fr.clone()),
+            0.80,
             true,
-            occupation,
-            rank,
-            chrono::Utc::now().naive_utc(), 
+            mil_occupation,
+            mil_rank,
+            occ_group,
+            occ_level,
+            chrono::Utc::now().naive_utc(),
             None
         );
 
@@ -400,7 +427,19 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
             let occupation: MilitaryOccupation = rand::random();
 
             let rank: Rank = rand::random();
-            
+
+            // Set military or civilian HR fields based on the person's
+            // personnel type
+            let member_personnel_type = personnel_types
+                .get(&person_id)
+                .copied()
+                .unwrap_or(PersonnelType::Civilian);
+
+            let (mil_occupation, mil_rank, occ_group, occ_level) = match member_personnel_type {
+                PersonnelType::Military => (Some(occupation), Some(rank), None, None),
+                _ => (None, None, Some(OccupationalGroup::choose()), Some(rng.gen_range(1..=7))),
+            };
+
             let start_date = chrono::Utc::now().naive_utc();
             let modifier = chrono::Duration::days(rng.gen_range(-300..300));
 
@@ -415,15 +454,17 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
             };
 
             let mut nr = NewRole::new(
-                p_id, 
-                team.id, 
-                role.trim().to_string(), 
-                format!("{}_FR", role.trim()), 
-                0.80, 
+                p_id,
+                team.id,
+                role.trim().to_string(),
+                format!("{}_FR", role.trim()),
+                0.80,
                 true,
-                occupation,
-                rank,
-                start_date + modifier, 
+                mil_occupation,
+                mil_rank,
+                occ_group,
+                occ_level,
+                start_date + modifier,
                 None
             );
 
@@ -444,14 +485,14 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
                 0..=5 => continue,
                 6..=8 => {
                     nr.active = false;
-                    nr.rank.next();
+                    nr.rank = nr.rank.map(|r| r.next());
                     nr.start_datestamp -= chrono::Duration::days(rng.gen_range(-300..-100));
                     role_vec.push(nr.clone())
                 },
                 9..=10 => {
                     for _i in 1..=3 {
                         nr.active = false;
-                        nr.rank.previous();
+                        nr.rank = nr.rank.map(|r| r.previous());
                         nr.start_datestamp -= chrono::Duration::days(rng.gen_range(-600..-150));
                         role_vec.push(nr.clone())
                     }

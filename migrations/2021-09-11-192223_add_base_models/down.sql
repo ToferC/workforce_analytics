@@ -15,12 +15,14 @@ DROP TABLE IF EXISTS skills;
 
 DROP TABLE IF EXISTS team_ownerships;
 DROP TABLE IF EXISTS roles;
+DROP TYPE IF EXISTS occupational_group;
 DROP TABLE IF EXISTS teams;
 
 DROP TABLE IF EXISTS org_tier_ownerships;
 DROP TABLE IF EXISTS org_tiers;
 
 DROP TABLE IF EXISTS persons;
+DROP TYPE IF EXISTS personnel_type;
 DROP TYPE IF EXISTS military_occupation;
 DROP TYPE IF EXISTS rank;
 

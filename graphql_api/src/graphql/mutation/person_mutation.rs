@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-use crate::models::{Person, NewPerson};
+use crate::models::{Person, NewPerson, PersonnelType};
 use crate::common_utils::{UserRole,
     is_operator, RoleGuard};
 use crate::schema::persons;
@@ -95,7 +95,11 @@ impl PersonMutation {
             person.orcid_id = s;
         };
 
-        
+        if let Some(s) = data.personnel_type {
+            person.personnel_type = s;
+        };
+
+
         if let Some(s) = data.retired_at {
             person.retired_at = Some(s);
         };
@@ -122,9 +126,10 @@ pub struct PersonData {
     pub postal_code: Option<String>,
     pub country: Option<String>,
 
-    pub organization_id: Option<Uuid>, // Organization 
+    pub organization_id: Option<Uuid>, // Organization
     pub peoplesoft_id: Option<String>,
     pub orcid_id: Option<String>,
+    pub personnel_type: Option<PersonnelType>,
 
     pub updated_at: Option<NaiveDateTime>,
     pub retired_at: Option<NaiveDateTime>,

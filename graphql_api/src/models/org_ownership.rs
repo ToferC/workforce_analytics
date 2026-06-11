@@ -10,7 +10,7 @@ use async_graphql::*;
 use crate::database::connection;
 use crate::schema::*;
 
-#[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset)]
+#[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, SimpleObject)]
 #[diesel(table_name = org_tier_ownerships)]
 #[diesel(belongs_to(Person))]
 /// Represents a relationship between a person (owner) and an organizational tier

@@ -226,9 +226,7 @@ impl ValidatedLevel {
 
 
 
-#[derive(Debug, Clone, Deserialize, Serialize, Insertable)]
-/// Linked from HealthProfile
-/// Linked to Trip
+#[derive(Debug, Clone, Deserialize, Serialize, Insertable, InputObject)]
 #[diesel(table_name = validations)]
 pub struct NewValidation {
     pub validator_id: Uuid, // Person

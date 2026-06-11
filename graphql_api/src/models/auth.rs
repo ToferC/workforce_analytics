@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use actix_web::{HttpRequest, Result};
 use argon2::password_hash::{PasswordHashString, SaltString};
-use chrono::{Duration, Local};
+use chrono::{Duration, Local, DateTime};
 use jsonwebtoken::{decode, DecodingKey, TokenData, Validation};
 use jsonwebtoken::{encode, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
@@ -33,7 +33,7 @@ pub struct Claims {
     pub role: String,
 }
 
-pub fn create_token(user_id: String, role: UserRole) -> String {
+pub fn create_token(user_id: String, role: UserRole) -> Result<(String, DateTime<Local>), Error> {
     let exp_time = Local::now() + Duration::seconds(TOKEN_DURATION);
 
     let claims = Claims {
@@ -42,12 +42,14 @@ pub fn create_token(user_id: String, role: UserRole) -> String {
         role: role.to_string(),
     };
 
-    encode(
+    let token = encode(
         &Header::default(),
         &claims,
         &EncodingKey::from_secret(JWT_SECRET_KEY.as_ref()),
     )
-    .expect("Can't create token")
+    .expect("Can't create token");
+
+    Ok((token, exp_time))
 }
 
 pub fn get_claim(http_request: HttpRequest) -> Result<(UserRole, uuid::Uuid, i64), jsonwebtoken::errors::Error> {

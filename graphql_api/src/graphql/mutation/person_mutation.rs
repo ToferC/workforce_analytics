@@ -95,12 +95,17 @@ impl PersonMutation {
             person.orcid_id = s;
         };
 
-        
+        if let Some(s) = data.country {
+            person.country = s;
+        };
+
         if let Some(s) = data.retired_at {
             person.retired_at = Some(s);
         };
 
-        Ok(person)
+        // Persist the changes — returning the mutated struct without
+        // saving silently discards the update
+        person.update()
     }
 }
 

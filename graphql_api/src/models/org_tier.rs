@@ -55,9 +55,25 @@ impl OrgTier {
     }
 
     pub async fn owner(&self) -> Result<Person> {
-        let org_tier_ownership = OrgOwnership::get_by_org_tier_id(&self.id).unwrap();
+        // Tiers created without an explicit ownership record inherit the
+        // nearest ancestor's owner until one is assigned. Never panic here:
+        // an unwrap would kill the worker for any tier missing ownership.
+        let mut tier_id = self.id;
+        let mut parent_tier = self.parent_tier;
 
-        Person::get_by_id(&org_tier_ownership.owner_id)
+        loop {
+            match OrgOwnership::get_by_org_tier_id(&tier_id) {
+                Ok(org_tier_ownership) => return Person::get_by_id(&org_tier_ownership.owner_id),
+                Err(_) => match parent_tier {
+                    Some(parent_id) => {
+                        let parent = OrgTier::get_by_id(&parent_id)?;
+                        tier_id = parent.id;
+                        parent_tier = parent.parent_tier;
+                    },
+                    None => return Err(async_graphql::Error::new("No owner assigned to this org tier")),
+                },
+            }
+        }
     }
 
     pub async fn teams(&self) -> Result<Vec<Team>> {

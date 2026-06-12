@@ -481,9 +481,11 @@ type User {
   approvedByUserUid: UUID
 }
 type UserResponse {
+  id: UUID!
   bearer: String!
   role: String!
   email: String!
+  expiresAt: NaiveDateTime!
 }
 "Other people's validations of an individuals Capability"
 type Validation {

@@ -1,7 +1,7 @@
 use async_graphql::*;
 use uuid::Uuid;
 
-use crate::models::{Organization, OrgTier};
+use crate::models::{Organization, OrgTier, OrgOwnership};
 
 /*
 use crate::common_utils::{RoleGuard, is_admin, UserRole};
@@ -12,6 +12,18 @@ pub struct OrganizationQuery;
 
 #[Object]
 impl OrganizationQuery {
+
+    #[graphql(name = "orgOwnershipByTierId")]
+    /// Returns the ownership record linking an org tier to its owner.
+    /// Exposes the record id so clients can call updateOrgOwnership to
+    /// reassign the owner. Errors if the tier has no ownership record.
+    pub async fn org_ownership_by_tier_id(
+        &self,
+        _context: &Context<'_>,
+        org_tier_id: Uuid,
+    ) -> Result<OrgOwnership> {
+        OrgOwnership::get_by_org_tier_id(&org_tier_id)
+    }
 
     // Organizations
 

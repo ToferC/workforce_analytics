@@ -296,6 +296,7 @@ type Query {
   personByName(name: String!): [Person!]!
   "Returns a vector of all travel groups"
   allTeams: [Team!]!
+  teamOwnershipByTeamId(teamId: UUID!): TeamOwnership!
   "Returns a specific travel group by its UUID"
   teamByID(id: UUID!): Team!
   teamByName(name: String!): [Team!]!
@@ -311,6 +312,7 @@ type Query {
   allOrgTiers: [OrgTier!]!
   "Returns a vector of org tiers for a specific org ID"
   orgTiersByOrgId(id: UUID!): [OrgTier!]!
+  orgOwnershipByTierId(orgTierId: UUID!): OrgOwnership!
   """
   Accepts argument "count" and returns a vector of {count} org tiers
   """

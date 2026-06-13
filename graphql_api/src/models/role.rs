@@ -31,8 +31,12 @@ pub struct Role {
     pub effort: f64,
     pub active: bool,
     // HR info - this will be another module - just here for expediency
-    pub military_occupation: MilitaryOccupation,
-    pub rank: Rank,
+    // Military personnel use military_occupation and rank
+    // Civilian personnel use occupational_group and occupational_level
+    pub military_occupation: Option<MilitaryOccupation>,
+    pub rank: Option<Rank>,
+    pub occupational_group: Option<OccupationalGroup>,
+    pub occupational_level: Option<i32>,
 
     pub start_datestamp: NaiveDateTime,
     pub end_date: Option<NaiveDateTime>,
@@ -90,12 +94,24 @@ impl Role {
         Requirement::get_by_role_id(self.id)
     }
 
-    pub async fn military_occupation(&self) -> Result<String> {
-        Ok(self.military_occupation.to_string())
+    /// Returns the military occupation for a military role holder, if applicable
+    pub async fn military_occupation(&self) -> Result<Option<String>> {
+        Ok(self.military_occupation.map(|mo| mo.to_string()))
     }
 
-    pub async fn rank(&self) -> Result<Rank> {
+    /// Returns the military rank for a military role holder, if applicable
+    pub async fn rank(&self) -> Result<Option<Rank>> {
         Ok(self.rank)
+    }
+
+    /// Returns the occupational group for a civilian role holder, if applicable
+    pub async fn occupational_group(&self) -> Result<Option<OccupationalGroup>> {
+        Ok(self.occupational_group)
+    }
+
+    /// Returns the occupational level for a civilian role holder, if applicable
+    pub async fn occupational_level(&self) -> Result<Option<i32>> {
+        Ok(self.occupational_level)
     }
 
     pub async fn start_date(&self) -> Result<String> {
@@ -297,8 +313,12 @@ pub struct NewRole {
     pub effort: f64,
     pub active: bool,
     // HR info - this will be another module - just here for expediency
-    pub military_occupation: MilitaryOccupation,
-    pub rank: Rank,
+    // Military personnel use military_occupation and rank
+    // Civilian personnel use occupational_group and occupational_level
+    pub military_occupation: Option<MilitaryOccupation>,
+    pub rank: Option<Rank>,
+    pub occupational_group: Option<OccupationalGroup>,
+    pub occupational_level: Option<i32>,
     pub start_datestamp: NaiveDateTime,
     pub end_date: Option<NaiveDateTime>,
 }
@@ -312,8 +332,10 @@ impl NewRole {
         title_fr: String,
         effort: f64,
         active: bool,
-        military_occupation: MilitaryOccupation,
-        rank: Rank,
+        military_occupation: Option<MilitaryOccupation>,
+        rank: Option<Rank>,
+        occupational_group: Option<OccupationalGroup>,
+        occupational_level: Option<i32>,
         start_datestamp: NaiveDateTime,
         end_date: Option<NaiveDateTime>,
     ) -> Self {
@@ -326,6 +348,8 @@ impl NewRole {
             active,
             military_occupation,
             rank,
+            occupational_group,
+            occupational_level,
             start_datestamp,
             end_date,
         }
@@ -457,6 +481,50 @@ impl MilitaryOccupation {
     pub fn choose() -> MilitaryOccupation {
         let choice: MilitaryOccupation = rand::random();
         choice
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Enum, DbEnum, Copy, Display)]
+#[ExistingTypePath = "crate::schema::sql_types::OccupationalGroup"]
+/// Represents civilian occupational groups (classifications)
+pub enum OccupationalGroup {
+    AdministrativeServices,
+    ComputerSystems,
+    EconomicsAndSocialScience,
+    Engineering,
+    Executive,
+    FinancialManagement,
+    HumanResources,
+    InformationServices,
+    ProgramAdministration,
+    Research,
+    TechnicalServices,
+    Other,
+}
+
+impl OccupationalGroup {
+    pub fn choose() -> OccupationalGroup {
+        let choice: OccupationalGroup = rand::random();
+        choice
+    }
+}
+
+impl Distribution<OccupationalGroup> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> OccupationalGroup {
+        match rng.gen_range(0..100) {
+            0..=19 => OccupationalGroup::AdministrativeServices,    // 20% - Administration
+            20..=34 => OccupationalGroup::ProgramAdministration,    // 15% - Program delivery
+            35..=46 => OccupationalGroup::ComputerSystems,          // 12% - IT
+            47..=56 => OccupationalGroup::EconomicsAndSocialScience, // 10% - Analysis
+            57..=64 => OccupationalGroup::TechnicalServices,        // 8% - Technical
+            65..=72 => OccupationalGroup::Engineering,              // 8% - Engineering
+            73..=79 => OccupationalGroup::FinancialManagement,      // 7% - Finance
+            80..=86 => OccupationalGroup::HumanResources,           // 7% - HR
+            87..=91 => OccupationalGroup::Research,                 // 5% - Research
+            92..=95 => OccupationalGroup::InformationServices,      // 4% - Communications
+            96..=97 => OccupationalGroup::Executive,                // 2% - Executives
+            _ => OccupationalGroup::Other,                          // 2% - Miscellaneous
+        }
     }
 }
 

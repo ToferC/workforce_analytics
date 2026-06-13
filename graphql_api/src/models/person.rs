@@ -395,7 +395,15 @@ pub fn find_roles_by_requirements_met(person: &Person) -> Result<Vec<Role>> {
 
     for cap in capabilities {
 
-        let reqs = Requirement::get_by_skill_id_and_level(cap.skill_id, cap.validated_level.unwrap())?;
+        // A capability with no validations yet has no validated level, so
+        // it can't be matched against requirements. Skip it rather than
+        // unwrapping (which panicked the person / findMatches query).
+        let validated_level = match cap.validated_level {
+            Some(level) => level,
+            None => continue,
+        };
+
+        let reqs = Requirement::get_by_skill_id_and_level(cap.skill_id, validated_level)?;
 
         for r in reqs {
             role_ids.push(r.role_id);

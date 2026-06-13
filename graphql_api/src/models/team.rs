@@ -194,9 +194,25 @@ impl Team {
     }
 
     pub async fn owner(&self) -> Result<Person> {
-        let team_ownership = TeamOwnership::get_by_team_id(&self.id).unwrap();
-
-        Person::get_by_id(&team_ownership.person_id)
+        // Teams created without an explicit ownership record fall back to
+        // their org tier's owner (which itself inherits up the tier chain).
+        // Never panic here: an unwrap would kill the worker for any team
+        // missing ownership.
+        match TeamOwnership::get_by_team_id(&self.id) {
+            Ok(team_ownership) => Person::get_by_id(&team_ownership.person_id),
+            Err(_) => {
+                let mut tier = OrgTier::get_by_id(&self.org_tier_id)?;
+                loop {
+                    match crate::models::OrgOwnership::get_by_org_tier_id(&tier.id) {
+                        Ok(ownership) => return Person::get_by_id(&ownership.owner_id),
+                        Err(_) => match tier.parent_tier {
+                            Some(parent_id) => tier = OrgTier::get_by_id(&parent_id)?,
+                            None => return Err(async_graphql::Error::new("No owner assigned to this team")),
+                        },
+                    }
+                }
+            },
+        }
     }
     
 }

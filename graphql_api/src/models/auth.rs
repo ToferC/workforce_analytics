@@ -61,8 +61,14 @@ pub fn get_claim(http_request: HttpRequest) -> Result<(UserRole, uuid::Uuid, i64
         .get("Authorization")
         .and_then(|header_value| {
             header_value.to_str().ok().map(|s| {
+                // Guard against a header shorter than "Bearer " — slicing
+                // past the end panics the worker
                 let jwt_start_index = "Bearer ".len();
-                let jwt = s[jwt_start_index..s.len()].to_string();
+                let jwt = if s.len() > jwt_start_index {
+                    s[jwt_start_index..s.len()].to_string()
+                } else {
+                    String::new()
+                };
                 let token_data = decode_token(&jwt);
                 println!("TOKEN: {:?}", &token_data);
                 token_data

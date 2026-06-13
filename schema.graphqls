@@ -401,8 +401,8 @@ type Role {
   work: [Work!]!
   active: String!
   requirements: [Requirement!]!
-  militaryOccupation: String!
-  rank: Rank!
+  militaryOccupation: String
+  rank: Rank
   startDate: String!
   endDate: String!
   createdAt: String!

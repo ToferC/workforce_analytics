@@ -14,7 +14,7 @@ use async_graphql::*;
 use crate::database::connection;
 use crate::schema::*;
 
-use crate::models::{CapabilityCount, CapabilityLevel, Affiliation, SkillDomain, Publication};
+use crate::models::{CapabilityCount, CapabilityLevel, Affiliation, SkillDomain, Publication, Product};
 
 use super::OrgTier;
 
@@ -45,6 +45,10 @@ impl Organization {
 
     pub async fn publications(&self) -> Result<Vec<Publication>> {
         Publication::get_by_publishing_organization_id(&self.id)
+    }
+
+    pub async fn products(&self) -> Result<Vec<Product>> {
+        Product::get_by_organization_id(&self.id)
     }
 
     pub async fn org_tiers(&self) -> Result<Vec<OrgTier>> {

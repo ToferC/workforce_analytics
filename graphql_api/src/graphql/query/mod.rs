@@ -9,6 +9,7 @@ mod user_query;
 mod publication_query;
 mod task;
 mod work;
+mod product;
 
 pub use self::query::*;
 pub use self::person_query::*;
@@ -21,4 +22,5 @@ pub use self::user_query::*;
 pub use self::publication_query::*;
 pub use self::task::*;
 pub use self::work::*;
+pub use self::product::*;
 

@@ -111,6 +111,20 @@ impl PersonMutation {
         // saving silently discards the update
         person.update()
     }
+
+    #[graphql(
+        name = "restorePerson",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    /// Un-retire a person by clearing retired_at.
+    pub async fn restore_person(
+        &self,
+        _context: &Context<'_>,
+        id: Uuid,
+    ) -> Result<Person> {
+        Person::restore(&id)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, Insertable, AsChangeset, InputObject)]

@@ -212,7 +212,18 @@ impl Person {
         .filter(persons::id.eq(&self.id))
         .set(self.clone())
         .get_result(&mut conn)?;
-        
+
+        Ok(res)
+    }
+
+    /// Clear retired_at to un-retire (AsChangeset skips None, so set NULL).
+    pub fn restore(id: &Uuid) -> Result<Self> {
+        let mut conn = connection()?;
+
+        let res = diesel::update(persons::table.filter(persons::id.eq(id)))
+            .set(persons::retired_at.eq::<Option<NaiveDateTime>>(None))
+            .get_result(&mut conn)?;
+
         Ok(res)
     }
 }

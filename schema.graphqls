@@ -77,6 +77,7 @@ type Mutation {
   signIn(input: LoginQuery!): UserResponse!
   createPerson(data: NewPerson!): Person!
   updatePerson(data: PersonData!): Person!
+  restorePerson(id: UUID!): Person!
   createRole(roleData: NewRole!): Role!
   updateRole(roleData: RoleData!): Role!
   createCapability(data: NewCapability!): Capability!
@@ -99,12 +100,15 @@ type Mutation {
   updateSkill(data: SkillData!): Skill!
   createOrganization(data: NewOrganization!): Organization!
   updateOrganization(data: OrganizationData!): Organization!
+  restoreOrganization(id: UUID!): Organization!
   createOrgTier(data: NewOrgTier!): OrgTier!
   updateOrgTier(data: OrgTierData!): OrgTier!
+  restoreOrgTier(id: UUID!): OrgTier!
   createOrgOwnership(data: NewOrgOwnership!): OrgOwnership!
   updateOrgOwnership(data: OrgOwnershipData!): OrgOwnership!
   createTeam(data: NewTeam!): Team!
   updateTeam(data: TeamData!): Team!
+  restoreTeam(id: UUID!): Team!
   createTeamOwnership(data: NewTeamOwnership!): TeamOwnership!
   updateTeamOwnership(data: TeamOwnershipData!): TeamOwnership!
   createAffiliation(data: NewAffiliation!): Affiliation!

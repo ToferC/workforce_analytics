@@ -139,6 +139,14 @@ impl Role {
 
         find_people_by_requirements_met(requirements)
     }
+
+    pub async fn start_datestamp(&self) -> Result<NaiveDateTime> {
+        Ok(self.start_datestamp)
+    }
+
+    pub async fn end_datestamp(&self) -> Result<Option<NaiveDateTime>> {
+        Ok(self.end_date)
+    }
 }
 
 

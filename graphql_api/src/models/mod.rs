@@ -17,6 +17,7 @@ mod publication;
 mod publication_contributor;
 mod requirement;
 
+mod analytics;
 mod access_log;
 mod user;
 mod messages;
@@ -41,6 +42,7 @@ pub use publication::*;
 pub use publication_contributor::*;
 pub use requirement::*;
 
+pub use analytics::*;
 pub use self::access_log::*;
 pub use self::user::*;
 //pub use messages::*;

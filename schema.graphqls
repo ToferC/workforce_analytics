@@ -177,6 +177,10 @@ type OrgTier {
   childOrganizationTier: [OrgTier!]!
   owner: Person!
   teams: [Team!]!
+  "Capability counts rolled up across this tier and its descendants."
+  capabilityCounts: [CapabilityCount!]!
+  "Sum of active effort across this tier and descendants."
+  totalEffort: Int!
 }
 """
 Represents an organization as a core structure within which are
@@ -448,6 +452,19 @@ type Query {
   productsByName(name: String!): [Product!]!
   "Returns a vector of products delivered by a specific organization"
   productsByOrganizationId(organizationId: UUID!): [Product!]!
+  """
+  Cumulative validated capability across the organization over time,
+  one series per SkillDomain.
+  """
+  capabilityGrowth(bucket: TimeBucket!, from: NaiveDateTime, to: NaiveDateTime, domain: SkillDomain, orgTierId: UUID): [LabeledSeries!]!
+  """
+  Per-domain capability supply vs demand over time.
+  """
+  capabilitySupplyDemand(bucket: TimeBucket!, from: NaiveDateTime, to: NaiveDateTime, domain: SkillDomain, orgTierId: UUID): [SupplyDemandSeries!]!
+  "Capability depth per team across all skill domains (for a heatmap)."
+  teamCapabilityMatrix(orgTierId: UUID): [TeamCapabilityRow!]!
+  "Derived role transitions over a window, for mobility/promotion analysis."
+  talentMovements(from: NaiveDateTime, to: NaiveDateTime, orgTierId: UUID): [TalentMovement!]!
 }
 "A representation of a roles ability to use a skill at a specific level"
 type Requirement {
@@ -492,6 +509,8 @@ type Role {
   createdAt: String!
   updatedAt: String!
   findMatches: [Person!]!
+  startDatestamp: NaiveDateTime!
+  endDatestamp: NaiveDateTime
 }
 """
 Should get this from an API or have standard data
@@ -547,6 +566,10 @@ type Team {
   vacantRoles: [Role!]!
   roles: [Role!]!
   owner: Person!
+  "Capability counts for people holding roles in this team."
+  capabilityCounts: [CapabilityCount!]!
+  "Sum of active effort across this team's roles."
+  totalEffort: Int!
 }
 type TeamOwnership {
   id: UUID!
@@ -616,6 +639,58 @@ type Work {
   on its domain. Accepts an optional count (default 10).
   """
   capabilityMatches(count: Int): [Capability!]!
+}
+enum TimeBucket {
+  WEEK
+  MONTH
+  QUARTER
+  YEAR
+}
+type TimeSeriesPoint {
+  "Start of the bucket, ISO 8601"
+  periodStart: NaiveDateTime!
+  bucket: TimeBucket!
+  value: Float!
+}
+type LabeledSeries {
+  "e.g. a SkillDomain value, as a String"
+  key: String!
+  points: [TimeSeriesPoint!]!
+}
+type SupplyDemandPoint {
+  periodStart: NaiveDateTime!
+  bucket: TimeBucket!
+  "Count/weight of validated capabilities available as of period end."
+  supply: Float!
+  "Count/weight of required capability from role Requirements + Work as of period end."
+  demand: Float!
+}
+type SupplyDemandSeries {
+  "SkillDomain value as String."
+  domain: String!
+  points: [SupplyDemandPoint!]!
+}
+type TeamCapabilityCell {
+  domain: String!
+  "Weighted capability depth (validated; self-identified fallback)."
+  depth: Float!
+  "Distinct people contributing at this domain."
+  peopleCount: Int!
+}
+type TeamCapabilityRow {
+  teamId: UUID!
+  teamName: String!
+  cells: [TeamCapabilityCell!]!
+}
+type TalentMovement {
+  personId: UUID!
+  at: NaiveDateTime!
+  fromTeamId: UUID
+  toTeamId: UUID
+  fromLevel: String
+  toLevel: String
+  "PROMOTION | LATERAL | INFLOW | OUTFLOW"
+  kind: String!
 }
 "Enums for Capability -> shift to 0 - 4"
 enum CapabilityLevel {

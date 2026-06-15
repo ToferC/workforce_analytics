@@ -77,6 +77,7 @@ type Mutation {
   signIn(input: LoginQuery!): UserResponse!
   createPerson(data: NewPerson!): Person!
   updatePerson(data: PersonData!): Person!
+  "Un-retire a person by clearing retired_at."
   restorePerson(id: UUID!): Person!
   createRole(roleData: NewRole!): Role!
   updateRole(roleData: RoleData!): Role!
@@ -100,14 +101,21 @@ type Mutation {
   updateSkill(data: SkillData!): Skill!
   createOrganization(data: NewOrganization!): Organization!
   updateOrganization(data: OrganizationData!): Organization!
+  """
+  Un-retire an organization by clearing retired_at. The update
+  resolvers treat a null field as "unchanged", so clearing needs a
+  dedicated mutation.
+  """
   restoreOrganization(id: UUID!): Organization!
   createOrgTier(data: NewOrgTier!): OrgTier!
   updateOrgTier(data: OrgTierData!): OrgTier!
+  "Un-retire an org tier by clearing retired_at."
   restoreOrgTier(id: UUID!): OrgTier!
   createOrgOwnership(data: NewOrgOwnership!): OrgOwnership!
   updateOrgOwnership(data: OrgOwnershipData!): OrgOwnership!
   createTeam(data: NewTeam!): Team!
   updateTeam(data: TeamData!): Team!
+  "Un-retire a team by clearing retired_at."
   restoreTeam(id: UUID!): Team!
   createTeamOwnership(data: NewTeamOwnership!): TeamOwnership!
   updateTeamOwnership(data: TeamOwnershipData!): TeamOwnership!
@@ -121,6 +129,8 @@ type Mutation {
   updateWork(data: WorkData!): Work!
   createTask(data: NewTask!): Task!
   updateTask(data: TaskData!): Task!
+  createProduct(data: NewProduct!): Product!
+  updateProduct(data: ProductData!): Product!
   createRequirement(data: NewRequirement!): Requirement!
   updateRequirement(data: RequirementData!): Requirement!
   """
@@ -185,6 +195,7 @@ type Organization {
   retiredAt: NaiveDateTime
   affiliations: [Affiliation!]!
   publications: [Publication!]!
+  products: [Product!]!
   orgTiers: [OrgTier!]!
   topOrgTier: [OrgTier!]!
   capabilityCounts: [CapabilityCount!]!
@@ -208,6 +219,11 @@ type Person {
   organizationId: UUID!
   peoplesoftId: String!
   orcidId: String!
+  """
+  Distinguishes military members from civilian employees,
+  contractors, students and others
+  """
+  personnelType: PersonnelType!
   createdAt: NaiveDateTime!
   updatedAt: NaiveDateTime!
   retiredAt: NaiveDateTime
@@ -222,6 +238,12 @@ type Person {
   inactiveRoles: [Role!]!
   "Returns active role"
   activeRoles: [Role!]!
+  """
+  Returns the sum effort of active work across this person's active
+  roles. Maximum sustainable effort is around 10, so lower values
+  indicate capacity to take on new work.
+  """
+  activeEffort: Int!
   "Returns person's affiliations with other organizations"
   affiliations: [Affiliation!]!
   "Returns a vector of the teams owned by this person"
@@ -236,6 +258,37 @@ type Person {
   "Returns a vector of the language results for the person"
   languageData: [LanguageData!]!
   findMatches: [Role!]!
+}
+"""
+A product or service delivered by an organization.
+Tasks flow under a product, and multiple people do Work as part of
+a task that contributes to the product. Work carries its capability
+requirement so that people with the required capabilities can be
+identified and matched to the work.
+"""
+type Product {
+  id: UUID!
+  nameEn: String!
+  nameFr: String!
+  descriptionEn: String!
+  descriptionFr: String!
+  primaryDomain: SkillDomain!
+  url: String
+  productStatus: WorkStatus!
+  createdAt: NaiveDateTime!
+  updatedAt: NaiveDateTime!
+  retiredAt: NaiveDateTime
+  organization: Organization!
+  "The role accountable for delivery of this product"
+  productOwner: Role!
+  "The tasks that flow under this product"
+  tasks: [Task!]!
+  "All work elements planned under this product's tasks"
+  work: [Work!]!
+  "Work elements under this product's tasks not yet assigned to a role"
+  vacantWork: [Work!]!
+  "Total effort of active work planned under this product's tasks"
+  effort: Int!
 }
 type Publication {
   id: UUID!
@@ -298,12 +351,23 @@ type Query {
   peopleCount: Int!
   personById(id: UUID!): Person!
   personByName(name: String!): [Person!]!
+  """
+  Returns the ownership record linking a team to its owner. Exposes
+  the record id so clients can call updateTeamOwnership to reassign
+  the owner. Errors if the team has no ownership record.
+  """
+  teamOwnershipByTeamId(teamId: UUID!): TeamOwnership!
   "Returns a vector of all travel groups"
   allTeams: [Team!]!
-  teamOwnershipByTeamId(teamId: UUID!): TeamOwnership!
   "Returns a specific travel group by its UUID"
   teamByID(id: UUID!): Team!
   teamByName(name: String!): [Team!]!
+  """
+  Returns the ownership record linking an org tier to its owner.
+  Exposes the record id so clients can call updateOrgOwnership to
+  reassign the owner. Errors if the tier has no ownership record.
+  """
+  orgOwnershipByTierId(orgTierId: UUID!): OrgOwnership!
   "Returns a vector of all organizations"
   allOrganizations: [Organization!]!
   """
@@ -316,7 +380,6 @@ type Query {
   allOrgTiers: [OrgTier!]!
   "Returns a vector of org tiers for a specific org ID"
   orgTiersByOrgId(id: UUID!): [OrgTier!]!
-  orgOwnershipByTierId(orgTierId: UUID!): OrgOwnership!
   """
   Accepts argument "count" and returns a vector of {count} org tiers
   """
@@ -374,6 +437,17 @@ type Query {
   "Returns a vector of all persons ordered by family name"
   allWork: [Work!]!
   workById(id: UUID!): Work!
+  """
+  Accepts an argument of "count" and returns a vector of {count} products
+  """
+  products(count: Int!): [Product!]!
+  "Returns a vector of all products"
+  allProducts: [Product!]!
+  productById(id: UUID!): Product!
+  "Returns a vector of products matching some part of a provided name"
+  productsByName(name: String!): [Product!]!
+  "Returns a vector of products delivered by a specific organization"
+  productsByOrganizationId(organizationId: UUID!): [Product!]!
 }
 "A representation of a roles ability to use a skill at a specific level"
 type Requirement {
@@ -405,8 +479,14 @@ type Role {
   work: [Work!]!
   active: String!
   requirements: [Requirement!]!
+  "Returns the military occupation for a military role holder, if applicable"
   militaryOccupation: String
+  "Returns the military rank for a military role holder, if applicable"
   rank: Rank
+  "Returns the occupational group for a civilian role holder, if applicable"
+  occupationalGroup: OccupationalGroup
+  "Returns the occupational level for a civilian role holder, if applicable"
+  occupationalLevel: Int
   startDate: String!
   endDate: String!
   createdAt: String!
@@ -445,8 +525,12 @@ type Task {
   createdAt: NaiveDateTime!
   updatedAt: NaiveDateTime!
   work: [Work!]!
+  "Work under this task not yet assigned to a role"
+  vacantWork: [Work!]!
   effort: Int!
   createdBy: Role!
+  "The product this task contributes to, if any"
+  product: Product
 }
 type Team {
   id: UUID!
@@ -508,6 +592,8 @@ Data structure for a relationship between a person and work
 This is a many to many relationship as multiple people may be
 assigned to a specific piece of work and a person may be assigned
 to multiple pieces of work
+Work may be planned under a task with its capability requirement
+(domain and capability_level) before a role is assigned
 """
 type Work {
   id: UUID!
@@ -520,7 +606,16 @@ type Work {
   createdAt: NaiveDateTime!
   updatedAt: NaiveDateTime!
   task: Task!
-  role: Role!
+  role: Role
+  "The specific skill this work requires, if one is set"
+  skill: Skill
+  """
+  Capabilities (and through them, people) validated at or above
+  the level required by this work, ordered by validated level.
+  Matches on the work's specific skill when one is set, otherwise
+  on its domain. Accepts an optional count (default 10).
+  """
+  capabilityMatches(count: Int): [Capability!]!
 }
 "Enums for Capability -> shift to 0 - 4"
 enum CapabilityLevel {
@@ -592,6 +687,29 @@ enum MilitaryOccupation {
   CYBER
   SPECIAL_FORCES
   OFFICER
+  OTHER
+}
+"Represents civilian occupational groups (classifications)"
+enum OccupationalGroup {
+  ADMINISTRATIVE_SERVICES
+  COMPUTER_SYSTEMS
+  ECONOMICS_AND_SOCIAL_SCIENCE
+  ENGINEERING
+  EXECUTIVE
+  FINANCIAL_MANAGEMENT
+  HUMAN_RESOURCES
+  INFORMATION_SERVICES
+  PROGRAM_ADMINISTRATION
+  RESEARCH
+  TECHNICAL_SERVICES
+  OTHER
+}
+"Represents the employment category of a person within the organization"
+enum PersonnelType {
+  MILITARY
+  CIVILIAN
+  CONTRACTOR
+  STUDENT
   OTHER
 }
 enum PublicationStatus {
@@ -739,6 +857,18 @@ input NewPerson {
   organizationId: UUID!
   peoplesoftId: String!
   orcidId: String!
+  personnelType: PersonnelType!
+}
+input NewProduct {
+  organizationId: UUID!
+  productOwnerRoleId: UUID!
+  nameEn: String!
+  nameFr: String!
+  descriptionEn: String!
+  descriptionFr: String!
+  primaryDomain: SkillDomain!
+  url: String
+  productStatus: WorkStatus!
 }
 input NewPublication {
   publishingOrganizationId: UUID!
@@ -771,8 +901,10 @@ input NewRole {
   titleFr: String!
   effort: Float!
   active: Boolean!
-  militaryOccupation: MilitaryOccupation!
-  rank: Rank!
+  militaryOccupation: MilitaryOccupation
+  rank: Rank
+  occupationalGroup: OccupationalGroup
+  occupationalLevel: Int
   startDatestamp: NaiveDateTime!
   endDate: NaiveDateTime
 }
@@ -794,6 +926,7 @@ input NewTask {
   startDatestamp: NaiveDateTime!
   targetCompletionDate: NaiveDateTime!
   taskStatus: WorkStatus!
+  productId: UUID
 }
 """
 Linked from HealthProfile
@@ -825,10 +958,11 @@ input NewValidation {
 }
 input NewWork {
   taskId: UUID!
-  roleId: UUID!
+  roleId: UUID
   workDescription: String!
   url: String
   domain: SkillDomain!
+  skillId: UUID
   capabilityLevel: CapabilityLevel!
   effort: Int!
   workStatus: WorkStatus!
@@ -877,8 +1011,21 @@ input PersonData {
   organizationId: UUID
   peoplesoftId: String
   orcidId: String
+  personnelType: PersonnelType
   updatedAt: NaiveDateTime
   retiredAt: NaiveDateTime
+}
+"InputObject for Product with Option fields - only include the ones you want to update"
+input ProductData {
+  id: UUID!
+  productOwnerRoleId: UUID
+  nameEn: String
+  nameFr: String
+  descriptionEn: String
+  descriptionFr: String
+  primaryDomain: SkillDomain
+  url: String
+  productStatus: WorkStatus
 }
 "InputObject for PublicationContributor with Option fields - only include the ones you want to update"
 input PublicationContributorData {
@@ -942,6 +1089,7 @@ input TaskData {
   targetCompletionDate: NaiveDateTime
   taskStatus: WorkStatus
   completedDate: NaiveDateTime
+  productId: UUID
 }
 "InputObject for Team with Option fields - only include the ones you want to update"
 input TeamData {
@@ -986,9 +1134,12 @@ input ValidationData {
 "InputObject for Work with Option fields - only include the ones you want to update"
 input WorkData {
   id: UUID!
+  taskId: UUID
+  roleId: UUID
   workDescription: String
   url: String
   domain: SkillDomain
+  skillId: UUID
   capabilityLevel: CapabilityLevel
   effort: Int
   workStatus: WorkStatus

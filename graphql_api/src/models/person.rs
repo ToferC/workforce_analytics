@@ -18,8 +18,8 @@ use crate::common_utils::{
 use crate::database::connection;
 use crate::schema::*;
 
-use crate::models::{Role, TeamOwnership, Team, OrgTier, OrgOwnership, Capability, Affiliation, LanguageData, 
-    Publication};
+use crate::models::{Role, TeamOwnership, Team, OrgTier, OrgOwnership, Capability, Affiliation, LanguageData,
+    Publication, Work};
 
 use super::{Validation, Requirement};
 
@@ -281,6 +281,13 @@ impl Person {
     /// Returns active role
     pub async fn active_roles(&self) -> Result<Vec<Role>> {
         Role::get_by_person_id(self.id, true)
+    }
+
+    /// Returns the sum effort of active work across this person's active
+    /// roles. Maximum sustainable effort is around 10, so lower values
+    /// indicate capacity to take on new work.
+    pub async fn active_effort(&self) -> Result<i32> {
+        Work::sum_person_active_effort(&self.id)
     }
 
     /// Returns person's affiliations with other organizations

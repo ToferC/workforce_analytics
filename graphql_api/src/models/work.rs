@@ -12,13 +12,15 @@ use uuid::Uuid;
 use async_graphql::*;
 
 use crate::schema::*;
-use crate::models::{SkillDomain, Role, Task, CapabilityLevel};
+use crate::models::{SkillDomain, Role, Task, Capability, CapabilityLevel, Skill};
 use crate::database::connection;
 
 /// Data structure for a relationship between a person and work
-/// This is a many to many relationship as multiple people may be 
+/// This is a many to many relationship as multiple people may be
 /// assigned to a specific piece of work and a person may be assigned
 /// to multiple pieces of work
+/// Work may be planned under a task with its capability requirement
+/// (domain and capability_level) before a role is assigned
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, SimpleObject)]
 #[graphql(complex)]
 #[table_name = "works"]
@@ -27,7 +29,7 @@ pub struct Work {
     #[graphql(skip)]
     pub task_id: Uuid,
     #[graphql(skip)]
-    pub role_id: Uuid,
+    pub role_id: Option<Uuid>,
     pub work_description: String,
     pub url: Option<String>,
     pub domain: SkillDomain,
@@ -36,6 +38,8 @@ pub struct Work {
     pub work_status: WorkStatus,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    #[graphql(skip)]
+    pub skill_id: Option<Uuid>,
 }
 
 #[ComplexObject]
@@ -44,8 +48,32 @@ impl Work {
         Task::get_by_id(&self.task_id)
     }
 
-    pub async fn role(&self) -> Result<Role> {
-        Role::get_by_id(&self.role_id)
+    pub async fn role(&self) -> Result<Option<Role>> {
+        match self.role_id {
+            Some(id) => Ok(Some(Role::get_by_id(&id)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// The specific skill this work requires, if one is set
+    pub async fn skill(&self) -> Result<Option<Skill>> {
+        match self.skill_id {
+            Some(id) => Ok(Some(Skill::get_by_id(&id)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Capabilities (and through them, people) validated at or above
+    /// the level required by this work, ordered by validated level.
+    /// Matches on the work's specific skill when one is set, otherwise
+    /// on its domain. Accepts an optional count (default 10).
+    pub async fn capability_matches(&self, count: Option<i64>) -> Result<Vec<Capability>> {
+        let count = count.unwrap_or(10);
+
+        match self.skill_id {
+            Some(skill_id) => Capability::get_matches_by_skill_id_and_level(&skill_id, self.capability_level, count),
+            None => Capability::get_matches_by_domain_and_level(&self.domain, self.capability_level, count),
+        }
     }
 }
 
@@ -111,12 +139,12 @@ impl Work {
     pub fn get_worker_ids(task_id: &Uuid) -> Result<Vec<Uuid>> {
 
         let mut conn = connection()?;
-        let res: Vec<Uuid> = works::table
+        let res: Vec<Option<Uuid>> = works::table
             .filter(works::task_id.eq(task_id))
             .select(works::role_id)
-            .load::<Uuid>(&mut conn)?;
+            .load::<Option<Uuid>>(&mut conn)?;
 
-        Ok(res)
+        Ok(res.into_iter().flatten().collect())
     }
 
     pub fn get_by_id(id: &Uuid) -> Result<Self> {
@@ -154,6 +182,24 @@ impl Work {
         Ok(total_effort)
     }
 
+    /// Return the total effort of active work across a person's active roles.
+    pub fn sum_person_active_effort(person_id: &Uuid) -> Result<i32> {
+        let mut conn = connection()?;
+
+        let res = works::table
+            .inner_join(roles::table)
+            .filter(roles::person_id.eq(person_id))
+            .filter(roles::active.eq(true))
+            .filter(works::work_status.ne_all(vec![WorkStatus::Cancelled, WorkStatus::Completed]))
+            .select(works::effort)
+            .load::<i32>(&mut conn)?;
+
+        let total_effort = res.into_iter()
+            .sum();
+
+        Ok(total_effort)
+    }
+
     /// Return the numeric indicator of the total effort allocated to a task.
     pub fn sum_task_effort(task_id: &Uuid) -> Result<i32> {
         let mut conn = connection()?;
@@ -178,7 +224,66 @@ impl Work {
 
         Ok(res)
     }
-    
+
+    /// Return work under a task that has not yet been assigned to a role
+    pub fn get_vacant_by_task_id(task_id: &Uuid) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let res = works::table
+            .filter(works::task_id.eq(task_id))
+            .filter(works::role_id.is_null())
+            .order_by(works::created_at)
+            .load::<Work>(&mut conn)?;
+
+        Ok(res)
+    }
+
+    /// Return all work under a product's tasks
+    pub fn get_by_product_id(product_id: &Uuid) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let res = works::table
+            .inner_join(tasks::table)
+            .filter(tasks::product_id.eq(product_id))
+            .select(works::all_columns)
+            .order_by(works::created_at)
+            .load::<Work>(&mut conn)?;
+
+        Ok(res)
+    }
+
+    /// Return work under a product's tasks that has not yet been assigned to a role
+    pub fn get_vacant_by_product_id(product_id: &Uuid) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let res = works::table
+            .inner_join(tasks::table)
+            .filter(tasks::product_id.eq(product_id))
+            .filter(works::role_id.is_null())
+            .select(works::all_columns)
+            .order_by(works::created_at)
+            .load::<Work>(&mut conn)?;
+
+        Ok(res)
+    }
+
+    /// Return the numeric indicator of the total effort allocated to a product's tasks.
+    pub fn sum_product_effort(product_id: &Uuid) -> Result<i32> {
+        let mut conn = connection()?;
+
+        let res = works::table
+            .inner_join(tasks::table)
+            .filter(tasks::product_id.eq(product_id))
+            .filter(works::work_status.ne_all(vec![WorkStatus::Cancelled, WorkStatus::Completed]))
+            .select(works::effort)
+            .load::<i32>(&mut conn)?;
+
+        let total_effort = res.into_iter()
+            .sum();
+
+        Ok(total_effort)
+    }
+
     pub fn update(&self) -> Result<Self> {
         let mut conn = connection()?;
 
@@ -195,10 +300,11 @@ impl Work {
 #[table_name = "works"]
 pub struct NewWork {
     pub task_id: Uuid,
-    pub role_id: Uuid,
+    pub role_id: Option<Uuid>,
     pub work_description: String,
     pub url: Option<String>,
     pub domain: SkillDomain,
+    pub skill_id: Option<Uuid>,
     pub capability_level: CapabilityLevel,
     pub effort: i32,
     pub work_status: WorkStatus,
@@ -208,10 +314,11 @@ impl NewWork {
 
     pub fn new(
         task_id: Uuid,
-        role_id: Uuid,
+        role_id: Option<Uuid>,
         work_description: String,
         url: Option<String>,
         domain: SkillDomain,
+        skill_id: Option<Uuid>,
         capability_level: CapabilityLevel,
         effort: i32,
         work_status: WorkStatus,
@@ -222,6 +329,7 @@ impl NewWork {
             work_description,
             url,
             domain,
+            skill_id,
             capability_level,
             effort,
             work_status,

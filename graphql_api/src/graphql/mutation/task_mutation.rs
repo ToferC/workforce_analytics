@@ -78,6 +78,11 @@ impl TaskMutation {
             task.completed_date = Some(s);
         };
 
+        // Attach this task to the product it contributes to
+        if let Some(s) = data.product_id {
+            task.product_id = Some(s);
+        };
+
         task.update()
     }
 }
@@ -97,4 +102,5 @@ pub struct TaskData {
     pub target_completion_date: Option<NaiveDateTime>,
     pub task_status: Option<WorkStatus>,
     pub completed_date: Option<NaiveDateTime>,
+    pub product_id: Option<Uuid>,
 }

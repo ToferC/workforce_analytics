@@ -14,7 +14,7 @@ use crate::models::{Person, Organization, NewPerson, NewOrganization,
     NewRequirement, Requirement,
 };
 
-use super::{create_fake_capabilities, generate_dummy_publications_and_contributors, generate_tasks};
+use super::{create_fake_capabilities, generate_dummy_products, generate_dummy_publications_and_contributors, generate_tasks};
 
 /// Creates basic Org, People, Teams, Roles, Work, etc in the database
 pub fn pre_populate_db_schema() -> Result<(), Error> {
@@ -517,12 +517,13 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
 
                 let nw = NewWork::new(
                     task.id,
-                    role_res.id,
+                    Some(role_res.id),
                     format!("{} {}",
                         work_verbs.choose(&mut rng).unwrap().trim(),
                         task.title.trim()),
                     Some("https://www.forces.ca/some_url".to_string()),
                     task.domain,
+                    None,
                     capability_level,
                     effort,
                     task_status,
@@ -552,6 +553,11 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
     // Create dummy validatoins for capabilities
     let _res = create_validations()
         .expect("Unable to create validations");
+
+    // Create products with tasks attached and vacant work awaiting
+    // capability matches
+    let _res = generate_dummy_products(&org.id)
+        .expect("Unable to create products");
 
     let _res = Requirement::batch_create(&requirements_vec)?;
 

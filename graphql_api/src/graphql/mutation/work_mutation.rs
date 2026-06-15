@@ -37,6 +37,16 @@ impl WorkMutation {
     ) -> Result<Work> {
         let mut work = Work::get_by_id(&data.id)?;
 
+        if let Some(s) = data.task_id {
+            work.task_id = s;
+        };
+
+        // Assign a role (person) identified as having the required
+        // capabilities to this work
+        if let Some(s) = data.role_id {
+            work.role_id = Some(s);
+        };
+
         if let Some(s) = data.work_description {
             work.work_description = s;
         };
@@ -47,6 +57,10 @@ impl WorkMutation {
 
         if let Some(s) = data.domain {
             work.domain = s;
+        };
+
+        if let Some(s) = data.skill_id {
+            work.skill_id = Some(s);
         };
 
         if let Some(s) = data.capability_level {
@@ -70,9 +84,12 @@ impl WorkMutation {
 /// InputObject for Work with Option fields - only include the ones you want to update
 pub struct WorkData {
     pub id: Uuid,
+    pub task_id: Option<Uuid>,
+    pub role_id: Option<Uuid>,
     pub work_description: Option<String>,
     pub url: Option<String>,
     pub domain: Option<SkillDomain>,
+    pub skill_id: Option<Uuid>,
     pub capability_level: Option<CapabilityLevel>,
     pub effort: Option<i32>,
     pub work_status: Option<WorkStatus>,

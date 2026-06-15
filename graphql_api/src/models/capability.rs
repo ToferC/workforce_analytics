@@ -230,6 +230,38 @@ impl Capability {
         Ok(res)
     }
 
+    /// Returns active capabilities within a domain validated at or above the
+    /// target level. Used to match people to the capability requirements of work.
+    pub fn get_matches_by_domain_and_level(domain: &SkillDomain, level: CapabilityLevel, count: i64) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let res = capabilities::table
+            .filter(capabilities::domain.eq(domain))
+            .filter(capabilities::validated_level.ge(level))
+            .filter(capabilities::retired_at.is_null())
+            .order_by(capabilities::validated_level.desc())
+            .limit(count)
+            .load::<Capability>(&mut conn)?;
+
+        Ok(res)
+    }
+
+    /// Returns active capabilities in a specific skill validated at or above the
+    /// target level. Used to match people to the capability requirements of work.
+    pub fn get_matches_by_skill_id_and_level(skill_id: &Uuid, level: CapabilityLevel, count: i64) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let res = capabilities::table
+            .filter(capabilities::skill_id.eq(skill_id))
+            .filter(capabilities::validated_level.ge(level))
+            .filter(capabilities::retired_at.is_null())
+            .order_by(capabilities::validated_level.desc())
+            .limit(count)
+            .load::<Capability>(&mut conn)?;
+
+        Ok(res)
+    }
+
     pub fn get_by_person_id(id: Uuid) -> Result<Vec<Self>> {
         let mut conn = connection()?;
 

@@ -141,6 +141,18 @@ impl Organization {
         Ok(res)
     }
 
+    /// Clear retired_at to un-retire. update()'s AsChangeset skips None
+    /// fields, so clearing a column needs an explicit set to NULL.
+    pub fn restore(id: &Uuid) -> Result<Organization> {
+        let mut conn = connection()?;
+
+        let res = diesel::update(organizations::table.filter(organizations::id.eq(id)))
+            .set(organizations::retired_at.eq::<Option<NaiveDateTime>>(None))
+            .get_result(&mut conn)?;
+
+        Ok(res)
+    }
+
     pub fn load_into_hash() -> HashMap<Uuid, Organization> {
         let mut conn = connection().expect("Unable to make connection");
 

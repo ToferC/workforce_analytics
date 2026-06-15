@@ -64,6 +64,20 @@ impl TeamMutation {
 
         team.update()
     }
+
+    #[graphql(
+        name = "restoreTeam",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    /// Un-retire a team by clearing retired_at.
+    pub async fn restore_team(
+        &self,
+        _context: &Context<'_>,
+        id: Uuid,
+    ) -> Result<Team> {
+        Team::restore(&id)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, InputObject)]

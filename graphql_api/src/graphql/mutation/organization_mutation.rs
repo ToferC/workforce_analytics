@@ -68,6 +68,22 @@ impl OrganizationMutation {
 
         organization.update()
     }
+
+    #[graphql(
+        name = "restoreOrganization",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    /// Un-retire an organization by clearing retired_at. The update
+    /// resolvers treat a null field as "unchanged", so clearing needs a
+    /// dedicated mutation.
+    pub async fn restore_organization(
+        &self,
+        _context: &Context<'_>,
+        id: Uuid,
+    ) -> Result<Organization> {
+        Organization::restore(&id)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, InputObject)]

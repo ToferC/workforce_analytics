@@ -1,6 +1,6 @@
 use async_graphql::*;
 
-use crate::models::{Team};
+use crate::models::{Team, TeamOwnership};
 use uuid::Uuid;
 
 /*
@@ -12,6 +12,18 @@ pub struct TeamQuery;
 
 #[Object]
 impl TeamQuery {
+
+    #[graphql(name = "teamOwnershipByTeamId")]
+    /// Returns the ownership record linking a team to its owner. Exposes
+    /// the record id so clients can call updateTeamOwnership to reassign
+    /// the owner. Errors if the team has no ownership record.
+    pub async fn team_ownership_by_team_id(
+        &self,
+        _context: &Context<'_>,
+        team_id: Uuid,
+    ) -> Result<TeamOwnership> {
+        TeamOwnership::get_by_team_id(&team_id)
+    }
 
     // Teams
     #[graphql(name = "allTeams")]

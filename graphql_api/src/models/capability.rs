@@ -420,7 +420,10 @@ impl From<(String, SkillDomain, Option<CapabilityLevel>, i64)> for CapabilityCou
         CapabilityCount {
             name,
             domain,
-            level: level.expect("Unable to translate Validated Level").to_string(),
+            // A capability with no validations yet has no validated level;
+            // bucket it as "UNVALIDATED" rather than panicking (these now
+            // exist whenever a capability is created without validations).
+            level: level.map(|l| l.to_string()).unwrap_or_else(|| "UNVALIDATED".to_string()),
             counts,
         }
     }

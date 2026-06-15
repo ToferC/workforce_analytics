@@ -131,7 +131,18 @@ impl Team {
         .filter(teams::id.eq(&self.id))
         .set(self)
         .get_result(&mut conn)?;
-        
+
+        Ok(res)
+    }
+
+    /// Clear retired_at to un-retire (AsChangeset skips None, so set NULL).
+    pub fn restore(id: &Uuid) -> Result<Self> {
+        let mut conn = connection()?;
+
+        let res = diesel::update(teams::table.filter(teams::id.eq(id)))
+            .set(teams::retired_at.eq::<Option<NaiveDateTime>>(None))
+            .get_result(&mut conn)?;
+
         Ok(res)
     }
 }

@@ -200,7 +200,18 @@ impl OrgTier {
             .filter(org_tiers::id.eq(&self.id))
             .set(self)
             .get_result(&mut conn)?;
-        
+
+        Ok(res)
+    }
+
+    /// Clear retired_at to un-retire (AsChangeset skips None, so set NULL).
+    pub fn restore(id: &Uuid) -> Result<OrgTier> {
+        let mut conn = connection()?;
+
+        let res = diesel::update(org_tiers::table.filter(org_tiers::id.eq(id)))
+            .set(org_tiers::retired_at.eq::<Option<NaiveDateTime>>(None))
+            .get_result(&mut conn)?;
+
         Ok(res)
     }
 }

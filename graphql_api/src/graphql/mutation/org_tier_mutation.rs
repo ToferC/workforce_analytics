@@ -64,6 +64,20 @@ impl OrgTierMutation {
 
         org_tier.update()
     }
+
+    #[graphql(
+        name = "restoreOrgTier",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    /// Un-retire an org tier by clearing retired_at.
+    pub async fn restore_org_tier(
+        &self,
+        _context: &Context<'_>,
+        id: Uuid,
+    ) -> Result<OrgTier> {
+        OrgTier::restore(&id)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, InputObject)]

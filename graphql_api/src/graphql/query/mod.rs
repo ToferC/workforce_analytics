@@ -1,4 +1,5 @@
 mod query;
+mod analytics_query;
 mod person_query;
 mod organization_query;
 mod team_query;
@@ -12,6 +13,7 @@ mod work;
 mod product;
 
 pub use self::query::*;
+pub use self::analytics_query::*;
 pub use self::person_query::*;
 pub use self::organization_query::*;
 pub use self::team_query::*;

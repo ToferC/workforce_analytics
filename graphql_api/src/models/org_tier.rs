@@ -79,6 +79,93 @@ impl OrgTier {
     pub async fn teams(&self) -> Result<Vec<Team>> {
         Team::get_by_org_tier_id(&self.id)
     }
+
+    /// Capability counts rolled up across this tier and its descendants.
+    pub async fn capability_counts(&self) -> Result<Vec<crate::models::CapabilityCount>> {
+        use crate::schema::{org_tiers, teams, roles, capabilities};
+        use diesel::dsl::count;
+        use diesel::prelude::*;
+        use crate::models::CapabilityLevel;
+        let mut conn = connection()?;
+
+        let all_tiers_raw: Vec<(Uuid, Option<Uuid>)> = org_tiers::table
+            .select((org_tiers::id, org_tiers::parent_tier))
+            .load(&mut conn)?;
+
+        let mut tier_ids: Vec<Uuid> = Vec::new();
+        let mut queue = vec![self.id];
+        while let Some(current) = queue.pop() {
+            tier_ids.push(current);
+            for (tid, parent) in &all_tiers_raw {
+                if *parent == Some(current) {
+                    queue.push(*tid);
+                }
+            }
+        }
+
+        let team_ids: Vec<Uuid> = teams::table
+            .filter(teams::org_tier_id.eq_any(&tier_ids))
+            .select(teams::id)
+            .load::<Uuid>(&mut conn)?;
+
+        let person_ids: Vec<Uuid> = roles::table
+            .filter(roles::team_id.eq_any(&team_ids))
+            .filter(roles::active.eq(true))
+            .filter(roles::person_id.is_not_null())
+            .select(roles::person_id)
+            .load::<Option<Uuid>>(&mut conn)?
+            .into_iter()
+            .flatten()
+            .collect();
+
+        let res: Vec<(String, SkillDomain, Option<CapabilityLevel>, i64)> = capabilities::table
+            .filter(capabilities::person_id.eq_any(&person_ids))
+            .filter(capabilities::retired_at.is_null())
+            .group_by((capabilities::name_en, capabilities::domain, capabilities::validated_level))
+            .select((capabilities::name_en, capabilities::domain, capabilities::validated_level, count(capabilities::id)))
+            .order_by((capabilities::name_en, capabilities::validated_level))
+            .load::<(String, SkillDomain, Option<CapabilityLevel>, i64)>(&mut conn)?;
+
+        Ok(res.into_iter().map(crate::models::CapabilityCount::from).collect())
+    }
+
+    /// Sum of active effort across this tier and descendants.
+    pub async fn total_effort(&self) -> Result<i32> {
+        use crate::schema::{org_tiers, teams, roles, works};
+        use crate::models::WorkStatus;
+        use diesel::prelude::*;
+        let mut conn = connection()?;
+
+        let all_tiers_raw: Vec<(Uuid, Option<Uuid>)> = org_tiers::table
+            .select((org_tiers::id, org_tiers::parent_tier))
+            .load(&mut conn)?;
+
+        let mut tier_ids: Vec<Uuid> = Vec::new();
+        let mut queue = vec![self.id];
+        while let Some(current) = queue.pop() {
+            tier_ids.push(current);
+            for (tid, parent) in &all_tiers_raw {
+                if *parent == Some(current) {
+                    queue.push(*tid);
+                }
+            }
+        }
+
+        let team_ids: Vec<Uuid> = teams::table
+            .filter(teams::org_tier_id.eq_any(&tier_ids))
+            .select(teams::id)
+            .load::<Uuid>(&mut conn)?;
+
+        let res = works::table
+            .inner_join(roles::table)
+            .filter(roles::team_id.eq_any(&team_ids))
+            .filter(roles::active.eq(true))
+            .filter(works::work_status.ne_all(vec![WorkStatus::Cancelled, WorkStatus::Completed]))
+            .select(works::effort)
+            .load::<i32>(&mut conn)?;
+
+        Ok(res.into_iter().sum())
+    }
 }
 
 // Non Graphql

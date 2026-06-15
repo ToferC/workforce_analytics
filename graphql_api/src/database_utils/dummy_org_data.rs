@@ -39,6 +39,19 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
 
     science_org_ids.push(org.id);
 
+    let dnd_o = NewOrganization::new(
+        "Department of National Defence".to_string(),
+        "Ministère de la Défense nationale".to_string(),
+        "DND".to_string(),
+        "MDN".to_string(),
+        "Government".to_string(),
+        "https://www.canada.ca/en/department-national-defence.html".to_string(),
+    );
+
+    let dnd_org = Organization::create(&dnd_o).expect("Unable to create DND organization");
+
+    science_org_ids.push(dnd_org.id);
+
     // Set up Science Orgs for Affiliations
 
     let places = vec![("British Columbia", "UBC"), ("Manitoba", "UM"), ("Toronto", "UofT"), ("Quebec", "UQAM"),
@@ -69,16 +82,28 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
     let mut requirements_vec: Vec<NewRequirement> = Vec::new();
 
     let tt = NewOrgTier::new(
-            org.id, 
-            0, 
-            "Office of the Chief of Defence Staff".to_string(), 
-            "Bureau de chef d’état-major de la Défense".to_string(), 
+            org.id,
+            0,
+            "Office of the Chief of Defence Staff".to_string(),
+            "Bureau de chef d’état-major de la Défense".to_string(),
             SkillDomain::PeopleAndOrganisationalLeadership,
             None);
 
     let top_tier = OrgTier::create(&tt).unwrap();
 
     org_tiers.push(top_tier.clone());
+
+    let dnd_tt = NewOrgTier::new(
+            dnd_org.id,
+            0,
+            "Office of the Deputy Minister".to_string(),
+            "Bureau du sous-ministre".to_string(),
+            SkillDomain::PeopleAndOrganisationalLeadership,
+            None);
+
+    let dnd_top_tier = OrgTier::create(&dnd_tt).unwrap();
+
+    org_tiers.push(dnd_top_tier.clone());
 
     let org_path = "seeds/org_structure.csv";
 
@@ -113,33 +138,39 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
 
         println!("Creating Org Tiers for: {}", branch);
 
+        // Route civilian branches (ADM groups and Deputy Minister) to DND
+        let (branch_org_id, branch_parent_id) = if is_civilian_branch(&branch) {
+            (dnd_org.id, dnd_top_tier.id)
+        } else {
+            (org.id, top_tier.id)
+        };
+
         // create org tiers if not already existing
         // Create branch and get id
         let adm = NewOrgTier::new(
-            org.id, 
-            1, 
-            branch.to_owned(), 
+            branch_org_id,
+            1,
+            branch.to_owned(),
             branch.to_owned(),
             SkillDomain::PeopleAndOrganisationalLeadership,
-            Some(top_tier.id),
+            Some(branch_parent_id),
         );
-    
+
         let adm_tier = OrgTier::get_or_create(&adm)
             .expect("Unable to get or create org_tier");
-
 
         org_tiers.push(adm_tier.clone());
 
         // Create centre and get id
         let ctr = NewOrgTier::new(
-            org.id, 
-            2, 
-            centre.to_owned(), 
+            branch_org_id,
+            2,
+            centre.to_owned(),
             centre.to_owned(),
             SkillDomain::PeopleAndOrganisationalLeadership,
             Some(adm_tier.id),
         );
-    
+
         let ctr_tier = OrgTier::get_or_create(&ctr)
             .expect("Unable to get or create org_tier");
 
@@ -147,34 +178,32 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
 
         // Create division and get id
         let div = NewOrgTier::new(
-            org.id, 
-            3, 
-            division.to_owned(), 
+            branch_org_id,
+            3,
+            division.to_owned(),
             division.to_owned(),
             domain,
             Some(ctr_tier.id),
         );
-    
+
         let div_tier = OrgTier::get_or_create(&div)
             .expect("Unable to get or create org_tier");
 
         org_tiers.push(div_tier.clone());
 
-
-        // Create 5 teams per division
+        // Create 3 teams per division
         for i in 1..=3 {
             let tm = NewOrgTier::new(
-                org.id, 
-                4, 
-                format!("{} Team {}", division.to_owned(), i), 
+                branch_org_id,
+                4,
+                format!("{} Team {}", division.to_owned(), i),
                 format!("{} Team {}", division.to_owned(), i),
                 domain,
                 Some(div_tier.id),
             );
-        
+
             let tm_tier = OrgTier::get_or_create(&tm)
                 .expect("Unable to get or create org_tier");
-
 
             org_tiers.push(tm_tier);
         }
@@ -303,13 +332,26 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
         
         // set officer occupation and rank and define levels of management
 
-        let (occupation, rank, num_members, title_str) = match ot.tier_level {
-            0 => (MilitaryOccupation::choose(), Rank::General, 4, "Chief of Defence Staff"),
-            1 => (MilitaryOccupation::choose(), Rank::LieutenantGeneral, 4, "Commander"),
-            2 => (MilitaryOccupation::choose(), Rank::BrigadierGeneral, 3, "Director General"),
-            3 => (MilitaryOccupation::choose(), Rank::Colonel, 2, "Director"),
-            4 => (MilitaryOccupation::choose(), Rank::LieutenantColonel, 3, "Manager"),
-            _ => (MilitaryOccupation::choose(), Rank::Major, 4, "Special Advisor"),
+        let is_civilian_tier = ot.organization_id == dnd_org.id;
+
+        let (occupation, rank, num_members, title_str) = if is_civilian_tier {
+            match ot.tier_level {
+                0 => (MilitaryOccupation::choose(), Rank::General, 4, "Deputy Minister"),
+                1 => (MilitaryOccupation::choose(), Rank::LieutenantGeneral, 4, "Assistant Deputy Minister"),
+                2 => (MilitaryOccupation::choose(), Rank::BrigadierGeneral, 3, "Director General"),
+                3 => (MilitaryOccupation::choose(), Rank::Colonel, 2, "Director"),
+                4 => (MilitaryOccupation::choose(), Rank::LieutenantColonel, 3, "Manager"),
+                _ => (MilitaryOccupation::choose(), Rank::Major, 4, "Special Advisor"),
+            }
+        } else {
+            match ot.tier_level {
+                0 => (MilitaryOccupation::choose(), Rank::General, 4, "Chief of Defence Staff"),
+                1 => (MilitaryOccupation::choose(), Rank::LieutenantGeneral, 4, "Commander"),
+                2 => (MilitaryOccupation::choose(), Rank::BrigadierGeneral, 3, "Director General"),
+                3 => (MilitaryOccupation::choose(), Rank::Colonel, 2, "Director"),
+                4 => (MilitaryOccupation::choose(), Rank::LieutenantColonel, 3, "Manager"),
+                _ => (MilitaryOccupation::choose(), Rank::Major, 4, "Special Advisor"),
+            }
         };
 
         // Owners may be military or civilian; set the HR fields matching
@@ -337,12 +379,12 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
         let team_name = ot.name_en.clone().trim().to_string();
 
         let new_team = NewTeam::new(
-            team_name.trim().to_string(), 
+            team_name.trim().to_string(),
             format!("{}_FR", team_name.trim()),
-            org.id, 
+            ot.organization_id,
             ot.id,
             ot.primary_domain,
-            "Description_EN".to_string(), 
+            "Description_EN".to_string(),
             "Description_FR".to_string()
         );
 
@@ -565,6 +607,10 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
 
 }
 
+
+fn is_civilian_branch(branch: &str) -> bool {
+    branch == "Deputy Minister" || branch.starts_with("ADM ")
+}
 
 pub fn gen_rand_number() -> String {
     let mut rng = rand::thread_rng();

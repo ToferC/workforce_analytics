@@ -58,7 +58,7 @@ impl RoleMutation {
     }
 
     #[graphql(
-        name = "updateRole", 
+        name = "updateRole",
         guard = "RoleGuard::new(UserRole::Operator)",
         visible = "is_operator",
     )]
@@ -67,7 +67,7 @@ impl RoleMutation {
         _context: &Context<'_>,
         role_data: RoleData,
     ) -> Result<Role> {
-        
+
         let mut role = Role::get_by_id(&role_data.id)?;
 
         if let Some(id) = role_data.active {
@@ -83,6 +83,35 @@ impl RoleMutation {
         };
 
         Ok(role)
+    }
+
+    /// Assign a person to a vacant role. Errors if the role is already occupied.
+    #[graphql(
+        name = "assignPersonToRole",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    pub async fn assign_person_to_role(
+        &self,
+        _context: &Context<'_>,
+        person_id: Uuid,
+        role_id: Uuid,
+    ) -> Result<Role> {
+        Role::assign_person(&role_id, &person_id)
+    }
+
+    /// Remove the person from a role, leaving it vacant.
+    #[graphql(
+        name = "vacateRole",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    pub async fn vacate_role(
+        &self,
+        _context: &Context<'_>,
+        role_id: Uuid,
+    ) -> Result<Role> {
+        Role::vacate(&role_id)
     }
 }
 

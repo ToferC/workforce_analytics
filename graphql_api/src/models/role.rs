@@ -306,7 +306,44 @@ impl Role {
         .filter(roles::id.eq(&self.id))
         .set(self.clone())
         .get_result(&mut conn)?;
-        
+
+        Ok(res)
+    }
+
+    /// Assign a person to this role. Errors if the role is already occupied.
+    pub fn assign_person(role_id: &Uuid, person_id: &Uuid) -> Result<Self> {
+        let mut conn = connection()?;
+
+        let role: Role = roles::table.filter(roles::id.eq(role_id)).first(&mut conn)?;
+
+        if role.person_id.is_some() {
+            return Err(Error::new(format!(
+                "Role {} is already occupied. Vacate it first or create a new role.",
+                role_id
+            )));
+        }
+
+        let res = diesel::update(roles::table.filter(roles::id.eq(role_id)))
+            .set((
+                roles::person_id.eq(Some(person_id)),
+                roles::updated_at.eq(chrono::Utc::now().naive_utc()),
+            ))
+            .get_result(&mut conn)?;
+
+        Ok(res)
+    }
+
+    /// Remove the person from this role, leaving it vacant.
+    pub fn vacate(role_id: &Uuid) -> Result<Self> {
+        let mut conn = connection()?;
+
+        let res = diesel::update(roles::table.filter(roles::id.eq(role_id)))
+            .set((
+                roles::person_id.eq(None::<Uuid>),
+                roles::updated_at.eq(chrono::Utc::now().naive_utc()),
+            ))
+            .get_result(&mut conn)?;
+
         Ok(res)
     }
 }

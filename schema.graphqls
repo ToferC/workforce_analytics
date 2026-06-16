@@ -81,6 +81,10 @@ type Mutation {
   restorePerson(id: UUID!): Person!
   createRole(roleData: NewRole!): Role!
   updateRole(roleData: RoleData!): Role!
+  "Assign a person to a vacant role. Errors if the role is already occupied."
+  assignPersonToRole(personId: UUID!, roleId: UUID!): Role!
+  "Remove the person from a role, leaving it vacant."
+  vacateRole(roleId: UUID!): Role!
   createCapability(data: NewCapability!): Capability!
   """
   An operator may update a capability.

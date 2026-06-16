@@ -77,7 +77,8 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         retired_at -> Nullable<Timestamp>,
-        validation_values -> Array<Nullable<Int8>>,
+        validated_by_id -> Nullable<Uuid>,
+        validated_at -> Nullable<Timestamp>,
     }
 }
 

@@ -312,41 +312,32 @@ pub fn create_validations() -> Result<(), Error> {
         capabilities.len(),
     );
 
-    for (i, mut c) in capabilities.into_iter().enumerate() {
-        let mut validations = Vec::new();
-
-        let validators: Vec<Uuid> = person_ids
-            .choose_multiple(&mut rng, 4)
-            .cloned()
-            .collect();
-
+    for (i, c) in capabilities.into_iter().enumerate() {
         if i % 100 == 0 {
             print!(".")
         }
 
-        let mut validated_levels: Vec<CapabilityLevel> = Vec::new();
+        // A single central authority validates the capability, setting the
+        // validated level directly. Creating the validation also stamps the
+        // capability with the authority and date for provenance.
+        let authority: Uuid = person_ids
+            .choose(&mut rng)
+            .cloned()
+            .expect("No people available to act as validation authority");
 
-        for validator in validators {
-            let assessment = match rng.gen_range(0..10) {
-                0..=3  => c.self_identified_level.step_down(),
-                4..=6  => c.self_identified_level,
-                7..=9  => c.self_identified_level.step_up(),
-                _      => c.self_identified_level.step_up(),
-            };
+        let assessment = match rng.gen_range(0..10) {
+            0..=3  => c.self_identified_level.step_down(),
+            4..=6  => c.self_identified_level,
+            _      => c.self_identified_level.step_up(),
+        };
 
-            validated_levels.push(assessment);
+        let v = NewValidation::new(
+            authority,
+            c.id,
+            assessment,
+        );
 
-            let v = NewValidation::new(
-                validator,
-                c.id,
-                assessment,
-            );
-
-            validations.push(v.clone());
-        }
-
-        let _r = Validation::batch_create(validations)?;
-        c.update_from_batch_validations(&validated_levels)?;
+        let _r = Validation::create(&v)?;
         progress.increment();
     }
 

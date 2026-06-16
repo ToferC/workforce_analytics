@@ -60,6 +60,12 @@ type CapabilityCount {
   level: String!
   counts: Int!
 }
+"A named time series (e.g. one per SkillDomain)"
+type LabeledSeries {
+  "e.g. a SkillDomain value, as a String"
+  key: String!
+  points: [TimeSeriesPoint!]!
+}
 "A representation of a persons' language proficiency"
 type LanguageData {
   id: UUID!
@@ -461,9 +467,7 @@ type Query {
   one series per SkillDomain.
   """
   capabilityGrowth(bucket: TimeBucket!, from: NaiveDateTime, to: NaiveDateTime, domain: SkillDomain, orgTierId: UUID): [LabeledSeries!]!
-  """
-  Per-domain capability supply vs demand over time.
-  """
+  "Per-domain capability supply vs demand over time."
   capabilitySupplyDemand(bucket: TimeBucket!, from: NaiveDateTime, to: NaiveDateTime, domain: SkillDomain, orgTierId: UUID): [SupplyDemandSeries!]!
   "Capability depth per team across all skill domains (for a heatmap)."
   teamCapabilityMatrix(orgTierId: UUID): [TeamCapabilityRow!]!
@@ -532,6 +536,32 @@ type Skill {
   retiredAt: NaiveDateTime
   capabilities: [Capability!]!
 }
+"Supply vs demand for a single time bucket"
+type SupplyDemandPoint {
+  periodStart: NaiveDateTime!
+  bucket: TimeBucket!
+  "Count/weight of validated capabilities available as of period end."
+  supply: Float!
+  "Count/weight of required capability from role Requirements + Work as of period end."
+  demand: Float!
+}
+"Supply/demand time series for one domain"
+type SupplyDemandSeries {
+  "SkillDomain value as String."
+  domain: String!
+  points: [SupplyDemandPoint!]!
+}
+"A detected talent movement event"
+type TalentMovement {
+  personId: UUID!
+  at: NaiveDateTime!
+  fromTeamId: UUID
+  toTeamId: UUID
+  fromLevel: String
+  toLevel: String
+  "PROMOTION | LATERAL | INFLOW | OUTFLOW"
+  kind: String!
+}
 type Task {
   id: UUID!
   createdByRoleId: UUID!
@@ -575,6 +605,20 @@ type Team {
   "Sum of active effort across this team's roles."
   totalEffort: Int!
 }
+"A cell in the team capability heatmap"
+type TeamCapabilityCell {
+  domain: String!
+  "Weighted capability depth (validated; self-identified fallback)."
+  depth: Float!
+  "Distinct people contributing at this domain."
+  peopleCount: Int!
+}
+"A row in the team capability heatmap"
+type TeamCapabilityRow {
+  teamId: UUID!
+  teamName: String!
+  cells: [TeamCapabilityCell!]!
+}
 type TeamOwnership {
   id: UUID!
   personId: UUID!
@@ -583,6 +627,13 @@ type TeamOwnership {
   endDate: NaiveDateTime
   createdAt: NaiveDateTime!
   updatedAt: NaiveDateTime!
+}
+"A single data point in a time series"
+type TimeSeriesPoint {
+  "Start of the bucket, ISO 8601"
+  periodStart: NaiveDateTime!
+  bucket: TimeBucket!
+  value: Float!
 }
 type User {
   id: UUID!
@@ -643,58 +694,6 @@ type Work {
   on its domain. Accepts an optional count (default 10).
   """
   capabilityMatches(count: Int): [Capability!]!
-}
-enum TimeBucket {
-  WEEK
-  MONTH
-  QUARTER
-  YEAR
-}
-type TimeSeriesPoint {
-  "Start of the bucket, ISO 8601"
-  periodStart: NaiveDateTime!
-  bucket: TimeBucket!
-  value: Float!
-}
-type LabeledSeries {
-  "e.g. a SkillDomain value, as a String"
-  key: String!
-  points: [TimeSeriesPoint!]!
-}
-type SupplyDemandPoint {
-  periodStart: NaiveDateTime!
-  bucket: TimeBucket!
-  "Count/weight of validated capabilities available as of period end."
-  supply: Float!
-  "Count/weight of required capability from role Requirements + Work as of period end."
-  demand: Float!
-}
-type SupplyDemandSeries {
-  "SkillDomain value as String."
-  domain: String!
-  points: [SupplyDemandPoint!]!
-}
-type TeamCapabilityCell {
-  domain: String!
-  "Weighted capability depth (validated; self-identified fallback)."
-  depth: Float!
-  "Distinct people contributing at this domain."
-  peopleCount: Int!
-}
-type TeamCapabilityRow {
-  teamId: UUID!
-  teamName: String!
-  cells: [TeamCapabilityCell!]!
-}
-type TalentMovement {
-  personId: UUID!
-  at: NaiveDateTime!
-  fromTeamId: UUID
-  toTeamId: UUID
-  fromLevel: String
-  toLevel: String
-  "PROMOTION | LATERAL | INFLOW | OUTFLOW"
-  kind: String!
 }
 "Enums for Capability -> shift to 0 - 4"
 enum CapabilityLevel {
@@ -837,6 +836,13 @@ enum SkillDomain {
   PEOPLE_AND_ORGANISATIONAL_LEADERSHIP
   GOVERNANCE
   CORPORATE_SERVICES
+}
+"Time bucket granularity for analytics series"
+enum TimeBucket {
+  WEEK
+  MONTH
+  QUARTER
+  YEAR
 }
 enum WorkStatus {
   PLANNING

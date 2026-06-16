@@ -48,7 +48,12 @@ type Capability {
   createdAt: NaiveDateTime!
   updatedAt: NaiveDateTime!
   retiredAt: NaiveDateTime
+  "Provenance of the current validated level: the central authority who set it and when. Populated directly from the authoritative validation."
+  validatedById: UUID
+  validatedAt: NaiveDateTime
   person: Person!
+  "The central authority who set the current validated level, if any."
+  validatedBy: Person
   skillName: String!
   skill: Skill!
   "Detailed view of validations for this capability"
@@ -144,13 +149,16 @@ type Mutation {
   createRequirement(data: NewRequirement!): Requirement!
   updateRequirement(data: RequirementData!): Requirement!
   """
-  Creates a validation for a person's capability. Also automatically updates
-  the associated capability's validated_level based on the average of all validations.
+  Records a central authority's validation of a person's capability. The
+  capability's validated_level is set directly from this validation, and
+  the validating authority and date are stamped onto the capability for
+  provenance. The validation is retained as date-stamped history.
   """
   createValidation(data: NewValidation!): Validation!
   """
-  Updates a validation's level. Also automatically recalculates
-  the associated capability's validated_level.
+  Updates a validation's level. The associated capability's
+  validated_level is set directly from this authoritative validation,
+  and its validation provenance (authority and date) is refreshed.
   """
   updateValidation(data: ValidationData!): Validation!
   createLanguageData(data: NewLanguageData!): LanguageData!
@@ -655,7 +663,7 @@ type UserResponse {
   email: String!
   expiresAt: NaiveDateTime!
 }
-"Other people's validations of an individuals Capability"
+"A central authority's validation of an individual's Capability. Each validation is retained and date-stamped as provenance; the most recent one sets the capability's validated level directly."
 type Validation {
   id: UUID!
   validatorId: UUID!
@@ -896,7 +904,6 @@ input NewCapability {
   skillId: UUID!
   organizationId: UUID!
   selfIdentifiedLevel: CapabilityLevel!
-  validationValues: [Int!]!
 }
 "Represents an insertable Language"
 input NewLanguageData {

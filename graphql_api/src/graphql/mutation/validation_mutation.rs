@@ -16,8 +16,10 @@ impl ValidationMutation {
         guard = "RoleGuard::new(UserRole::Admin)",
         visible = "is_admin",
     )]
-    /// Creates a validation for a person's capability. Also automatically updates
-    /// the associated capability's validated_level based on the average of all validations.
+    /// Records a central authority's validation of a person's capability. The
+    /// capability's validated_level is set directly from this validation, and
+    /// the validating authority and date are stamped onto the capability for
+    /// provenance. The validation is retained as date-stamped history.
     pub async fn create_validation(
         &self,
         _context: &Context<'_>,
@@ -32,8 +34,9 @@ impl ValidationMutation {
         guard = "RoleGuard::new(UserRole::Admin)",
         visible = "is_admin",
     )]
-    /// Updates a validation's level. Also automatically recalculates
-    /// the associated capability's validated_level.
+    /// Updates a validation's level. The associated capability's
+    /// validated_level is set directly from this authoritative validation,
+    /// and its validation provenance (authority and date) is refreshed.
     pub async fn update_validation(
         &self,
         _context: &Context<'_>,

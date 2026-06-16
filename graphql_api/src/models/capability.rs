@@ -15,7 +15,7 @@ use crate::{database::connection};
 
 use crate::{schema::*, database};
 
-use crate::models::{Person, Skill, Organization, SkillDomain, Validation, ValidatedLevel};
+use crate::models::{Person, Skill, Organization, SkillDomain, Validation};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, Insertable, AsChangeset, SimpleObject, Associations)]
 #[diesel(belongs_to(Person))]
@@ -44,8 +44,10 @@ pub struct Capability {
     pub updated_at: NaiveDateTime,
     pub retired_at: Option<NaiveDateTime>,
 
-    #[graphql(skip)]
-    pub validation_values: Vec<Option<i64>>,
+    /// Provenance of the current validated level: the central authority who
+    /// set it and when. Populated directly from the authoritative validation.
+    pub validated_by_id: Option<Uuid>,
+    pub validated_at: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, DbEnum, Serialize, Deserialize, Enum, PartialOrd, Ord, Display)]
@@ -99,6 +101,14 @@ impl CapabilityLevel {
 impl Capability {
     pub async fn person(&self) -> Result<Person> {
         Person::get_by_id(&self.person_id)
+    }
+
+    /// The central authority who set the current validated level, if any.
+    pub async fn validated_by(&self) -> Result<Option<Person>> {
+        match self.validated_by_id {
+            Some(id) => Ok(Some(Person::get_by_id(&id)?)),
+            None => Ok(None),
+        }
     }
 
     pub async fn skill_name(&self) -> Result<String> {
@@ -316,44 +326,20 @@ impl Capability {
         Ok(counts)
     }
 
-    /// Updates a Capability based on a new validation
-    pub fn update_from_validation(&mut self, validated_level: &CapabilityLevel) -> Result<Self> {
+    /// Sets the capability's validated level directly from an authoritative
+    /// validation. The central authority's assessment is taken as-is (no
+    /// averaging), and the validating authority and timestamp are recorded
+    /// for provenance. The validation itself is retained in the validations
+    /// table as the date-stamped history.
+    pub fn update_from_validation(&mut self, validation: &Validation) -> Result<Self> {
 
-        self.validation_values.push(Some(ValidatedLevel::get_value_from_capability_level(validated_level)));
-
-        let values: Option<Vec<i64>> = self.validation_values.clone().into_iter().collect();
-
-        let values = values.unwrap();
-
-        let validation_average: i64 = values.iter().sum::<i64>() / values.len() as i64;
-
-        let validated_level = ValidatedLevel::get_capability_level_from_value(&validation_average);
-
-        self.validated_level = Some(validated_level);
+        self.validated_level = Some(validation.validated_level);
+        self.validated_by_id = Some(validation.validator_id);
+        self.validated_at = Some(validation.updated_at);
 
         self.update()
     }
 
-    /// Updates a Capability based on a vector of validations
-    pub fn update_from_batch_validations(&mut self, validated_levels: &Vec<CapabilityLevel>) -> Result<Self> {
-
-        for v in validated_levels {
-            self.validation_values.push(Some(ValidatedLevel::get_value_from_capability_level(v)));
-        };
-        
-        let values: Option<Vec<i64>> = self.validation_values.clone().into_iter().collect();
-        
-        let values = values.unwrap();
-
-        let validation_average: i64 = values.iter().sum::<i64>() / values.len() as i64;
-
-        let validated_level = ValidatedLevel::get_capability_level_from_value(&validation_average);
-
-        self.validated_level = Some(validated_level);
-
-        self.update()
-    }
-    
     /// Updates a Capability based on changed data
     pub fn update(&self) -> Result<Self> {
 
@@ -378,7 +364,6 @@ pub struct NewCapability {
     pub skill_id: Uuid, // Skill
     pub organization_id: Uuid,
     pub self_identified_level: CapabilityLevel,
-    pub validation_values: Vec<i64>,
 }
 
 impl NewCapability {
@@ -392,8 +377,6 @@ impl NewCapability {
 
         let skill = Skill::get_by_id(&skill_id).expect("Unable to get skill");
 
-        let self_identified_value: i64 = ValidatedLevel::get_value_from_capability_level(&self_identified_level);
-        
         NewCapability {
             name_en: skill.name_en,
             name_fr: skill.name_fr,
@@ -402,7 +385,6 @@ impl NewCapability {
             skill_id: skill.id,
             organization_id: organization_id,
             self_identified_level,
-            validation_values: vec![self_identified_value],
         }
     }
 }

@@ -19,8 +19,9 @@ use super::{Person, Capability};
 #[diesel(belongs_to(Person))]
 #[diesel(belongs_to(Capability))]
 #[graphql(complex)]
-// Represents ownership of a team by a person
-/// Other people's validations of an individuals Capability
+/// A central authority's validation of an individual's Capability. Each
+/// validation is retained and date-stamped as provenance; the most recent
+/// one sets the capability's validated level directly.
 pub struct Validation {
     pub id: Uuid,
     #[graphql(
@@ -55,7 +56,7 @@ impl Validation {
 
         let mut capability = Capability::get_by_id(&res.capability_id)?;
 
-        capability.update_from_validation(&res.validated_level)?;
+        capability.update_from_validation(&res)?;
         
         Ok(res)
     }
@@ -153,78 +154,11 @@ impl Validation {
 
         let mut capability = Capability::get_by_id(&res.capability_id)?;
 
-        capability.update_from_validation(&res.validated_level)?;
+        capability.update_from_validation(&res)?;
         
         Ok(res)
     }
 }
-
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, SimpleObject)]
-pub struct ValidatedLevel {
-    capability_level: CapabilityLevel,
-    average: f32,
-}
-
-impl ValidatedLevel {
-    pub fn new(
-        capability_level: CapabilityLevel, 
-        average: f32,
-    ) -> Self {
-        ValidatedLevel { 
-            capability_level,
-            average,
-         }
-    }
-
-    pub fn get_value_from_capability_level(capability_level: &CapabilityLevel) -> i64 {
-            let n = match capability_level {
-                CapabilityLevel::Desired => 0,
-                CapabilityLevel::Novice => 100,
-                CapabilityLevel::Experienced => 200,
-                CapabilityLevel::Expert => 300,
-                CapabilityLevel::Specialist => 400,
-            };
-            
-            n
-    }
-
-    pub fn get_capability_level_from_value(value: &i64) -> CapabilityLevel {
-
-        let cap = match value {
-            00..=070 => CapabilityLevel::Desired,
-            71..=170 => CapabilityLevel::Novice,
-            171..=270 => CapabilityLevel::Experienced,
-            271..=370 => CapabilityLevel::Expert,
-            371..=470 => CapabilityLevel::Specialist,
-            _ => CapabilityLevel::Desired,
-        };
-
-        cap
-    }
-
-    pub fn return_validated_level(validation_values: &Vec<i64>) -> Result<ValidatedLevel> {
-    
-        let average_value = validation_values.iter().sum::<i64>() / validation_values.len() as i64;
-    
-        let cap = match &average_value {
-            00..=070 => CapabilityLevel::Desired,
-            71..=170 => CapabilityLevel::Novice,
-            171..=270 => CapabilityLevel::Experienced,
-            271..=370 => CapabilityLevel::Expert,
-            371..=470 => CapabilityLevel::Specialist,
-            _ => CapabilityLevel::Desired,
-        };
-    
-        let res = ValidatedLevel::new(
-            cap,
-            average_value as f32 / 100.0,
-        );
-    
-        Ok(res)
-    }
-}
-
-
 
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, InputObject)]
 #[diesel(table_name = validations)]

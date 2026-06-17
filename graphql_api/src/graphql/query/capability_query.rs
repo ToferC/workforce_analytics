@@ -3,7 +3,7 @@ use async_graphql::*;
 use crate::models::{Capability, Skill, CapabilityCount, SkillDomain, CapabilityLevel};
 use uuid::Uuid;
 
-//use crate::common_utils::{RoleGuard, is_admin, UserRole};
+use crate::common_utils::{RoleGuard, UserRole};
 
 #[derive(Default)]
 pub struct CapabilityQuery;
@@ -13,8 +13,9 @@ impl CapabilityQuery {
 
     // Capabilities
     /// Returns count number of Capabilities in the system
+    #[graphql(guard = "RoleGuard::new(UserRole::User)")]
     pub async fn capabilities(
-        &self, 
+        &self,
         _context: &Context<'_>,
         count: i64,
     ) -> Result<Vec<Capability>> {
@@ -23,8 +24,9 @@ impl CapabilityQuery {
     }
 
     /// Returns a capability by its Uuid
+    #[graphql(guard = "RoleGuard::new(UserRole::User)")]
     pub async fn capability_by_id(
-        &self, 
+        &self,
         _context: &Context<'_>,
         id: Uuid
     ) -> Result<Capability> {
@@ -32,10 +34,11 @@ impl CapabilityQuery {
         Capability::get_by_id(&id)
     }
 
-    /// Accepts a String "name" and returns a vector of capabilities that 
+    /// Accepts a String "name" and returns a vector of capabilities that
     /// match in EN or FR against it
+    #[graphql(guard = "RoleGuard::new(UserRole::User)")]
     pub async fn capabilities_by_name(
-        &self, 
+        &self,
         _context: &Context<'_>,
         name: String,
     ) -> Result<Vec<Capability>> {
@@ -44,8 +47,9 @@ impl CapabilityQuery {
     }
 
     /// Accepts a String "name" and a CapabilityLevel and returns matches against both
+    #[graphql(guard = "RoleGuard::new(UserRole::User)")]
     pub async fn capabilities_by_name_and_level(
-        &self, 
+        &self,
         _context: &Context<'_>,
         name: String,
         level: CapabilityLevel,
@@ -53,10 +57,11 @@ impl CapabilityQuery {
 
         Capability::get_by_name_and_level(&name, level)
     }
-       
+
     /// Return a count of the number of people who have a capability at each level of the capability
+    #[graphql(guard = "RoleGuard::new(UserRole::User)")]
     pub async fn capability_counts_by_name(
-        &self, 
+        &self,
         _context: &Context<'_>,
         name: String,
     ) -> Result<Vec<CapabilityCount>> {
@@ -65,8 +70,9 @@ impl CapabilityQuery {
     }
 
     /// Return a CapabilityCount by a specific SkillDomain (SCIENTIFIC, etc.)
+    #[graphql(guard = "RoleGuard::new(UserRole::User)")]
     pub async fn capability_counts_by_domain(
-        &self, 
+        &self,
         _context: &Context<'_>,
         domain: SkillDomain,
     ) -> Result<Vec<CapabilityCount>> {
@@ -77,8 +83,9 @@ impl CapabilityQuery {
     // Skills
 
     /// Returns vector of all skills
+    #[graphql(guard = "RoleGuard::new(UserRole::User)")]
     pub async fn skills(
-        &self, 
+        &self,
         _context: &Context<'_>,
     ) -> Result<Vec<Skill>> {
 
@@ -86,8 +93,9 @@ impl CapabilityQuery {
     }
 
     /// Returns a specific skill by ID
+    #[graphql(guard = "RoleGuard::new(UserRole::User)")]
     pub async fn skill_by_id(
-        &self, 
+        &self,
         _context: &Context<'_>,
         id: Uuid
     ) -> Result<Skill> {
@@ -96,8 +104,9 @@ impl CapabilityQuery {
     }
 
     /// Returns a vector of skills matching some part of the name provided
+    #[graphql(guard = "RoleGuard::new(UserRole::User)")]
     pub async fn skill_by_name(
-        &self, 
+        &self,
         _context: &Context<'_>,
         name: String,
     ) -> Result<Vec<Skill>> {

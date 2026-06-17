@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use actix_web::{HttpRequest, Result};
-use argon2::password_hash::{PasswordHashString, SaltString};
+use argon2::password_hash::{PasswordHashString, SaltString, rand_core::OsRng};
 use chrono::{Duration, Local, DateTime};
 use jsonwebtoken::{decode, DecodingKey, TokenData, Validation};
 use jsonwebtoken::{encode, EncodingKey, Header};
@@ -21,10 +21,6 @@ lazy_static! {
         std::env::var("JWT_SECRET_KEY").expect("Can't read JWT_SECRET_KEY");
 }
 
-lazy_static! {
-    static ref PASSWORD_SECRET_KEY: String = 
-        std::env::var("PASSWORD_SECRET_KEY").expect("Can't read PASSWORD_SECRET_KEY");
-}
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Claims {
@@ -106,7 +102,7 @@ pub fn hash_password(password: &str) -> Result<PasswordHashString, argon2::passw
 
     let pwd = password.as_bytes();
 
-    let salt = SaltString::from_b64(&PASSWORD_SECRET_KEY).expect("Unable to generate salt").to_owned();
+    let salt = SaltString::generate(&mut OsRng);
 
     let result = argon2.hash_password(
         pwd,

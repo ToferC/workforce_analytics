@@ -13,6 +13,7 @@ use crate::models::{
     TalentMovement,
     SkillDomain, CapabilityLevel, WorkStatus,
 };
+use crate::common_utils::{RoleGuard, UserRole};
 
 #[derive(Default)]
 pub struct AnalyticsQuery;
@@ -82,6 +83,7 @@ fn get_person_ids_under_org_tier(org_tier_id: &Uuid) -> Result<Vec<Uuid>> {
 impl AnalyticsQuery {
     /// Cumulative validated capability across the organization over time,
     /// one series per SkillDomain.
+    #[graphql(guard = "RoleGuard::new(UserRole::User)")]
     pub async fn capability_growth(
         &self,
         bucket: TimeBucket,
@@ -205,6 +207,7 @@ impl AnalyticsQuery {
     }
 
     /// Per-domain capability supply vs demand over time.
+    #[graphql(guard = "RoleGuard::new(UserRole::User)")]
     pub async fn capability_supply_demand(
         &self,
         bucket: TimeBucket,
@@ -411,6 +414,7 @@ impl AnalyticsQuery {
     }
 
     /// Capability depth per team across all skill domains (for a heatmap).
+    #[graphql(guard = "RoleGuard::new(UserRole::User)")]
     pub async fn team_capability_matrix(
         &self,
         org_tier_id: Option<Uuid>,
@@ -502,6 +506,7 @@ impl AnalyticsQuery {
     }
 
     /// Derived role transitions over a window, for mobility/promotion analysis.
+    #[graphql(guard = "RoleGuard::new(UserRole::User)")]
     pub async fn talent_movements(
         &self,
         from: Option<NaiveDateTime>,

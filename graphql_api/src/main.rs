@@ -1,5 +1,5 @@
 use actix_cors::Cors;
-use actix_web::{middleware, web, App, HttpServer};
+use actix_web::{http::header, middleware, web, App, HttpServer};
 use std::env;
 use std::time::Instant;
 use tera::Tera;
@@ -50,7 +50,17 @@ async fn main() -> std::io::Result<()> {
     println!("Got schema");
 
     HttpServer::new(move || {
-        let cors = Cors::permissive();
+        let allowed_origins = std::env::var("ALLOWED_ORIGINS")
+            .unwrap_or_else(|_| "http://localhost:3000,http://localhost:8080".to_string());
+
+        let mut cors = Cors::default()
+            .allowed_methods(vec!["GET", "POST", "OPTIONS"])
+            .allowed_headers(vec![header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT])
+            .max_age(3600);
+
+        for origin in allowed_origins.split(',') {
+            cors = cors.allowed_origin(origin.trim());
+        }
 
         let mut tera = Tera::new("graphql_api/templates/**/*").unwrap();
 

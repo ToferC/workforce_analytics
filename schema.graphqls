@@ -339,6 +339,30 @@ type Product {
   vacantWork: [Work!]!
   "Total effort of active work planned under this product's tasks"
   effort: Int!
+  """
+  Aggregated skill demand across all active work under this product.
+  Groups by skill (or domain where no specific skill is set) and
+  capability level, returning a count of work items and total effort
+  at each combination. Excludes cancelled and completed work.
+  """
+  skillDemand: [ProductSkillDemand!]!
+}
+"""
+Aggregated skill demand for a product, derived from its work items.
+Similar in shape to CapabilityCount and RequirementCount but scoped to
+the active work planned under a product's tasks.
+"""
+type ProductSkillDemand {
+  "Skill name, or the domain label when no specific skill is attached to the work."
+  name: String!
+  "The specific skill driving this demand, if one is set on the work items."
+  skillName: String
+  domain: SkillDomain!
+  level: CapabilityLevel!
+  "Number of distinct work items requiring this skill at this level."
+  workCount: Int!
+  "Sum of effort across those work items."
+  totalEffort: Int!
 }
 type Publication {
   id: UUID!

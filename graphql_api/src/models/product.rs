@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
 
 use chrono::{prelude::*};
@@ -10,7 +11,7 @@ use async_graphql::*;
 use crate::schema::*;
 use crate::database::connection;
 
-use crate::models::{Organization, Role, SkillDomain, Task, Work, WorkStatus};
+use crate::models::{CapabilityLevel, Organization, Role, Skill, SkillDomain, Task, Work, WorkStatus};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, Insertable, AsChangeset, SimpleObject, Associations)]
 #[diesel(belongs_to(Organization))]
@@ -73,6 +74,14 @@ impl Product {
     /// Total effort of active work planned under this product's tasks
     pub async fn effort(&self) -> Result<i32> {
         Work::sum_product_effort(&self.id)
+    }
+
+    /// Aggregated skill demand across all active work under this product.
+    /// Groups by skill (or domain where no specific skill is set) and
+    /// capability level, returning a count of work items and total effort
+    /// at each combination. Excludes cancelled and completed work.
+    pub async fn skill_demand(&self) -> Result<Vec<ProductSkillDemand>> {
+        Product::get_skill_demand(&self.id)
     }
 }
 
@@ -162,6 +171,63 @@ impl Product {
 
         Ok(res)
     }
+
+    /// Aggregates active work under a product into a skill demand summary.
+    /// Two queries: one for work items, one to resolve skill names by id.
+    pub fn get_skill_demand(id: &Uuid) -> Result<Vec<ProductSkillDemand>> {
+        let all_work = Work::get_by_product_id(id)?;
+
+        // SkillDomain and CapabilityLevel don't implement Hash, so we group
+        // with a Vec and linear search. Product work item counts are small
+        // enough that O(n²) here is never the bottleneck.
+        let mut rows: Vec<(SkillDomain, Option<Uuid>, CapabilityLevel, i64, i32)> = Vec::new();
+
+        for work in &all_work {
+            if matches!(work.work_status, WorkStatus::Cancelled | WorkStatus::Completed) {
+                continue;
+            }
+            match rows.iter_mut().find(|(d, s, l, _, _)| {
+                *d == work.domain && *s == work.skill_id && *l == work.capability_level
+            }) {
+                Some(entry) => {
+                    entry.3 += 1;
+                    entry.4 += work.effort;
+                }
+                None => rows.push((work.domain, work.skill_id, work.capability_level, 1, work.effort)),
+            }
+        }
+
+        // Resolve skill names in one batch query.
+        let skill_ids: Vec<Uuid> = rows.iter().filter_map(|(_, s, _, _, _)| *s).collect();
+
+        let skill_map: HashMap<Uuid, String> = if skill_ids.is_empty() {
+            HashMap::new()
+        } else {
+            Skill::get_by_ids(&skill_ids)?
+                .into_iter()
+                .map(|s| (s.id, s.name_en))
+                .collect()
+        };
+
+        let mut demand: Vec<ProductSkillDemand> = rows
+            .into_iter()
+            .map(|(domain, skill_id, level, work_count, total_effort)| {
+                let name = match skill_id {
+                    Some(id) => skill_map
+                        .get(&id)
+                        .cloned()
+                        .unwrap_or_else(|| format!("{:?}", domain)),
+                    None => format!("{:?}", domain),
+                };
+                let skill_name = skill_id.and_then(|id| skill_map.get(&id).cloned());
+                ProductSkillDemand { name, skill_name, domain, level, work_count, total_effort }
+            })
+            .collect();
+
+        demand.sort_by(|a, b| a.name.cmp(&b.name).then(a.level.cmp(&b.level)));
+
+        Ok(demand)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, InputObject)]
@@ -176,6 +242,23 @@ pub struct NewProduct {
     pub primary_domain: SkillDomain,
     pub url: Option<String>,
     pub product_status: WorkStatus,
+}
+
+/// Aggregated skill demand for a product, derived from its work items.
+/// Similar in shape to CapabilityCount and RequirementCount but scoped to
+/// the active work planned under a product's tasks.
+#[derive(Debug, Clone, Serialize, Deserialize, SimpleObject)]
+pub struct ProductSkillDemand {
+    /// Skill name, or the domain label when no specific skill is attached to the work.
+    pub name: String,
+    /// The specific skill driving this demand, if one is set on the work items.
+    pub skill_name: Option<String>,
+    pub domain: SkillDomain,
+    pub level: CapabilityLevel,
+    /// Number of distinct work items requiring this skill at this level.
+    pub work_count: i64,
+    /// Sum of effort across those work items.
+    pub total_effort: i32,
 }
 
 impl NewProduct {

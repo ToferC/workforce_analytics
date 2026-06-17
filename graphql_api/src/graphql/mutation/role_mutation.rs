@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-use crate::models::{Role, NewRole, Person, PersonnelType};
+use crate::models::{Role, RoleAssignment, NewRole, Person, PersonnelType};
 use crate::common_utils::{UserRole,
     is_operator, RoleGuard};
 use crate::schema::roles;
@@ -54,6 +54,13 @@ impl RoleMutation {
 
         let role = Role::create(&role_data)?;
 
+        // A person holds one active role at a time. If this new role was
+        // created already occupied, close the incumbent's tenure on any other
+        // role (recording it as career history) and vacate those positions.
+        if let Some(person_id) = role.person_id {
+            RoleAssignment::close_others_for_person(&person_id, &role.id)?;
+        }
+
         Ok(role)
     }
 
@@ -81,6 +88,10 @@ impl RoleMutation {
         if let Some(s) = role_data.end_date {
             role.end_date = Some(s);
         };
+
+        // Persist the change. Without this the mutation silently returned the
+        // in-memory edit while the database row was left untouched.
+        let role = role.update()?;
 
         Ok(role)
     }

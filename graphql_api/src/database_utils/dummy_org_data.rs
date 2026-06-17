@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::progress::progress::ProgressLogger;
 use super::{create_validations, generate_requirement};
 use crate::models::{Person, Organization, NewPerson, NewOrganization,
-    Role, NewRole, Team, NewTeam, OrgTier, NewOrgTier, OrgOwnership, NewOrgOwnership,
+    Role, NewRole, RoleAssignment, Team, NewTeam, OrgTier, NewOrgTier, OrgOwnership, NewOrgOwnership,
     TeamOwnership, NewTeamOwnership, MilitaryOccupation, OccupationalGroup, PersonnelType, Rank, SkillDomain, Skill, NewWork, CapabilityLevel, WorkStatus, Work,
     NewRequirement, Requirement,
 };
@@ -523,9 +523,13 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
                 requirements_vec.push(role_requirement.clone());
             }
 
+            // Generate some past positions for this person so their career
+            // history is populated. Each is attributed to the person and given
+            // an inactive (retired) position with a closed tenure.
             match rng.gen_range(0..10) {
-                0..=5 => continue,
+                0..=5 => {},
                 6..=8 => {
+                    nr.person_id = Some(person_id);
                     nr.active = false;
                     nr.rank = nr.rank.map(|r| r.next());
                     nr.start_datestamp -= chrono::Duration::days(rng.gen_range(-300..-100));
@@ -533,16 +537,24 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
                 },
                 9..=10 => {
                     for _i in 1..=3 {
+                        nr.person_id = Some(person_id);
                         nr.active = false;
                         nr.rank = nr.rank.map(|r| r.previous());
                         nr.start_datestamp -= chrono::Duration::days(rng.gen_range(-600..-150));
                         role_vec.push(nr.clone())
                     }
                 },
-                _ => continue,
+                _ => {},
             };
 
-            let _r = Role::batch_create(role_vec)?;
+            // Create each past position with an opening tenure, then close that
+            // tenure so it reads as career history rather than a current role.
+            for pr in role_vec {
+                let start = pr.start_datestamp;
+                let past = Role::create(&pr)?;
+                let end = start + chrono::Duration::days(rng.gen_range(120..400));
+                RoleAssignment::close_open_for_role(&past.id, end)?;
+            }
 
             // Assign work to the roles based on the team's tasks
             let mut work = Vec::new();

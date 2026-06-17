@@ -3,7 +3,7 @@ use std::{fmt::Debug, collections::HashMap};
 use chrono::{prelude::*};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
-use diesel::{self, Insertable, Queryable, ExpressionMethods};
+use diesel::{self, Insertable, Queryable, ExpressionMethods, Connection};
 use rand::{distributions::{Distribution, Standard}, Rng};
 use diesel::{RunQueryDsl, QueryDsl};
 use uuid::Uuid;
@@ -94,6 +94,13 @@ impl Role {
         Requirement::get_by_role_id(self.id)
     }
 
+    /// Full tenure history for this position: who has occupied it and when,
+    /// most recent first. The open assignment (no end_date) is the current
+    /// occupant.
+    pub async fn assignments(&self) -> Result<Vec<RoleAssignment>> {
+        RoleAssignment::get_by_role_id(&self.id)
+    }
+
     /// Returns the military occupation for a military role holder, if applicable
     pub async fn military_occupation(&self) -> Result<Option<String>> {
         Ok(self.military_occupation.map(|mo| mo.to_string()))
@@ -155,10 +162,16 @@ impl Role {
     pub fn create(role: &NewRole) -> Result<Role> {
         let mut conn = connection()?;
 
-        let res = diesel::insert_into(roles::table)
+        let res: Role = diesel::insert_into(roles::table)
         .values(role)
         .get_result(&mut conn)?;
-        
+
+        // If the role is created already occupied, open a tenure so the
+        // assignment history reflects the incumbent from day one.
+        if let Some(person_id) = res.person_id {
+            RoleAssignment::open(&res.id, &person_id, res.start_datestamp)?;
+        }
+
         Ok(res)
     }
 
@@ -296,6 +309,43 @@ impl Role {
 
         Ok(res)
     }
+
+    /// Roles this person currently occupies, derived from their open tenure.
+    /// A person holds at most one active role at a time.
+    pub fn get_current_for_person(person_id: &Uuid) -> Result<Vec<Role>> {
+        let mut conn = connection()?;
+
+        let role_ids: Vec<Uuid> = role_assignments::table
+            .filter(role_assignments::person_id.eq(person_id))
+            .filter(role_assignments::end_date.is_null())
+            .select(role_assignments::role_id)
+            .load::<Uuid>(&mut conn)?;
+
+        let roles = roles::table
+            .filter(roles::id.eq_any(&role_ids))
+            .load::<Role>(&mut conn)?;
+
+        Ok(roles)
+    }
+
+    /// Roles this person used to occupy, derived from their closed tenures.
+    /// This is the person's career progression through positions and survives
+    /// reassignment of the position to someone else.
+    pub fn get_past_for_person(person_id: &Uuid) -> Result<Vec<Role>> {
+        let mut conn = connection()?;
+
+        let role_ids: Vec<Uuid> = role_assignments::table
+            .filter(role_assignments::person_id.eq(person_id))
+            .filter(role_assignments::end_date.is_not_null())
+            .select(role_assignments::role_id)
+            .load::<Uuid>(&mut conn)?;
+
+        let roles = roles::table
+            .filter(roles::id.eq_any(&role_ids))
+            .load::<Role>(&mut conn)?;
+
+        Ok(roles)
+    }
     
     pub fn update(&mut self) -> Result<Self> {
         let mut conn = connection()?;
@@ -310,41 +360,112 @@ impl Role {
         Ok(res)
     }
 
-    /// Assign a person to this role. Errors if the role is already occupied.
+    /// Assign a person to this role. The role itself is a durable position, so
+    /// assigning rotates occupants rather than failing:
+    ///   * any current occupant of this role has their tenure closed (vacated);
+    ///   * the person's open tenure on any other role is closed, enforcing one
+    ///     active role per person and recording the move as career history;
+    ///   * a fresh open tenure is started and the role's current-occupant
+    ///     pointer is updated.
+    /// All of this happens in a single transaction so history stays consistent.
     pub fn assign_person(role_id: &Uuid, person_id: &Uuid) -> Result<Self> {
         let mut conn = connection()?;
 
-        let role: Role = roles::table.filter(roles::id.eq(role_id)).first(&mut conn)?;
+        let role = conn.transaction::<Role, diesel::result::Error, _>(|conn| {
+            let now = chrono::Utc::now().naive_utc();
 
-        if role.person_id.is_some() {
-            return Err(Error::new(format!(
-                "Role {} is already occupied. Vacate it first or create a new role.",
-                role_id
-            )));
-        }
-
-        let res = diesel::update(roles::table.filter(roles::id.eq(role_id)))
+            // Close the current occupant's tenure on this role, if any.
+            diesel::update(
+                role_assignments::table
+                    .filter(role_assignments::role_id.eq(role_id))
+                    .filter(role_assignments::end_date.is_null()),
+            )
             .set((
-                roles::person_id.eq(Some(person_id)),
-                roles::updated_at.eq(chrono::Utc::now().naive_utc()),
+                role_assignments::end_date.eq(now),
+                role_assignments::updated_at.eq(now),
             ))
-            .get_result(&mut conn)?;
+            .execute(conn)?;
 
-        Ok(res)
+            // Close this person's open tenure on any other role.
+            diesel::update(
+                role_assignments::table
+                    .filter(role_assignments::person_id.eq(person_id))
+                    .filter(role_assignments::end_date.is_null()),
+            )
+            .set((
+                role_assignments::end_date.eq(now),
+                role_assignments::updated_at.eq(now),
+            ))
+            .execute(conn)?;
+
+            // Clear the current-occupant pointer on the role(s) the person just
+            // left, so those positions read as vacant.
+            diesel::update(
+                roles::table
+                    .filter(roles::person_id.eq(person_id))
+                    .filter(roles::id.ne(role_id)),
+            )
+            .set((
+                roles::person_id.eq(None::<Uuid>),
+                roles::updated_at.eq(now),
+            ))
+            .execute(conn)?;
+
+            // Open the new tenure.
+            diesel::insert_into(role_assignments::table)
+                .values(NewRoleAssignment {
+                    role_id: *role_id,
+                    person_id: *person_id,
+                    start_date: now,
+                    end_date: None,
+                })
+                .execute(conn)?;
+
+            // Point the role at its new current occupant.
+            let updated = diesel::update(roles::table.filter(roles::id.eq(role_id)))
+                .set((
+                    roles::person_id.eq(Some(person_id)),
+                    roles::updated_at.eq(now),
+                ))
+                .get_result(conn)?;
+
+            Ok(updated)
+        })?;
+
+        Ok(role)
     }
 
-    /// Remove the person from this role, leaving it vacant.
+    /// Remove the person from this role, leaving the position vacant but still
+    /// active. Closes the open tenure (recording it as career history) and
+    /// clears the current-occupant pointer. The role itself is untouched.
     pub fn vacate(role_id: &Uuid) -> Result<Self> {
         let mut conn = connection()?;
 
-        let res = diesel::update(roles::table.filter(roles::id.eq(role_id)))
-            .set((
-                roles::person_id.eq(None::<Uuid>),
-                roles::updated_at.eq(chrono::Utc::now().naive_utc()),
-            ))
-            .get_result(&mut conn)?;
+        let role = conn.transaction::<Role, diesel::result::Error, _>(|conn| {
+            let now = chrono::Utc::now().naive_utc();
 
-        Ok(res)
+            diesel::update(
+                role_assignments::table
+                    .filter(role_assignments::role_id.eq(role_id))
+                    .filter(role_assignments::end_date.is_null()),
+            )
+            .set((
+                role_assignments::end_date.eq(now),
+                role_assignments::updated_at.eq(now),
+            ))
+            .execute(conn)?;
+
+            let updated = diesel::update(roles::table.filter(roles::id.eq(role_id)))
+                .set((
+                    roles::person_id.eq(None::<Uuid>),
+                    roles::updated_at.eq(now),
+                ))
+                .get_result(conn)?;
+
+            Ok(updated)
+        })?;
+
+        Ok(role)
     }
 }
 
@@ -399,6 +520,167 @@ impl NewRole {
             end_date,
         }
     }
+}
+
+/// Records a single person's tenure in a Role. The Role is durable; the
+/// assignment captures *who* held it and *when*. An open assignment
+/// (`end_date` is None) is the current occupant; closed assignments form the
+/// person's career history.
+#[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, Insertable, AsChangeset)]
+#[diesel(table_name = role_assignments)]
+pub struct RoleAssignment {
+    pub id: Uuid,
+    pub role_id: Uuid,
+    pub person_id: Uuid,
+    pub start_date: NaiveDateTime,
+    pub end_date: Option<NaiveDateTime>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[Object]
+impl RoleAssignment {
+    pub async fn id(&self) -> Uuid {
+        self.id
+    }
+
+    /// The person who held (or holds) the role during this tenure.
+    pub async fn person(&self) -> Result<Person> {
+        Person::get_by_id(&self.person_id)
+    }
+
+    /// The durable position this tenure belongs to.
+    pub async fn role(&self) -> Result<Role> {
+        Role::get_by_id(&self.role_id)
+    }
+
+    pub async fn start_date(&self) -> Result<String> {
+        Ok(self.start_date.format(DATE_FORMAT).to_string())
+    }
+
+    pub async fn end_date(&self) -> Result<String> {
+        match self.end_date {
+            Some(d) => Ok(d.format(DATE_FORMAT).to_string()),
+            None => Ok("Current".to_string()),
+        }
+    }
+
+    /// True while the person still occupies the role (no end_date set).
+    pub async fn is_current(&self) -> bool {
+        self.end_date.is_none()
+    }
+
+    pub async fn start_datestamp(&self) -> NaiveDateTime {
+        self.start_date
+    }
+
+    pub async fn end_datestamp(&self) -> Option<NaiveDateTime> {
+        self.end_date
+    }
+}
+
+impl RoleAssignment {
+    /// Open a new tenure for a person in a role (end_date None).
+    pub fn open(role_id: &Uuid, person_id: &Uuid, start: NaiveDateTime) -> Result<Self> {
+        let mut conn = connection()?;
+
+        let res = diesel::insert_into(role_assignments::table)
+            .values(NewRoleAssignment {
+                role_id: *role_id,
+                person_id: *person_id,
+                start_date: start,
+                end_date: None,
+            })
+            .get_result(&mut conn)?;
+
+        Ok(res)
+    }
+
+    /// Close the open tenure on a role at a given date and clear the role's
+    /// current-occupant pointer. Used to seed career history.
+    pub fn close_open_for_role(role_id: &Uuid, end: NaiveDateTime) -> Result<()> {
+        let mut conn = connection()?;
+
+        diesel::update(
+            role_assignments::table
+                .filter(role_assignments::role_id.eq(role_id))
+                .filter(role_assignments::end_date.is_null()),
+        )
+        .set((
+            role_assignments::end_date.eq(end),
+            role_assignments::updated_at.eq(end),
+        ))
+        .execute(&mut conn)?;
+
+        diesel::update(roles::table.filter(roles::id.eq(role_id)))
+            .set(roles::person_id.eq(None::<Uuid>))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Enforce one active role per person: close the person's open tenures on
+    /// every role except `keep_role_id`, and clear those roles' current-occupant
+    /// pointers so they read as vacant. Recorded as career history.
+    pub fn close_others_for_person(person_id: &Uuid, keep_role_id: &Uuid) -> Result<()> {
+        let mut conn = connection()?;
+        let now = chrono::Utc::now().naive_utc();
+
+        diesel::update(
+            role_assignments::table
+                .filter(role_assignments::person_id.eq(person_id))
+                .filter(role_assignments::end_date.is_null())
+                .filter(role_assignments::role_id.ne(keep_role_id)),
+        )
+        .set((
+            role_assignments::end_date.eq(now),
+            role_assignments::updated_at.eq(now),
+        ))
+        .execute(&mut conn)?;
+
+        diesel::update(
+            roles::table
+                .filter(roles::person_id.eq(person_id))
+                .filter(roles::id.ne(keep_role_id)),
+        )
+        .set((roles::person_id.eq(None::<Uuid>), roles::updated_at.eq(now)))
+        .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// All tenures for a position, most recent first.
+    pub fn get_by_role_id(role_id: &Uuid) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let res = role_assignments::table
+            .filter(role_assignments::role_id.eq(role_id))
+            .order(role_assignments::start_date.desc())
+            .load::<Self>(&mut conn)?;
+
+        Ok(res)
+    }
+
+    /// All tenures for a person, most recent first — their career history.
+    pub fn get_by_person_id(person_id: &Uuid) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let res = role_assignments::table
+            .filter(role_assignments::person_id.eq(person_id))
+            .order(role_assignments::start_date.desc())
+            .load::<Self>(&mut conn)?;
+
+        Ok(res)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Insertable)]
+#[diesel(table_name = role_assignments)]
+pub struct NewRoleAssignment {
+    pub role_id: Uuid,
+    pub person_id: Uuid,
+    pub start_date: NaiveDateTime,
+    pub end_date: Option<NaiveDateTime>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Enum, DbEnum, Copy, Display)]

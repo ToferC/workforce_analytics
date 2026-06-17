@@ -294,6 +294,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    role_assignments (id) {
+        id -> Uuid,
+        role_id -> Uuid,
+        person_id -> Uuid,
+        start_date -> Timestamp,
+        end_date -> Nullable<Timestamp>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::SkillDomain;
 
@@ -456,6 +468,8 @@ diesel::joinable!(publications -> organizations (publishing_organization_id));
 diesel::joinable!(publications -> persons (lead_author_id));
 diesel::joinable!(requirements -> roles (role_id));
 diesel::joinable!(requirements -> skills (skill_id));
+diesel::joinable!(role_assignments -> persons (person_id));
+diesel::joinable!(role_assignments -> roles (role_id));
 diesel::joinable!(roles -> persons (person_id));
 diesel::joinable!(roles -> teams (team_id));
 diesel::joinable!(tasks -> products (product_id));
@@ -483,6 +497,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     publication_contributors,
     publications,
     requirements,
+    role_assignments,
     roles,
     skills,
     tasks,

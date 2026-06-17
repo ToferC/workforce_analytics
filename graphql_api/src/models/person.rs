@@ -18,7 +18,7 @@ use crate::common_utils::{
 use crate::database::connection;
 use crate::schema::*;
 
-use crate::models::{Role, TeamOwnership, Team, OrgTier, OrgOwnership, Capability, Affiliation, LanguageData,
+use crate::models::{Role, RoleAssignment, TeamOwnership, Team, OrgTier, OrgOwnership, Capability, Affiliation, LanguageData,
     Publication, Work};
 
 use super::{Validation, Requirement};
@@ -273,14 +273,23 @@ impl Person {
         visible = "is_analyst",
     )]
      */
-    /// Returns active or inactive roles depending on the active boolean of true or false
+    /// Positions this person used to occupy, derived from their closed tenures.
+    /// This is the person's career progression and survives the position being
+    /// reassigned to someone else.
     pub async fn inactive_roles(&self) -> Result<Vec<Role>> {
-        Role::get_by_person_id(self.id, false)
+        Role::get_past_for_person(&self.id)
     }
 
-    /// Returns active role
+    /// The position this person currently occupies, derived from their open
+    /// tenure. A person holds at most one active role at a time.
     pub async fn active_roles(&self) -> Result<Vec<Role>> {
-        Role::get_by_person_id(self.id, true)
+        Role::get_current_for_person(&self.id)
+    }
+
+    /// Full career history: every tenure this person has held, most recent
+    /// first, each with its start/end dates and the role it belonged to.
+    pub async fn role_assignments(&self) -> Result<Vec<RoleAssignment>> {
+        RoleAssignment::get_by_person_id(&self.id)
     }
 
     /// Returns the sum effort of active work across this person's active

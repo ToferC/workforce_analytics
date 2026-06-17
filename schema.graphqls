@@ -48,7 +48,10 @@ type Capability {
   createdAt: NaiveDateTime!
   updatedAt: NaiveDateTime!
   retiredAt: NaiveDateTime
-  "Provenance of the current validated level: the central authority who set it and when. Populated directly from the authoritative validation."
+  """
+  Provenance of the current validated level: the central authority who
+  set it and when. Populated directly from the authoritative validation.
+  """
   validatedById: UUID
   validatedAt: NaiveDateTime
   person: Person!
@@ -256,11 +259,21 @@ type Person {
   givenName: String!
   "Returns the person's organization"
   organization: Organization!
-  "Positions this person used to occupy, derived from their closed tenures (career history)"
+  """
+  Positions this person used to occupy, derived from their closed tenures.
+  This is the person's career progression and survives the position being
+  reassigned to someone else.
+  """
   inactiveRoles: [Role!]!
-  "The position this person currently occupies, derived from their open tenure"
+  """
+  The position this person currently occupies, derived from their open
+  tenure. A person holds at most one active role at a time.
+  """
   activeRoles: [Role!]!
-  "Full career history: every tenure this person has held, most recent first"
+  """
+  Full career history: every tenure this person has held, most recent
+  first, each with its start/end dates and the role it belonged to.
+  """
   roleAssignments: [RoleAssignment!]!
   """
   Returns the sum effort of active work across this person's active
@@ -282,6 +295,19 @@ type Person {
   "Returns a vector of the language results for the person"
   languageData: [LanguageData!]!
   findMatches: [Role!]!
+}
+"A scored candidate for a role."
+type PersonMatchScore {
+  person: Person!
+  "Composite score in [0, 1]: coverage minus gap penalties."
+  matchScore: Float!
+  requirementsMet: Int!
+  requirementsTotal: Int!
+  "requirements_met / requirements_total."
+  coverage: Float!
+  "Sum of positive (shortfall) gaps only."
+  totalGap: Int!
+  requirementGaps: [RequirementMatch!]!
 }
 """
 A product or service delivered by an organization.
@@ -499,6 +525,17 @@ type Requirement {
   skillName: String!
   skill: Skill!
 }
+"Per-requirement breakdown for a single candidate."
+type RequirementMatch {
+  skillId: UUID!
+  skillName: String!
+  requiredLevel: CapabilityLevel!
+  "None when the person holds no capability for this skill at all."
+  actualLevel: CapabilityLevel
+  "required - actual (negative = over-qualified, 0 = exact, positive = shortfall)."
+  gap: Int!
+  met: Boolean!
+}
 type Role {
   id: UUID!
   person: Person
@@ -516,7 +553,8 @@ type Role {
   requirements: [Requirement!]!
   """
   Full tenure history for this position: who has occupied it and when,
-  most recent first. The open assignment (no end_date) is the current occupant.
+  most recent first. The open assignment (no end_date) is the current
+  occupant.
   """
   assignments: [RoleAssignment!]!
   "Returns the military occupation for a military role holder, if applicable"
@@ -532,26 +570,46 @@ type Role {
   createdAt: String!
   updatedAt: String!
   findMatches: [Person!]!
+  """
+  Returns tiered candidates for this role.
+  
+  `full_matches` meet every requirement at or above the required level.
+  `partial_matches` meet at least `min_coverage` of requirements and have
+  no single skill gap exceeding `max_gap_per_req` levels.
+  
+  Each capability level is a significant leap, so each missing level
+  costs 10 points off the composite score (0–100 scale).
+  """
+  fuzzyMatches(minCoverage: Float! = 0.5, maxGapPerReq: Int! = 1, limit: Int! = 20): RoleMatchResult!
   startDatestamp: NaiveDateTime!
   endDatestamp: NaiveDateTime
 }
-"""
-Records a single person's tenure in a Role. The Role is durable; the
-assignment captures who held it and when. An open assignment (no endDate) is
-the current occupant; closed assignments form the person's career history.
-"""
 type RoleAssignment {
   id: UUID!
-  "The person who held (or holds) the role during this tenure"
+  "The person who held (or holds) the role during this tenure."
   person: Person!
-  "The durable position this tenure belongs to"
+  "The durable position this tenure belongs to."
   role: Role!
   startDate: String!
   endDate: String!
-  "True while the person still occupies the role (no endDate set)"
+  "True while the person still occupies the role (no end_date set)."
   isCurrent: Boolean!
   startDatestamp: NaiveDateTime!
   endDatestamp: NaiveDateTime
+}
+"Tiered match result for a role."
+type RoleMatchResult {
+  roleId: UUID!
+  """
+  People who meet every requirement at or above the required level,
+  sorted by match_score descending.
+  """
+  fullMatches: [PersonMatchScore!]!
+  """
+  People who meet at least min_coverage of requirements and have no single
+  skill gap exceeding max_gap_per_req, sorted by match_score descending.
+  """
+  partialMatches: [PersonMatchScore!]!
 }
 """
 Should get this from an API or have standard data
@@ -688,7 +746,11 @@ type UserResponse {
   email: String!
   expiresAt: NaiveDateTime!
 }
-"A central authority's validation of an individual's Capability. Each validation is retained and date-stamped as provenance; the most recent one sets the capability's validated level directly."
+"""
+A central authority's validation of an individual's Capability. Each
+validation is retained and date-stamped as provenance; the most recent
+one sets the capability's validated level directly.
+"""
 type Validation {
   id: UUID!
   validatorId: UUID!

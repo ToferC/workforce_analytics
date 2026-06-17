@@ -14,7 +14,7 @@ use crate::config_variables::DATE_FORMAT;
 use crate::schema::*;
 use crate::database::connection;
 
-use super::{Person, Team, Work, Requirement, Capability};
+use super::{Person, Team, Work, Requirement, Capability, RoleMatchResult, find_fuzzy_matches};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset)]
 #[diesel(table_name = roles)]
@@ -145,6 +145,23 @@ impl Role {
         let requirements = Requirement::get_by_role_id(self.id)?;
 
         find_people_by_requirements_met(requirements)
+    }
+
+    /// Returns tiered candidates for this role.
+    ///
+    /// `full_matches` meet every requirement at or above the required level.
+    /// `partial_matches` meet at least `min_coverage` of requirements and have
+    /// no single skill gap exceeding `max_gap_per_req` levels.
+    ///
+    /// Each capability level is a significant leap, so each missing level
+    /// costs 10 points off the composite score (0–100 scale).
+    pub async fn fuzzy_matches(
+        &self,
+        #[graphql(default = 0.5)] min_coverage: f64,
+        #[graphql(default = 1)]   max_gap_per_req: i32,
+        #[graphql(default = 20)]  limit: i32,
+    ) -> Result<RoleMatchResult> {
+        find_fuzzy_matches(self.id, min_coverage, max_gap_per_req, limit as usize)
     }
 
     pub async fn start_datestamp(&self) -> Result<NaiveDateTime> {

@@ -94,6 +94,16 @@ impl CapabilityLevel {
             CapabilityLevel::Specialist => CapabilityLevel::Specialist,
         }
     }
+
+    pub fn as_int(self) -> i32 {
+        match self {
+            CapabilityLevel::Desired     => 0,
+            CapabilityLevel::Novice      => 1,
+            CapabilityLevel::Experienced => 2,
+            CapabilityLevel::Expert      => 3,
+            CapabilityLevel::Specialist  => 4,
+        }
+    }
 }
 
 // Graphql
@@ -192,6 +202,20 @@ impl Capability {
 
         let res = capabilities::table
             .filter(capabilities::skill_id.eq(id))
+            .load::<Capability>(&mut conn)?;
+
+        Ok(res)
+    }
+
+    /// Loads all active capabilities for a set of skills in a single query.
+    /// Used by fuzzy matching to replace N serial per-skill queries with one
+    /// batched lookup, backed by capabilities_skill_id_active_idx.
+    pub fn get_active_by_skill_ids(skill_ids: &[Uuid]) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let res = capabilities::table
+            .filter(capabilities::skill_id.eq_any(skill_ids))
+            .filter(capabilities::retired_at.is_null())
             .load::<Capability>(&mut conn)?;
 
         Ok(res)

@@ -256,10 +256,12 @@ type Person {
   givenName: String!
   "Returns the person's organization"
   organization: Organization!
-  "Returns active or inactive roles depending on the active boolean of true or false"
+  "Positions this person used to occupy, derived from their closed tenures (career history)"
   inactiveRoles: [Role!]!
-  "Returns active role"
+  "The position this person currently occupies, derived from their open tenure"
   activeRoles: [Role!]!
+  "Full career history: every tenure this person has held, most recent first"
+  roleAssignments: [RoleAssignment!]!
   """
   Returns the sum effort of active work across this person's active
   roles. Maximum sustainable effort is around 10, so lower values
@@ -512,6 +514,11 @@ type Role {
   work: [Work!]!
   active: String!
   requirements: [Requirement!]!
+  """
+  Full tenure history for this position: who has occupied it and when,
+  most recent first. The open assignment (no end_date) is the current occupant.
+  """
+  assignments: [RoleAssignment!]!
   "Returns the military occupation for a military role holder, if applicable"
   militaryOccupation: String
   "Returns the military rank for a military role holder, if applicable"
@@ -525,6 +532,24 @@ type Role {
   createdAt: String!
   updatedAt: String!
   findMatches: [Person!]!
+  startDatestamp: NaiveDateTime!
+  endDatestamp: NaiveDateTime
+}
+"""
+Records a single person's tenure in a Role. The Role is durable; the
+assignment captures who held it and when. An open assignment (no endDate) is
+the current occupant; closed assignments form the person's career history.
+"""
+type RoleAssignment {
+  id: UUID!
+  "The person who held (or holds) the role during this tenure"
+  person: Person!
+  "The durable position this tenure belongs to"
+  role: Role!
+  startDate: String!
+  endDate: String!
+  "True while the person still occupies the role (no endDate set)"
+  isCurrent: Boolean!
   startDatestamp: NaiveDateTime!
   endDatestamp: NaiveDateTime
 }

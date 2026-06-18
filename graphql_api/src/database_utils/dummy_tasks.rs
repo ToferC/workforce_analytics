@@ -2,7 +2,7 @@ use async_graphql::Error;
 use rand::{seq::SliceRandom, rngs::ThreadRng, Rng};
 use uuid::Uuid;
 
-use crate::models::{NewTask, Task, SkillDomain, WorkStatus, NewRequirement, CapabilityLevel, Rank};
+use crate::models::{NewTask, Task, Priority, SkillDomain, WorkStatus, NewRequirement, CapabilityLevel, Rank};
 
 /// Generate dummy tasks based on some baseline data about the org
 pub fn generate_tasks(
@@ -41,6 +41,7 @@ pub fn generate_tasks(
         chrono::Utc::now().naive_utc(),
         chrono::Utc::now().naive_utc(),
         WorkStatus::InProgress,
+        rand::random::<Priority>(),
         None,
     );
 

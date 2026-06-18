@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS products (
     url VARCHAR(256),
 
     product_status work_status NOT NULL DEFAULT 'planning',
+    priority priority NOT NULL DEFAULT 'medium',
 
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),

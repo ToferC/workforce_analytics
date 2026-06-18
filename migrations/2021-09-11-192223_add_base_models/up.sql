@@ -354,6 +354,13 @@ CREATE TYPE work_status AS ENUM (
     'cancelled'
 );
 
+CREATE TYPE priority AS ENUM (
+    'low',
+    'medium',
+    'high',
+    'critical'
+);
+
 CREATE TABLE IF NOT EXISTS tasks (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
 
@@ -373,6 +380,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     target_completion_date TIMESTAMP NOT NULL,
 
     task_status work_status NOT NULL DEFAULT 'planning',
+    priority priority NOT NULL DEFAULT 'medium',
 
     completed_date TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),

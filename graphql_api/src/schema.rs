@@ -26,6 +26,10 @@ pub mod sql_types {
     pub struct PersonnelType;
 
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "priority"))]
+    pub struct Priority;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "publication_status"))]
     pub struct PublicationStatus;
 
@@ -188,6 +192,7 @@ diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::SkillDomain;
     use super::sql_types::WorkStatus;
+    use super::sql_types::Priority;
 
     products (id) {
         id -> Uuid,
@@ -203,6 +208,7 @@ diesel::table! {
         #[max_length = 256]
         url -> Nullable<Varchar>,
         product_status -> WorkStatus,
+        priority -> Priority,
         created_at -> Timestamp,
         updated_at -> Timestamp,
         retired_at -> Nullable<Timestamp>,
@@ -328,6 +334,7 @@ diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::SkillDomain;
     use super::sql_types::WorkStatus;
+    use super::sql_types::Priority;
 
     tasks (id) {
         id -> Uuid,
@@ -345,6 +352,7 @@ diesel::table! {
         start_datestamp -> Timestamp,
         target_completion_date -> Timestamp,
         task_status -> WorkStatus,
+        priority -> Priority,
         completed_date -> Nullable<Timestamp>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
@@ -432,6 +440,7 @@ diesel::table! {
     use super::sql_types::SkillDomain;
     use super::sql_types::CapabilityLevel;
     use super::sql_types::WorkStatus;
+    use super::sql_types::Priority;
 
     works (id) {
         id -> Uuid,
@@ -445,6 +454,7 @@ diesel::table! {
         capability_level -> CapabilityLevel,
         effort -> Int4,
         work_status -> WorkStatus,
+        priority -> Priority,
         created_at -> Timestamp,
         updated_at -> Timestamp,
         skill_id -> Nullable<Uuid>,

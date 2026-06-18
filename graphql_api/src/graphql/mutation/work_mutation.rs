@@ -2,7 +2,7 @@ use async_graphql::*;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-use crate::models::{Work, NewWork, SkillDomain, CapabilityLevel, WorkStatus};
+use crate::models::{Work, NewWork, Priority, SkillDomain, CapabilityLevel, WorkStatus};
 use crate::common_utils::{UserRole, is_operator, RoleGuard};
 
 #[derive(Default)]
@@ -75,6 +75,10 @@ impl WorkMutation {
             work.work_status = s;
         };
 
+        if let Some(s) = data.priority {
+            work.priority = s;
+        };
+
         work.update()
     }
 }
@@ -93,4 +97,5 @@ pub struct WorkData {
     pub capability_level: Option<CapabilityLevel>,
     pub effort: Option<i32>,
     pub work_status: Option<WorkStatus>,
+    pub priority: Option<Priority>,
 }

@@ -11,7 +11,7 @@ use async_graphql::*;
 use crate::schema::*;
 use crate::database::connection;
 
-use crate::models::{CapabilityLevel, Organization, Role, Skill, SkillDomain, Task, Work, WorkStatus};
+use crate::models::{CapabilityLevel, Organization, Priority, Role, Skill, SkillDomain, Task, Work, WorkStatus};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, Insertable, AsChangeset, SimpleObject, Associations)]
 #[diesel(belongs_to(Organization))]
@@ -38,6 +38,7 @@ pub struct Product {
     pub primary_domain: SkillDomain,
     pub url: Option<String>,
     pub product_status: WorkStatus,
+    pub priority: Priority,
 
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -242,6 +243,7 @@ pub struct NewProduct {
     pub primary_domain: SkillDomain,
     pub url: Option<String>,
     pub product_status: WorkStatus,
+    pub priority: Priority,
 }
 
 /// Aggregated skill demand for a product, derived from its work items.
@@ -273,6 +275,7 @@ impl NewProduct {
         primary_domain: SkillDomain,
         url: Option<String>,
         product_status: WorkStatus,
+        priority: Priority,
     ) -> Self {
         NewProduct {
             organization_id,
@@ -284,6 +287,7 @@ impl NewProduct {
             primary_domain,
             url,
             product_status,
+            priority,
         }
     }
 }

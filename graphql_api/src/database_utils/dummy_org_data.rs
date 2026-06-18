@@ -10,7 +10,7 @@ use crate::progress::progress::ProgressLogger;
 use super::{create_validations, generate_requirement};
 use crate::models::{Person, Organization, NewPerson, NewOrganization,
     Role, NewRole, RoleAssignment, Team, NewTeam, OrgTier, NewOrgTier, OrgOwnership, NewOrgOwnership,
-    TeamOwnership, NewTeamOwnership, MilitaryOccupation, OccupationalGroup, PersonnelType, Rank, SkillDomain, Skill, NewWork, CapabilityLevel, WorkStatus, Work,
+    TeamOwnership, NewTeamOwnership, MilitaryOccupation, OccupationalGroup, PersonnelType, Rank, SkillDomain, Skill, NewWork, CapabilityLevel, Priority, WorkStatus, Work,
     NewRequirement, Requirement,
 };
 
@@ -581,6 +581,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
                     capability_level,
                     effort,
                     task_status,
+                    rand::random::<Priority>(),
                 );
 
                 work.push(nw);

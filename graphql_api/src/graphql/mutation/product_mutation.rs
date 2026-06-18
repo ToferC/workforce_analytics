@@ -2,7 +2,7 @@ use async_graphql::*;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-use crate::models::{Product, NewProduct, SkillDomain, WorkStatus};
+use crate::models::{Product, NewProduct, Priority, SkillDomain, WorkStatus};
 use crate::common_utils::{UserRole, is_operator, RoleGuard};
 
 #[derive(Default)]
@@ -69,6 +69,10 @@ impl ProductMutation {
             product.product_status = s;
         };
 
+        if let Some(s) = data.priority {
+            product.priority = s;
+        };
+
         product.update()
     }
 }
@@ -85,4 +89,5 @@ pub struct ProductData {
     pub primary_domain: Option<SkillDomain>,
     pub url: Option<String>,
     pub product_status: Option<WorkStatus>,
+    pub priority: Option<Priority>,
 }

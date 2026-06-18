@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-use crate::models::{Task, NewTask, SkillDomain, WorkStatus};
+use crate::models::{Task, NewTask, Priority, SkillDomain, WorkStatus};
 use crate::common_utils::{UserRole, is_operator, RoleGuard};
 
 #[derive(Default)]
@@ -74,6 +74,10 @@ impl TaskMutation {
             task.task_status = s;
         };
 
+        if let Some(s) = data.priority {
+            task.priority = s;
+        };
+
         if let Some(s) = data.completed_date {
             task.completed_date = Some(s);
         };
@@ -101,6 +105,7 @@ pub struct TaskData {
     pub start_datestamp: Option<NaiveDateTime>,
     pub target_completion_date: Option<NaiveDateTime>,
     pub task_status: Option<WorkStatus>,
+    pub priority: Option<Priority>,
     pub completed_date: Option<NaiveDateTime>,
     pub product_id: Option<Uuid>,
 }

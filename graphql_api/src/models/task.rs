@@ -10,7 +10,7 @@ use async_graphql::*;
 use crate::schema::*;
 use crate::database::connection;
 
-use crate::models::{SkillDomain, WorkStatus};
+use crate::models::{Priority, SkillDomain, WorkStatus};
 
 use super::{Work, Role, Product};
 
@@ -29,6 +29,7 @@ pub struct Task {
     pub start_datestamp: NaiveDateTime,
     pub target_completion_date: NaiveDateTime,
     pub task_status: WorkStatus,
+    pub priority: Priority,
     pub completed_date: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -175,6 +176,7 @@ pub struct NewTask {
     pub start_datestamp: NaiveDateTime,
     pub target_completion_date: NaiveDateTime,
     pub task_status: WorkStatus,
+    pub priority: Priority,
     pub product_id: Option<Uuid>, // Product
 }
 
@@ -190,8 +192,8 @@ impl NewTask {
         start_datestamp: NaiveDateTime,
         target_completion_date: NaiveDateTime,
         task_status: WorkStatus,
+        priority: Priority,
         product_id: Option<Uuid>, // Product
-
     ) -> Self {
         NewTask {
             created_by_role_id,
@@ -203,6 +205,7 @@ impl NewTask {
             start_datestamp,
             target_completion_date,
             task_status,
+            priority,
             product_id,
         }
     }

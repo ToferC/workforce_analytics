@@ -36,6 +36,7 @@ pub struct Work {
     pub capability_level: CapabilityLevel,
     pub effort: i32,
     pub work_status: WorkStatus,
+    pub priority: Priority,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     #[graphql(skip)]
@@ -308,6 +309,7 @@ pub struct NewWork {
     pub capability_level: CapabilityLevel,
     pub effort: i32,
     pub work_status: WorkStatus,
+    pub priority: Priority,
 }
 
 impl NewWork {
@@ -322,6 +324,7 @@ impl NewWork {
         capability_level: CapabilityLevel,
         effort: i32,
         work_status: WorkStatus,
+        priority: Priority,
     ) -> Self {
         NewWork {
             task_id,
@@ -333,6 +336,7 @@ impl NewWork {
             capability_level,
             effort,
             work_status,
+            priority,
         }
     }
 }
@@ -356,6 +360,26 @@ impl Distribution<WorkStatus> for Standard {
             9 => WorkStatus::Cancelled,
             10 => WorkStatus::Blocked,
             _ => WorkStatus::Blocked,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, DbEnum, Serialize, Deserialize, Enum)]
+#[ExistingTypePath = "crate::schema::sql_types::Priority"]
+pub enum Priority {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+impl Distribution<Priority> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Priority {
+        match rng.gen_range(0..=3) {
+            0 => Priority::Low,
+            1 => Priority::Medium,
+            2 => Priority::High,
+            _ => Priority::Critical,
         }
     }
 }

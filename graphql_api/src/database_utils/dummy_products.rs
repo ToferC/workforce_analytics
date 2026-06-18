@@ -2,7 +2,7 @@ use async_graphql::Error;
 use rand::{seq::SliceRandom, Rng};
 use uuid::Uuid;
 
-use crate::models::{CapabilityLevel, NewProduct, NewWork, Product, Skill, Task, Work, WorkStatus};
+use crate::models::{CapabilityLevel, NewProduct, NewWork, Priority, Product, Skill, Task, Work, WorkStatus};
 
 /// Generate dummy products for an organization, attach existing tasks to
 /// them and plan vacant work elements with capability requirements so the
@@ -47,6 +47,7 @@ pub fn generate_dummy_products(organization_id: &Uuid) -> Result<(), Error> {
             product_tasks[0].domain,
             Some("https://www.forces.ca/some_url".to_string()),
             WorkStatus::InProgress,
+            rand::random::<Priority>(),
         );
 
         let product = Product::create(&np)?;
@@ -80,6 +81,7 @@ pub fn generate_dummy_products(organization_id: &Uuid) -> Result<(), Error> {
                     rand::random::<CapabilityLevel>(),
                     rng.gen_range(1..=3),
                     WorkStatus::Planning,
+                    rand::random::<Priority>(),
                 );
 
                 vacant_work.push(nw);

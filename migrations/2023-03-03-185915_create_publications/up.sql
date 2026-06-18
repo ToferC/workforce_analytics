@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS works (
     effort INT NOT NULL,
 
     work_status work_status NOT NULL,
+    priority priority NOT NULL DEFAULT 'medium',
 
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()

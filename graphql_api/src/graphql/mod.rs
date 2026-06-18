@@ -1,4 +1,4 @@
-mod query;
+pub(crate) mod query;
 mod mutation;
 mod utilities;
 // mod subscription;

@@ -1,5 +1,5 @@
 mod query;
-mod analytics_query;
+pub(crate) mod analytics_query;
 mod person_query;
 mod organization_query;
 mod team_query;

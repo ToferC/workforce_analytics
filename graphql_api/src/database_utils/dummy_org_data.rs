@@ -563,8 +563,16 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
 
                 let task = tasks.choose(&mut rng).unwrap().clone();
 
+                // Work now requires a specific skill; pick one in the task's
+                // domain and skip if that domain has none to attach.
+                let task_skills = Skill::get_by_domain(task.domain)?;
+                let skill_id = match task_skills.choose(&mut rng) {
+                    Some(s) => s.id,
+                    None => continue,
+                };
+
                 let capability_level: CapabilityLevel = rand::random();
-                
+
                 let effort = rng.gen_range(1..=3);
 
                 let task_status: WorkStatus = rand::random();
@@ -577,7 +585,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
                         task.title.trim()),
                     Some("https://www.forces.ca/some_url".to_string()),
                     task.domain,
-                    None,
+                    skill_id,
                     capability_level,
                     effort,
                     task_status,

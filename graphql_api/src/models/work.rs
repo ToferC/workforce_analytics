@@ -40,7 +40,7 @@ pub struct Work {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     #[graphql(skip)]
-    pub skill_id: Option<Uuid>,
+    pub skill_id: Uuid,
 }
 
 #[ComplexObject]
@@ -56,25 +56,19 @@ impl Work {
         }
     }
 
-    /// The specific skill this work requires, if one is set
-    pub async fn skill(&self) -> Result<Option<Skill>> {
-        match self.skill_id {
-            Some(id) => Ok(Some(Skill::get_by_id(&id)?)),
-            None => Ok(None),
-        }
+    /// The specific skill this work requires
+    pub async fn skill(&self) -> Result<Skill> {
+        Skill::get_by_id(&self.skill_id)
     }
 
     /// Capabilities (and through them, people) validated at or above
     /// the level required by this work, ordered by validated level.
-    /// Matches on the work's specific skill when one is set, otherwise
-    /// on its domain. Accepts an optional count (default 10).
+    /// Matches on the work's required skill. Accepts an optional count
+    /// (default 10).
     pub async fn capability_matches(&self, count: Option<i64>) -> Result<Vec<Capability>> {
         let count = count.unwrap_or(10);
 
-        match self.skill_id {
-            Some(skill_id) => Capability::get_matches_by_skill_id_and_level(&skill_id, self.capability_level, count),
-            None => Capability::get_matches_by_domain_and_level(&self.domain, self.capability_level, count),
-        }
+        Capability::get_matches_by_skill_id_and_level(&self.skill_id, self.capability_level, count)
     }
 }
 
@@ -305,7 +299,7 @@ pub struct NewWork {
     pub work_description: String,
     pub url: Option<String>,
     pub domain: SkillDomain,
-    pub skill_id: Option<Uuid>,
+    pub skill_id: Uuid,
     pub capability_level: CapabilityLevel,
     pub effort: i32,
     pub work_status: WorkStatus,
@@ -320,7 +314,7 @@ impl NewWork {
         work_description: String,
         url: Option<String>,
         domain: SkillDomain,
-        skill_id: Option<Uuid>,
+        skill_id: Uuid,
         capability_level: CapabilityLevel,
         effort: i32,
         work_status: WorkStatus,

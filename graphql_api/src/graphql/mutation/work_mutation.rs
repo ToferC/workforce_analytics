@@ -60,7 +60,7 @@ impl WorkMutation {
         };
 
         if let Some(s) = data.skill_id {
-            work.skill_id = Some(s);
+            work.skill_id = s;
         };
 
         if let Some(s) = data.capability_level {

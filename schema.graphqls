@@ -55,8 +55,8 @@ type Capability {
   validatedById: UUID
   validatedAt: NaiveDateTime
   person: Person!
-  "The central authority who set the current validated level, if any."
-  validatedBy: Person
+  "The admin user who set the current validated level, if any."
+  validatedBy: User
   skillName: String!
   skill: Skill!
   "Detailed view of validations for this capability"
@@ -782,7 +782,7 @@ type Validation {
   validatedLevel: CapabilityLevel!
   createdAt: NaiveDateTime!
   updatedAt: NaiveDateTime!
-  validator: Person!
+  validator: User!
 }
 """
 Data structure for a relationship between a person and work

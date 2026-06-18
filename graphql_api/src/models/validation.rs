@@ -12,11 +12,10 @@ use crate::common_utils::{RoleGuard, UserRole, is_admin};
 use crate::database::connection;
 use crate::models::{CapabilityLevel};
 
-use super::{Person, Capability};
+use super::{Capability, User};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, SimpleObject)]
 #[diesel(table_name = validations)]
-#[diesel(belongs_to(Person))]
 #[diesel(belongs_to(Capability))]
 #[graphql(complex)]
 /// A central authority's validation of an individual's Capability. Each
@@ -28,7 +27,7 @@ pub struct Validation {
         guard = "RoleGuard::new(UserRole::Admin)",
         visible = "is_admin",
     )]
-    pub validator_id: Uuid, // Person
+    pub validator_id: Uuid, // User
     pub capability_id: Uuid, // Capability
     pub validated_level: CapabilityLevel,
     pub created_at: NaiveDateTime,
@@ -37,8 +36,8 @@ pub struct Validation {
 
 #[ComplexObject]
 impl Validation {
-    pub async fn validator(&self) -> Result<Person> {
-        Person::get_by_id(&self.validator_id)
+    pub async fn validator(&self) -> Result<User> {
+        User::get_by_id(&self.validator_id)
     }
 }
 
@@ -163,7 +162,7 @@ impl Validation {
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, InputObject)]
 #[diesel(table_name = validations)]
 pub struct NewValidation {
-    pub validator_id: Uuid, // Person
+    pub validator_id: Uuid, // User
     pub capability_id: Uuid, // Capability
     pub validated_level: CapabilityLevel,
 }
@@ -171,7 +170,7 @@ pub struct NewValidation {
 impl NewValidation {
 
     pub fn new(
-        validator_id: Uuid, // Person
+        validator_id: Uuid, // User
         capability_id: Uuid, // Capability
         validated_level: CapabilityLevel,
     ) -> Self {

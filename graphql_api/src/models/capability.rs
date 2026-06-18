@@ -15,7 +15,7 @@ use crate::{database::connection};
 
 use crate::{schema::*, database};
 
-use crate::models::{Person, Skill, Organization, SkillDomain, Validation};
+use crate::models::{Person, Skill, Organization, SkillDomain, User, Validation};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, Insertable, AsChangeset, SimpleObject, Associations)]
 #[diesel(belongs_to(Person))]
@@ -113,10 +113,10 @@ impl Capability {
         Person::get_by_id(&self.person_id)
     }
 
-    /// The central authority who set the current validated level, if any.
-    pub async fn validated_by(&self) -> Result<Option<Person>> {
+    /// The admin user who set the current validated level, if any.
+    pub async fn validated_by(&self) -> Result<Option<User>> {
         match self.validated_by_id {
-            Some(id) => Ok(Some(Person::get_by_id(&id)?)),
+            Some(id) => Ok(Some(User::get_by_id(&id)?)),
             None => Ok(None),
         }
     }

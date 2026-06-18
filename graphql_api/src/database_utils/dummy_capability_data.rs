@@ -4,7 +4,7 @@ use async_graphql::Error;
 use crate::progress::progress::ProgressLogger;
 
 use crate::models::{Affiliation, NewAffiliation, NewCapability, Capability, Skill, NewSkill, CapabilityLevel, SkillDomain,
-    LanguageLevel, LanguageName, NewLanguageData, LanguageData, Person, NewValidation, Validation};
+    LanguageLevel, LanguageName, NewLanguageData, LanguageData, NewValidation, User, Validation};
 
 pub fn pre_populate_skills() -> Result<(), Error> {
 
@@ -304,7 +304,7 @@ pub fn create_validations() -> Result<(), Error> {
 
     let mut rng = rand::thread_rng();
 
-    let person_ids   = Person::get_all_ids()?;
+    let user_ids     = User::get_all_ids()?;
     let capabilities = Capability::get_all()?;
 
     let mut progress = ProgressLogger::new(
@@ -317,13 +317,13 @@ pub fn create_validations() -> Result<(), Error> {
             print!(".")
         }
 
-        // A single central authority validates the capability, setting the
+        // A single admin user validates the capability, setting the
         // validated level directly. Creating the validation also stamps the
         // capability with the authority and date for provenance.
-        let authority: Uuid = person_ids
+        let authority: Uuid = user_ids
             .choose(&mut rng)
             .cloned()
-            .expect("No people available to act as validation authority");
+            .expect("No users available to act as validation authority");
 
         let assessment = match rng.gen_range(0..10) {
             0..=3  => c.self_identified_level.step_down(),

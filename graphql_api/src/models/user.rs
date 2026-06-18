@@ -91,6 +91,14 @@ impl User {
         Ok(user)
     }
 
+    pub fn get_all_ids() -> Result<Vec<Uuid>> {
+        let mut conn = connection()?;
+        let res = users::table
+            .select(users::id)
+            .load::<Uuid>(&mut conn)?;
+        Ok(res)
+    }
+
     pub fn update(&mut self) -> Result<Self> {
         let mut conn = connection()?;
 

@@ -480,7 +480,7 @@ diesel::joinable!(teams -> org_tiers (org_tier_id));
 diesel::joinable!(teams -> organizations (organization_id));
 diesel::joinable!(users -> valid_roles (role));
 diesel::joinable!(validations -> capabilities (capability_id));
-diesel::joinable!(validations -> persons (validator_id));
+diesel::joinable!(validations -> users (validator_id));
 diesel::joinable!(works -> roles (role_id));
 diesel::joinable!(works -> skills (skill_id));
 diesel::joinable!(works -> tasks (task_id));

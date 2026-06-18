@@ -815,13 +815,13 @@ type Work {
   updatedAt: NaiveDateTime!
   task: Task!
   role: Role
-  "The specific skill this work requires, if one is set"
-  skill: Skill
+  "The specific skill this work requires"
+  skill: Skill!
   """
   Capabilities (and through them, people) validated at or above
   the level required by this work, ordered by validated level.
-  Matches on the work's specific skill when one is set, otherwise
-  on its domain. Accepts an optional count (default 10).
+  Matches on the work's required skill. Accepts an optional count
+  (default 10).
   """
   capabilityMatches(count: Int): [Capability!]!
 }
@@ -1184,7 +1184,7 @@ input NewWork {
   workDescription: String!
   url: String
   domain: SkillDomain!
-  skillId: UUID
+  skillId: UUID!
   capabilityLevel: CapabilityLevel!
   effort: Int!
   workStatus: WorkStatus!

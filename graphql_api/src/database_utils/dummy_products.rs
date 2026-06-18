@@ -61,13 +61,15 @@ pub fn generate_dummy_products(organization_id: &Uuid) -> Result<(), Error> {
 
             let domain_skills = Skill::get_by_domain(task.domain)?;
 
-            // Plan unassigned work under each task, half targeting a
-            // specific skill, awaiting a capability match
+            // Plan unassigned work under each task, each targeting a
+            // specific skill, awaiting a capability match. Skip tasks
+            // whose domain has no skills to attach.
             for _ in 0..rng.gen_range(1..=2) {
 
-                let skill_id = domain_skills.choose(&mut rng)
-                    .filter(|_| rng.gen_bool(0.5))
-                    .map(|s| s.id);
+                let skill_id = match domain_skills.choose(&mut rng) {
+                    Some(s) => s.id,
+                    None => continue,
+                };
 
                 let nw = NewWork::new(
                     task.id,

@@ -181,7 +181,7 @@ impl Product {
         // SkillDomain and CapabilityLevel don't implement Hash, so we group
         // with a Vec and linear search. Product work item counts are small
         // enough that O(n²) here is never the bottleneck.
-        let mut rows: Vec<(SkillDomain, Option<Uuid>, CapabilityLevel, i64, i32)> = Vec::new();
+        let mut rows: Vec<(SkillDomain, Uuid, CapabilityLevel, i64, i32)> = Vec::new();
 
         for work in &all_work {
             if matches!(work.work_status, WorkStatus::Cancelled | WorkStatus::Completed) {
@@ -199,7 +199,7 @@ impl Product {
         }
 
         // Resolve skill names in one batch query.
-        let skill_ids: Vec<Uuid> = rows.iter().filter_map(|(_, s, _, _, _)| *s).collect();
+        let skill_ids: Vec<Uuid> = rows.iter().map(|(_, s, _, _, _)| *s).collect();
 
         let skill_map: HashMap<Uuid, String> = if skill_ids.is_empty() {
             HashMap::new()
@@ -213,14 +213,8 @@ impl Product {
         let mut demand: Vec<ProductSkillDemand> = rows
             .into_iter()
             .map(|(domain, skill_id, level, work_count, total_effort)| {
-                let name = match skill_id {
-                    Some(id) => skill_map
-                        .get(&id)
-                        .cloned()
-                        .unwrap_or_else(|| format!("{:?}", domain)),
-                    None => format!("{:?}", domain),
-                };
-                let skill_name = skill_id.and_then(|id| skill_map.get(&id).cloned());
+                let skill_name = skill_map.get(&skill_id).cloned();
+                let name = skill_name.clone().unwrap_or_else(|| format!("{:?}", domain));
                 ProductSkillDemand { name, skill_name, domain, level, work_count, total_effort }
             })
             .collect();

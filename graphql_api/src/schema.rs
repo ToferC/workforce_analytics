@@ -457,7 +457,7 @@ diesel::table! {
         priority -> Priority,
         created_at -> Timestamp,
         updated_at -> Timestamp,
-        skill_id -> Nullable<Uuid>,
+        skill_id -> Uuid,
     }
 }
 

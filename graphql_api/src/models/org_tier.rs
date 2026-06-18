@@ -80,6 +80,17 @@ impl OrgTier {
         Team::get_by_org_tier_id(&self.id)
     }
 
+    /// Capability heatmap rolled up across all teams under this tier and descendants.
+    pub async fn capability_heatmap(&self) -> Result<Vec<crate::models::TeamCapabilityRow>> {
+        crate::graphql::query::compute_team_capability_matrix(Some(self.id), None)
+    }
+
+    /// Number of distinct people holding active roles under this tier and descendants.
+    pub async fn headcount(&self) -> Result<i32> {
+        let person_ids = crate::graphql::query::get_person_ids_under_org_tier(&self.id)?;
+        Ok(person_ids.len() as i32)
+    }
+
     /// Capability counts rolled up across this tier and its descendants.
     pub async fn capability_counts(&self) -> Result<Vec<crate::models::CapabilityCount>> {
         use crate::schema::{org_tiers, teams, roles, capabilities};

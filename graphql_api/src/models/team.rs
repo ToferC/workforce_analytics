@@ -254,6 +254,29 @@ impl Team {
         Ok(res.into_iter().map(crate::models::CapabilityCount::from).collect())
     }
 
+    /// Capability depth per skill domain for this team (lightweight heatmap row).
+    pub async fn capability_heatmap(&self) -> Result<Vec<crate::models::TeamCapabilityCell>> {
+        let rows = crate::graphql::query::compute_team_capability_matrix(None, Some(self.id))?;
+        Ok(rows.into_iter().next().map(|r| r.cells).unwrap_or_default())
+    }
+
+    /// Number of distinct people holding active roles on this team.
+    #[allow(deprecated)]
+    pub async fn headcount(&self) -> Result<i32> {
+        use crate::schema::roles;
+        use diesel::prelude::*;
+        let mut conn = crate::database::connection()?;
+
+        let count: i64 = roles::table
+            .filter(roles::team_id.eq(self.id))
+            .filter(roles::active.eq(true))
+            .filter(roles::person_id.is_not_null())
+            .select(diesel::dsl::count_distinct(roles::person_id))
+            .first(&mut conn)?;
+
+        Ok(count as i32)
+    }
+
     /// Sum of active effort across this team's roles.
     pub async fn total_effort(&self) -> Result<i32> {
         use crate::schema::{roles, works};

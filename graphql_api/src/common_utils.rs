@@ -25,7 +25,7 @@ impl RoleGuard {
 impl Guard for RoleGuard {
     async fn check(&self, context: &Context<'_>) -> Result<(), async_graphql::Error> {
         
-        if context.data_opt::<UserRole>() == Some(&UserRole::Admin) || context.data_opt::<UserRole>() == Some(&self.user_role) {
+        if context.data_opt::<UserRole>().is_some_and(|r| *r >= self.user_role) {
             Ok(())
         } else {
             let guard_error = context.data_opt::<jsonwebtoken::errors::Error>().clone();

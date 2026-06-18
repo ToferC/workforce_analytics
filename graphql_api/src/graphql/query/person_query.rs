@@ -3,9 +3,7 @@ use async_graphql::*;
 use crate::models::{Person};
 use uuid::Uuid;
 
-/*
-use crate::common_utils::{RoleGuard, is_admin, UserRole};
-*/
+use crate::common_utils::{RoleGuard, UserRole};
 
 #[derive(Default)]
 pub struct PersonQuery;
@@ -13,23 +11,23 @@ pub struct PersonQuery;
 #[Object]
 impl PersonQuery {
 
-    // People 
-    #[graphql(name = "allPeople")]
+    // People
+    #[graphql(name = "allPeople", guard = "RoleGuard::new(UserRole::User)")]
     /// Accepts argument of "count" and returns a vector of {count} persons ordered by
     /// family name.D
     pub async fn all_people(
-        &self, 
+        &self,
         _context: &Context<'_>,
     ) -> Result<Vec<Person>> {
 
         Person::get_all()
     }
 
-    #[graphql(name = "People")]
+    #[graphql(name = "People", guard = "RoleGuard::new(UserRole::User)")]
     /// Accepts argument of "count" and returns a vector of {count} persons ordered by
     /// family name
     pub async fn get_people(
-        &self, 
+        &self,
         _context: &Context<'_>,
         count: i64,
     ) -> Result<Vec<Person>> {
@@ -37,22 +35,22 @@ impl PersonQuery {
         Person::get_count(count)
     }
 
-    #[graphql(name = "peopleCount")]
+    #[graphql(name = "peopleCount", guard = "RoleGuard::new(UserRole::User)")]
     /// Accepts argument of "count" and returns a vector of {count} persons ordered by
     /// family name
     pub async fn people_count(
-        &self, 
+        &self,
         _context: &Context<'_>,
     ) -> Result<i64> {
 
         Person::count()
     }
 
-    
 
-    #[graphql(name = "personById")]
+
+    #[graphql(name = "personById", guard = "RoleGuard::new(UserRole::User)")]
     pub async fn person_by_id(
-        &self, 
+        &self,
         _context: &Context<'_>,
         id: Uuid
     ) -> Result<Person> {
@@ -60,9 +58,9 @@ impl PersonQuery {
         Person::get_by_id(&id)
     }
 
-    #[graphql(name = "personByName")]
+    #[graphql(name = "personByName", guard = "RoleGuard::new(UserRole::User)")]
     pub async fn person_by_name(
-        &self, 
+        &self,
         _context: &Context<'_>,
         name: String,
     ) -> Result<Vec<Person>> {

@@ -3,9 +3,7 @@ use async_graphql::*;
 use crate::models::{Task};
 use uuid::Uuid;
 
-/*
-use crate::common_utils::{RoleGuard, is_admin, UserRole};
-*/
+use crate::common_utils::{RoleGuard, UserRole};
 
 #[derive(Default)]
 pub struct TaskQuery;
@@ -13,23 +11,23 @@ pub struct TaskQuery;
 #[Object]
 impl TaskQuery {
 
-    // Task 
-    #[graphql(name = "allTasks")]
+    // Task
+    #[graphql(name = "allTasks", guard = "RoleGuard::new(UserRole::User)")]
     /// Accepts argument of "count" and returns a vector of {count} tasks ordered by
     /// family name.D
     pub async fn all_tasks(
-        &self, 
+        &self,
         _context: &Context<'_>,
     ) -> Result<Vec<Task>> {
 
         Task::get_all()
     }
 
-    #[graphql(name = "Tasks")]
+    #[graphql(name = "Tasks", guard = "RoleGuard::new(UserRole::User)")]
     /// Accepts argument of "count" and returns a vector of {count} tasks ordered by
     /// family name
     pub async fn get_tasks(
-        &self, 
+        &self,
         _context: &Context<'_>,
         count: i64,
     ) -> Result<Vec<Task>> {
@@ -37,9 +35,9 @@ impl TaskQuery {
         Task::get_count(count)
     }
 
-    #[graphql(name = "taskById")]
+    #[graphql(name = "taskById", guard = "RoleGuard::new(UserRole::User)")]
     pub async fn task_by_id(
-        &self, 
+        &self,
         _context: &Context<'_>,
         id: Uuid
     ) -> Result<Task> {
@@ -47,9 +45,9 @@ impl TaskQuery {
         Task::get_by_id(&id)
     }
 
-    #[graphql(name = "taskByName")]
+    #[graphql(name = "taskByName", guard = "RoleGuard::new(UserRole::User)")]
     pub async fn task_by_name(
-        &self, 
+        &self,
         _context: &Context<'_>,
         name: String,
     ) -> Result<Vec<Task>> {

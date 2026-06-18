@@ -239,23 +239,19 @@ impl Person {
         Ok(self.peoplesoft_id.to_owned())
     }
 
-    /*
     #[graphql(
         guard = "RoleGuard::new(UserRole::Analyst)",
         visible = "is_analyst",
     )]
-     */
     /// Returns the person's family or second name
     pub async fn family_name(&self) -> Result<String> {
         Ok(self.family_name.to_owned())
     }
-    
-    /*
+
     #[graphql(
         guard = "RoleGuard::new(UserRole::Analyst)",
         visible = "is_analyst",
     )]
-     */
     /// Returns the persons given or first name
     pub async fn given_name(&self) -> Result<String> {
         Ok(self.given_name.to_owned())
@@ -267,12 +263,10 @@ impl Person {
         Organization::get_by_id(&self.organization_id)
     }
 
-    /*
     #[graphql(
         guard = "RoleGuard::new(UserRole::Analyst)",
         visible = "is_analyst",
     )]
-     */
     /// Positions this person used to occupy, derived from their closed tenures.
     /// This is the person's career progression and survives the position being
     /// reassigned to someone else.

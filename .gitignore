@@ -25,3 +25,7 @@ orgchart/build
 orgchart/npm-debug.log*
 orgchart/yarn-debug.log*
 orgchart/yarn-error.log*
+
+# Kubernetes secrets - never commit
+kubernetes/secrets.yaml
+gke-k8s/api-config.yaml

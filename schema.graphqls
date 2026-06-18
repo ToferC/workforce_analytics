@@ -198,6 +198,10 @@ type OrgTier {
   childOrganizationTier: [OrgTier!]!
   owner: Person!
   teams: [Team!]!
+  "Capability heatmap rolled up across all teams under this tier and descendants."
+  capabilityHeatmap: [TeamCapabilityRow!]!
+  "Number of distinct people holding active roles under this tier and descendants."
+  headcount: Int!
   "Capability counts rolled up across this tier and its descendants."
   capabilityCounts: [CapabilityCount!]!
   "Sum of active effort across this tier and descendants."
@@ -325,6 +329,7 @@ type Product {
   primaryDomain: SkillDomain!
   url: String
   productStatus: WorkStatus!
+  priority: Priority!
   createdAt: NaiveDateTime!
   updatedAt: NaiveDateTime!
   retiredAt: NaiveDateTime
@@ -689,6 +694,7 @@ type Task {
   startDatestamp: NaiveDateTime!
   targetCompletionDate: NaiveDateTime!
   taskStatus: WorkStatus!
+  priority: Priority!
   completedDate: NaiveDateTime
   createdAt: NaiveDateTime!
   updatedAt: NaiveDateTime!
@@ -717,6 +723,10 @@ type Team {
   owner: Person!
   "Capability counts for people holding roles in this team."
   capabilityCounts: [CapabilityCount!]!
+  "Capability depth per skill domain for this team (lightweight heatmap row)."
+  capabilityHeatmap: [TeamCapabilityCell!]!
+  "Number of distinct people holding active roles on this team."
+  headcount: Int!
   "Sum of active effort across this team's roles."
   totalEffort: Int!
 }
@@ -800,6 +810,7 @@ type Work {
   capabilityLevel: CapabilityLevel!
   effort: Int!
   workStatus: WorkStatus!
+  priority: Priority!
   createdAt: NaiveDateTime!
   updatedAt: NaiveDateTime!
   task: Task!
@@ -908,6 +919,12 @@ enum PersonnelType {
   CONTRACTOR
   STUDENT
   OTHER
+}
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }
 enum PublicationStatus {
   PLANNING
@@ -1072,6 +1089,7 @@ input NewProduct {
   primaryDomain: SkillDomain!
   url: String
   productStatus: WorkStatus!
+  priority: Priority!
 }
 input NewPublication {
   publishingOrganizationId: UUID!
@@ -1129,6 +1147,7 @@ input NewTask {
   startDatestamp: NaiveDateTime!
   targetCompletionDate: NaiveDateTime!
   taskStatus: WorkStatus!
+  priority: Priority!
   productId: UUID
 }
 """
@@ -1169,6 +1188,7 @@ input NewWork {
   capabilityLevel: CapabilityLevel!
   effort: Int!
   workStatus: WorkStatus!
+  priority: Priority!
 }
 "InputObject for OrgOwnership with Option fields - only include the ones you want to update"
 input OrgOwnershipData {
@@ -1229,6 +1249,7 @@ input ProductData {
   primaryDomain: SkillDomain
   url: String
   productStatus: WorkStatus
+  priority: Priority
 }
 "InputObject for PublicationContributor with Option fields - only include the ones you want to update"
 input PublicationContributorData {
@@ -1291,6 +1312,7 @@ input TaskData {
   startDatestamp: NaiveDateTime
   targetCompletionDate: NaiveDateTime
   taskStatus: WorkStatus
+  priority: Priority
   completedDate: NaiveDateTime
   productId: UUID
 }
@@ -1346,6 +1368,7 @@ input WorkData {
   capabilityLevel: CapabilityLevel
   effort: Int
   workStatus: WorkStatus
+  priority: Priority
 }
 "Indicates that an Input Object is a OneOf Input Object (and thus requires exactly one of its field be provided)"
 directive @oneOf on INPUT_OBJECT

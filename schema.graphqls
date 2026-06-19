@@ -312,6 +312,32 @@ type PersonMatchScore {
   "Sum of positive (shortfall) gaps only."
   totalGap: Int!
   requirementGaps: [RequirementMatch!]!
+  """
+  True if the candidate currently holds a role under the OrgTier owned by
+  this role's area. The owner (and admins) can reassign these directly.
+  """
+  inManagedScope: Boolean!
+  """
+  The candidate's manager contact, populated only when the candidate is
+  outside the managed area (moving them needs their manager's agreement).
+  """
+  manager: ManagerContact
+}
+"""
+Contact details for the manager who owns a candidate's current team.
+Populated for candidates who fall outside the hiring role's managed area, so
+the requester knows whose permission is needed to move them.
+"""
+type ManagerContact {
+  "The owning (manager) Role for the candidate's current team."
+  ownerRoleId: UUID!
+  ownerRoleTitle: String!
+  "The candidate's current team name."
+  teamName: String!
+  "Manager's name, if the owning role is currently filled."
+  name: String
+  email: String
+  phone: String
 }
 """
 A product or service delivered by an organization.
@@ -630,15 +656,22 @@ type RoleAssignment {
 type RoleMatchResult {
   roleId: UUID!
   """
-  People who meet every requirement at or above the required level,
-  sorted by match_score descending.
+  The OrgTier whose owner is responsible for this role (nearest tier with an
+  ownership record, walking up from the role's team). Managed candidates sit
+  under this tier. Null if no owner is assigned anywhere up the chain.
   """
-  fullMatches: [PersonMatchScore!]!
+  managedOrgTierId: UUID
   """
-  People who meet at least min_coverage of requirements and have no single
-  skill gap exceeding max_gap_per_req, sorted by match_score descending.
+  Candidates who currently hold a role under the managed OrgTier — the owner
+  or an admin can reassign these internally. Sorted by match_score descending.
   """
-  partialMatches: [PersonMatchScore!]!
+  managedFullMatches: [PersonMatchScore!]!
+  "Managed-area candidates meeting min_coverage but not every requirement."
+  managedPartialMatches: [PersonMatchScore!]!
+  "Full matches outside the managed area; each carries manager contact."
+  externalFullMatches: [PersonMatchScore!]!
+  "Partial matches outside the managed area; each carries manager contact."
+  externalPartialMatches: [PersonMatchScore!]!
 }
 """
 Should get this from an API or have standard data

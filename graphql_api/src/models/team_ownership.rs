@@ -12,12 +12,13 @@ use crate::database::connection;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, SimpleObject)]
 #[diesel(table_name = team_ownerships)]
-#[diesel(belongs_to(Person))]
+#[diesel(belongs_to(Role))]
 #[diesel(belongs_to(Team))]
-// Represents ownership of a team by a person
+/// Represents ownership of a team by a role (the team's manager position).
+/// Tied to the Role, not the individual, so authority stays with the position.
 pub struct TeamOwnership {
     pub id: Uuid,
-    pub person_id: Uuid,
+    pub owner_role_id: Uuid,
     pub team_id: Uuid,
 
     pub start_datestamp: NaiveDateTime,
@@ -47,7 +48,7 @@ impl TeamOwnership {
         let mut conn = connection()?;
 
         let res = team_ownerships::table
-        .filter(team_ownerships::person_id.eq(&team_ownership.person_id))
+        .filter(team_ownerships::owner_role_id.eq(&team_ownership.owner_role_id))
         .filter(team_ownerships::team_id.eq(&team_ownership.team_id))
         .distinct()
         .first(&mut conn);
@@ -103,11 +104,13 @@ impl TeamOwnership {
         Ok(res)
     }
 
-    pub fn get_team_ids_by_owner_id(id: &Uuid) -> Result<Vec<Uuid>> {
+    /// Team ids owned by any of the given roles. Used to roll an owner's scope
+    /// up across the roles they currently occupy.
+    pub fn get_team_ids_by_owner_role_ids(role_ids: &[Uuid]) -> Result<Vec<Uuid>> {
         let mut conn = connection()?;
 
         let res = team_ownerships::table
-            .filter(team_ownerships::person_id.eq(id))
+            .filter(team_ownerships::owner_role_id.eq_any(role_ids))
             .select(team_ownerships::team_id)
             .load::<Uuid>(&mut conn)?;
 
@@ -132,7 +135,7 @@ impl TeamOwnership {
 /// Linked to Trip
 #[diesel(table_name = team_ownerships)]
 pub struct NewTeamOwnership {
-    pub person_id: Uuid,
+    pub owner_role_id: Uuid,
     pub team_id: Uuid,
 
     pub start_datestamp: NaiveDateTime,
@@ -142,13 +145,13 @@ pub struct NewTeamOwnership {
 impl NewTeamOwnership {
 
     pub fn new(
-        person_id: Uuid,
+        owner_role_id: Uuid,
         team_id: Uuid,
         start_datestamp: NaiveDateTime,
         end_date: Option<NaiveDateTime>,
     ) -> Self {
         NewTeamOwnership {
-            person_id,
+            owner_role_id,
             team_id,
             start_datestamp,
             end_date,

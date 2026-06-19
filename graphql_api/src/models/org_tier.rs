@@ -10,7 +10,7 @@ use async_graphql::*;
 use crate::database::connection;
 use crate::schema::*;
 
-use super::{Organization, Person, OrgOwnership, SkillDomain, Team};
+use super::{Organization, Role, OrgOwnership, SkillDomain, Team};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, SimpleObject)]
 #[graphql(complex)]
@@ -54,16 +54,19 @@ impl OrgTier {
         OrgTier::get_child_org_tiers(&self.id)
     }
 
-    pub async fn owner(&self) -> Result<Person> {
-        // Tiers created without an explicit ownership record inherit the
-        // nearest ancestor's owner until one is assigned. Never panic here:
-        // an unwrap would kill the worker for any tier missing ownership.
+    /// The role that owns (manages) this tier. Ownership is tied to the
+    /// position, so the owner may be a vacant role; expose `owner.person` for
+    /// the current incumbent. Tiers created without an explicit ownership
+    /// record inherit the nearest ancestor's owner until one is assigned.
+    /// Never panic here: an unwrap would kill the worker for any tier missing
+    /// ownership.
+    pub async fn owner(&self) -> Result<Role> {
         let mut tier_id = self.id;
         let mut parent_tier = self.parent_tier;
 
         loop {
             match OrgOwnership::get_by_org_tier_id(&tier_id) {
-                Ok(org_tier_ownership) => return Person::get_by_id(&org_tier_ownership.owner_id),
+                Ok(org_tier_ownership) => return Role::get_by_id(&org_tier_ownership.owner_role_id),
                 Err(_) => match parent_tier {
                     Some(parent_id) => {
                         let parent = OrgTier::get_by_id(&parent_id)?;

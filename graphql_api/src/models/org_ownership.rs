@@ -12,12 +12,14 @@ use crate::schema::*;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, SimpleObject)]
 #[diesel(table_name = org_tier_ownerships)]
-#[diesel(belongs_to(Person))]
-/// Represents a relationship between a person (owner) and an organizational tier
-/// Will be used to inform approvals and organizational authority
+#[diesel(belongs_to(Role))]
+/// Represents a relationship between a role (owner) and an organizational tier.
+/// Ownership records the management authority over a tier; it is tied to the
+/// position (Role), not the individual, so authority survives reassignment.
+/// Used to inform approvals and organizational authority.
 pub struct OrgOwnership {
     pub id: Uuid,
-    pub owner_id: Uuid,
+    pub owner_role_id: Uuid,
     pub org_tier_id: Uuid,
 
     pub created_at: NaiveDateTime,
@@ -82,11 +84,13 @@ impl OrgOwnership {
         Ok(res)
     }
 
-    pub fn get_org_tier_ids_by_owner_id(id: &Uuid) -> Result<Vec<Uuid>> {
+    /// Org tier ids owned by any of the given roles. Used to roll an owner's
+    /// scope up across the roles they currently occupy.
+    pub fn get_org_tier_ids_by_owner_role_ids(role_ids: &[Uuid]) -> Result<Vec<Uuid>> {
         let mut conn = connection()?;
 
         let res = org_tier_ownerships::table
-            .filter(org_tier_ownerships::owner_id.eq(id))
+            .filter(org_tier_ownerships::owner_role_id.eq_any(role_ids))
             .select(org_tier_ownerships::org_tier_id)
             .load::<Uuid>(&mut conn)?;
 
@@ -108,18 +112,18 @@ impl OrgOwnership {
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, SimpleObject, InputObject)]
 #[diesel(table_name = org_tier_ownerships)]
 pub struct NewOrgOwnership {
-    pub owner_id: Uuid,
+    pub owner_role_id: Uuid,
     pub org_tier_id: Uuid,
 }
 
 impl NewOrgOwnership {
 
     pub fn new(
-        owner_id: Uuid,
+        owner_role_id: Uuid,
         org_tier_id: Uuid,
     ) -> Self {
         NewOrgOwnership {
-            owner_id,
+            owner_role_id,
             org_tier_id,
         }
     }

@@ -106,7 +106,7 @@ diesel::table! {
 diesel::table! {
     org_tier_ownerships (id) {
         id -> Uuid,
-        owner_id -> Uuid,
+        owner_role_id -> Uuid,
         org_tier_id -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
@@ -363,7 +363,7 @@ diesel::table! {
 diesel::table! {
     team_ownerships (id) {
         id -> Uuid,
-        person_id -> Uuid,
+        owner_role_id -> Uuid,
         team_id -> Uuid,
         start_datestamp -> Timestamp,
         end_date -> Nullable<Timestamp>,
@@ -411,6 +411,8 @@ diesel::table! {
         #[max_length = 256]
         access_key -> Varchar,
         approved_by_user_uid -> Nullable<Uuid>,
+        #[max_length = 16]
+        account_type -> Varchar,
     }
 }
 
@@ -467,7 +469,7 @@ diesel::joinable!(capabilities -> persons (person_id));
 diesel::joinable!(capabilities -> skills (skill_id));
 diesel::joinable!(language_datas -> persons (person_id));
 diesel::joinable!(org_tier_ownerships -> org_tiers (org_tier_id));
-diesel::joinable!(org_tier_ownerships -> persons (owner_id));
+diesel::joinable!(org_tier_ownerships -> roles (owner_role_id));
 diesel::joinable!(org_tiers -> organizations (organization_id));
 diesel::joinable!(persons -> organizations (organization_id));
 diesel::joinable!(products -> organizations (organization_id));
@@ -484,7 +486,7 @@ diesel::joinable!(roles -> persons (person_id));
 diesel::joinable!(roles -> teams (team_id));
 diesel::joinable!(tasks -> products (product_id));
 diesel::joinable!(tasks -> roles (created_by_role_id));
-diesel::joinable!(team_ownerships -> persons (person_id));
+diesel::joinable!(team_ownerships -> roles (owner_role_id));
 diesel::joinable!(team_ownerships -> teams (team_id));
 diesel::joinable!(teams -> org_tiers (org_tier_id));
 diesel::joinable!(teams -> organizations (organization_id));

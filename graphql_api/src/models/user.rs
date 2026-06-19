@@ -11,6 +11,11 @@ use crate::common_utils::{is_admin, RoleGuard, UserRole};
 use crate::models::hash_password;
 use crate::database::connection;
 
+/// A human user, linked to a Person.
+pub const ACCOUNT_TYPE_HUMAN: &str = "HUMAN";
+/// A non-human service account (application / data service); no Person required.
+pub const ACCOUNT_TYPE_AGENT: &str = "AGENT";
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UserInstance {
     id: String,
@@ -60,6 +65,12 @@ pub struct User {
     )]
     /// Access Level: Admin
     pub approved_by_user_uid: Option<Uuid>,
+
+    /// Principal kind: "HUMAN" (default) or "AGENT". An AGENT is a non-human
+    /// service account that queries the API on behalf of an application or data
+    /// service. HUMAN users must be linked to a Person; ADMIN and AGENT users
+    /// are exempt from that requirement.
+    pub account_type: String,
 }
 
 impl User {
@@ -125,6 +136,7 @@ pub struct InsertableUser {
     pub updated_at: NaiveDateTime,
     pub access_key: String,
     pub approved_by_user_uid: Option<Uuid>,
+    pub account_type: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, InputObject)]
@@ -135,6 +147,9 @@ pub struct UserData {
     pub password: String,
     /// UserRole in system: USER, OPERATOR, ANALYST, ADMIN
     pub role: String,
+    /// Principal kind: "HUMAN" (default) or "AGENT". Agents are non-human
+    /// service accounts and are not required to be linked to a Person.
+    pub account_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, InputObject)]
@@ -175,9 +190,9 @@ impl From<UserData> for InsertableUser {
             email,
             password,
             role,
-            ..
+            account_type,
         } = user_data;
-        
+
         let hash = hash_password(&password)
             .expect("Unable to hash password")
             .to_string();
@@ -192,6 +207,7 @@ impl From<UserData> for InsertableUser {
             access_key: "".to_owned(),
             access_level: "detailed".to_owned(),
             approved_by_user_uid: None,
+            account_type: account_type.unwrap_or_else(|| ACCOUNT_TYPE_HUMAN.to_owned()),
         }
     }
 }

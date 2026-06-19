@@ -13,7 +13,7 @@ use crate::config_variables::DATE_FORMAT;
 use crate::schema::*;
 use crate::database::connection;
 
-use super::{Role, Person, TeamOwnership, SkillDomain};
+use super::{Role, TeamOwnership, SkillDomain};
 
 
 #[derive(Debug, Clone, Deserialize, Serialize, Identifiable, Queryable, Insertable, AsChangeset)]
@@ -204,18 +204,20 @@ impl Team {
         Role::get_by_team_id(self.id)
     }
 
-    pub async fn owner(&self) -> Result<Person> {
-        // Teams created without an explicit ownership record fall back to
-        // their org tier's owner (which itself inherits up the tier chain).
-        // Never panic here: an unwrap would kill the worker for any team
-        // missing ownership.
+    /// The role that owns (manages) this team. Ownership is tied to the
+    /// position, so the owner may be a vacant role; expose `owner.person` for
+    /// the current incumbent. Teams created without an explicit ownership
+    /// record fall back to their org tier's owner (which itself inherits up the
+    /// tier chain). Never panic here: an unwrap would kill the worker for any
+    /// team missing ownership.
+    pub async fn owner(&self) -> Result<Role> {
         match TeamOwnership::get_by_team_id(&self.id) {
-            Ok(team_ownership) => Person::get_by_id(&team_ownership.person_id),
+            Ok(team_ownership) => Role::get_by_id(&team_ownership.owner_role_id),
             Err(_) => {
                 let mut tier = OrgTier::get_by_id(&self.org_tier_id)?;
                 loop {
                     match crate::models::OrgOwnership::get_by_org_tier_id(&tier.id) {
-                        Ok(ownership) => return Person::get_by_id(&ownership.owner_id),
+                        Ok(ownership) => return Role::get_by_id(&ownership.owner_role_id),
                         Err(_) => match tier.parent_tier {
                             Some(parent_id) => tier = OrgTier::get_by_id(&parent_id)?,
                             None => return Err(async_graphql::Error::new("No owner assigned to this team")),

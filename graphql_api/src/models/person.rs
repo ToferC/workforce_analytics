@@ -144,6 +144,19 @@ impl Person {
         Ok(res)
     }
 
+    /// The Person linked to a User (auth identity). Human users map to exactly
+    /// one Person; admin and agent users have none, so this returns an error
+    /// for them.
+    pub fn get_by_user_id(user_id: &Uuid) -> Result<Person> {
+        let mut conn = connection()?;
+
+        let res = persons::table
+            .filter(persons::user_id.eq(user_id))
+            .first(&mut conn)?;
+
+        Ok(res)
+    }
+
     pub fn get_by_ids(ids: &Vec<Uuid>) -> Result<Vec<Person>> {
         let mut conn = connection()?;
 
@@ -298,16 +311,27 @@ impl Person {
         Affiliation::get_by_person_id(self.id)
     }
 
-    /// Returns a vector of the teams owned by this person
+    /// Teams owned by this person, derived from the roles they currently
+    /// occupy. Ownership lives on the Role (the manager position), so this
+    /// aggregates across the person's active roles.
     pub async fn owned_teams(&self) -> Result<Vec<Team>> {
-        let team_ids = TeamOwnership::get_team_ids_by_owner_id(&self.id).unwrap();
+        let role_ids: Vec<Uuid> = Role::get_current_for_person(&self.id)?
+            .iter()
+            .map(|r| r.id)
+            .collect();
+        let team_ids = TeamOwnership::get_team_ids_by_owner_role_ids(&role_ids)?;
 
         Team::get_by_ids(&team_ids)
     }
 
-    /// Returns a vector of the organizational tiers owned by this person
+    /// Organizational tiers owned by this person, derived from the roles they
+    /// currently occupy (ownership lives on the manager Role).
     pub async fn owned_org_tiers(&self) -> Result<Vec<OrgTier>> {
-        let org_tier_ids = OrgOwnership::get_org_tier_ids_by_owner_id(&self.id).unwrap();
+        let role_ids: Vec<Uuid> = Role::get_current_for_person(&self.id)?
+            .iter()
+            .map(|r| r.id)
+            .collect();
+        let org_tier_ids = OrgOwnership::get_org_tier_ids_by_owner_role_ids(&role_ids)?;
 
         OrgTier::get_by_ids(&org_tier_ids)
     }

@@ -1,60 +1,60 @@
-# Build stage
-#  Base rust image vaiant: rust:1.68-slim requires other dependencies
-FROM rust:latest as builder
+# syntax=docker/dockerfile:1
+#
+# Recommended production image (smallest). Multi-stage build of the
+# `graphql_api` workspace binary onto a slim Debian runtime.
+#
+# Build context is the repository root (a Cargo workspace: members
+# `graphql_api` and `errors`). Selected in docker-compose.yml.
 
-RUN apt-get -qq update && apt-get install -y -q \
-    libclang-dev \
-    libssl-dev
-# removed unnecessary packages: openssl clang llvm-dev cmake
+# ---- Build stage ------------------------------------------------------------
+FROM rust:latest AS builder
 
-# RUN cargo install diesel_cli --no-default-features --features postgres
-
-WORKDIR /app
-
-# We copy just the manifests to leverage Docker cache
-# Copying specific file/folders makes the .dockerignore file redundant in this Dockerfile
-# COPY . .
-COPY Cargo.toml Cargo.lock ./
-
-# Now the source code and migrations, both required for the build
-COPY src src
-# migrations are embeded database.rs:19:40
-COPY migrations migrations
-
-RUN cargo build --release
-
-# Final stage
-FROM debian:bookworm-slim 
-
-# Install dependencies (check that they are still all required)
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    libclang-dev \
+# libpq for Diesel (Postgres), libssl for TLS. pkg-config to locate them.
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
-    libssl-dev \ 
+    libssl-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# Add 'rusty' user/group we wish the container to run as
-RUN groupadd -r rusty && useradd --no-log-init -r -g rusty rusty
+WORKDIR /app
+
+# Whole workspace. All member manifests must be present for cargo to resolve
+# the workspace, and `embed_migrations!()` reads ./migrations at build time
+# (it walks up from the crate dir to the workspace root).
+COPY Cargo.toml Cargo.lock ./
+COPY graphql_api graphql_api
+COPY errors errors
+COPY migrations migrations
+
+RUN cargo build --release --bin graphql_api
+
+# ---- Runtime stage ----------------------------------------------------------
+FROM debian:bookworm-slim
+
+# Runtime shared libs only: Postgres client, OpenSSL, CA roots for outbound TLS.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libpq5 \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Run as an unprivileged user.
+RUN groupadd -r app && useradd --no-log-init -r -g app app
 
 WORKDIR /app
 
-# --chown=<user>:<group>
-COPY --from=builder /app/target/release/workforce_analytics .
+# Binary.
+COPY --from=builder /app/target/release/graphql_api ./graphql_api
 
-# seed: These are needed in the final image for the image to seed the database
+# Runtime assets, placed at the paths the binary resolves them from:
+#   - Tera templates : "graphql_api/templates/**/*"   (relative to CWD = /app)
+#   - Static files   : <CARGO_MANIFEST_DIR>/static = /app/graphql_api/static
+#   - Seed CSVs      : "seeds/*"                      (relative to CWD = /app)
+COPY graphql_api/templates graphql_api/templates
+COPY graphql_api/static graphql_api/static
 COPY seeds seeds
 
-# templates: these are needed in the final image for rendering web pages
-COPY templates templates
-
-# static: needed for javascript and css
-COPY static static
-
-# migrations: these are NOT needed in the final image, as they are embedded in the binary
-# COPY migrations migrations # for diesel migrate
-
-USER rusty
+USER app
 EXPOSE 8080
 
-CMD ["./workforce_analytics"]
+CMD ["./graphql_api"]

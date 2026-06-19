@@ -38,8 +38,8 @@ impl OrgOwnershipMutation {
     ) -> Result<OrgOwnership> {
         let mut org_ownership = OrgOwnership::get_by_id(data.id)?;
 
-        if let Some(s) = data.owner_id {
-            org_ownership.owner_id = s;
+        if let Some(s) = data.owner_role_id {
+            org_ownership.owner_role_id = s;
         };
 
         if let Some(s) = data.org_tier_id {
@@ -59,7 +59,7 @@ impl OrgOwnershipMutation {
 /// InputObject for OrgOwnership with Option fields - only include the ones you want to update
 pub struct OrgOwnershipData {
     pub id: Uuid,
-    pub owner_id: Option<Uuid>,
+    pub owner_role_id: Option<Uuid>,
     pub org_tier_id: Option<Uuid>,
     pub retired_at: Option<NaiveDateTime>,
 }

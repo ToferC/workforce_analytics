@@ -173,7 +173,7 @@ Will be used to inform approvals and organizational authority
 """
 type OrgOwnership {
   id: UUID!
-  ownerId: UUID!
+  ownerRoleId: UUID!
   orgTierId: UUID!
   createdAt: NaiveDateTime!
   updatedAt: NaiveDateTime!
@@ -196,7 +196,7 @@ type OrgTier {
   organization: Organization!
   parentOrganizationTier: OrgTier
   childOrganizationTier: [OrgTier!]!
-  owner: Person!
+  owner: Role!
   teams: [Team!]!
   "Capability heatmap rolled up across all teams under this tier and descendants."
   capabilityHeatmap: [TeamCapabilityRow!]!
@@ -720,7 +720,7 @@ type Team {
   occupiedRoles: [Role!]!
   vacantRoles: [Role!]!
   roles: [Role!]!
-  owner: Person!
+  owner: Role!
   "Capability counts for people holding roles in this team."
   capabilityCounts: [CapabilityCount!]!
   "Capability depth per skill domain for this team (lightweight heatmap row)."
@@ -746,7 +746,7 @@ type TeamCapabilityRow {
 }
 type TeamOwnership {
   id: UUID!
-  personId: UUID!
+  ownerRoleId: UUID!
   teamId: UUID!
   startDatestamp: NaiveDateTime!
   endDate: NaiveDateTime
@@ -772,6 +772,13 @@ type User {
   accessKey: String!
   "Access Level: Admin"
   approvedByUserUid: UUID
+  """
+  Principal kind: "HUMAN" (default) or "AGENT". An AGENT is a non-human
+  service account that queries the API on behalf of an application or data
+  service. HUMAN users must be linked to a Person; ADMIN and AGENT users
+  are exempt from that requirement.
+  """
+  accountType: String!
 }
 type UserResponse {
   id: UUID!
@@ -1042,7 +1049,7 @@ input NewLanguageData {
   speaking: LanguageLevel
 }
 input NewOrgOwnership {
-  ownerId: UUID!
+  ownerRoleId: UUID!
   orgTierId: UUID!
 }
 input NewOrgTier {
@@ -1168,7 +1175,7 @@ Linked from HealthProfile
 Linked to Trip
 """
 input NewTeamOwnership {
-  personId: UUID!
+  ownerRoleId: UUID!
   teamId: UUID!
   startDatestamp: NaiveDateTime!
   endDate: NaiveDateTime
@@ -1193,7 +1200,7 @@ input NewWork {
 "InputObject for OrgOwnership with Option fields - only include the ones you want to update"
 input OrgOwnershipData {
   id: UUID!
-  ownerId: UUID
+  ownerRoleId: UUID
   orgTierId: UUID
   retiredAt: NaiveDateTime
 }
@@ -1329,7 +1336,7 @@ input TeamData {
 "InputObject for TeamOwnership with Option fields - only include the ones you want to update"
 input TeamOwnershipData {
   id: UUID!
-  personId: UUID
+  ownerRoleId: UUID
   teamId: UUID
   startDatestamp: NaiveDateTime
   endDate: NaiveDateTime
@@ -1341,6 +1348,11 @@ input UserData {
   password: String!
   "UserRole in system: USER, OPERATOR, ANALYST, ADMIN"
   role: String!
+  """
+  Principal kind: "HUMAN" (default) or "AGENT". Agents are non-human service
+  accounts and are not required to be linked to a Person.
+  """
+  accountType: String
 }
 "Input Struct to create a new user. Only accessible by Administrators."
 input UserUpdate {

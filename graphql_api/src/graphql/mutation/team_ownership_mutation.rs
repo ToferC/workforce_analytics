@@ -38,8 +38,8 @@ impl TeamOwnershipMutation {
     ) -> Result<TeamOwnership> {
         let mut team_ownership = TeamOwnership::get_by_id(&data.id)?;
 
-        if let Some(s) = data.person_id {
-            team_ownership.person_id = s;
+        if let Some(s) = data.owner_role_id {
+            team_ownership.owner_role_id = s;
         };
 
         if let Some(s) = data.team_id {
@@ -63,7 +63,7 @@ impl TeamOwnershipMutation {
 /// InputObject for TeamOwnership with Option fields - only include the ones you want to update
 pub struct TeamOwnershipData {
     pub id: Uuid,
-    pub person_id: Option<Uuid>,
+    pub owner_role_id: Option<Uuid>,
     pub team_id: Option<Uuid>,
     pub start_datestamp: Option<NaiveDateTime>,
     pub end_date: Option<NaiveDateTime>,

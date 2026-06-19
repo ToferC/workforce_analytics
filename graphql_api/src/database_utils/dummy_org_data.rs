@@ -367,13 +367,6 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
             _ => (None, None, Some(OccupationalGroup::Executive), Some((5 - ot.tier_level).max(1))),
         };
 
-        let ownership = NewOrgOwnership::new(
-            owner_id,
-            ot.id,
-        );
-
-        let _res = OrgOwnership::create(&ownership).unwrap();
-
         // create team at this level
 
         let team_name = ot.name_en.clone().trim().to_string();
@@ -408,6 +401,11 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
         );
 
         let role_res = Role::create(&nr).unwrap();
+
+        // The manager role owns this org tier and (below) its team. Ownership is
+        // tied to the position, not the person, so authority stays with the role
+        // when the incumbent moves on.
+        let _res = OrgOwnership::create(&NewOrgOwnership::new(role_res.id, ot.id)).unwrap();
 
         // Create requirements for role
         let skill_ids: Vec<Uuid> = domain_skills
@@ -444,10 +442,10 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
             tasks.push(task);
         }
 
-        // Set team ownership
+        // Set team ownership — owned by the manager role, not the person.
 
         let new_team_ownership = NewTeamOwnership::new(
-            owner_id,
+            role_res.id,
             team.id,
             chrono::Utc::now().naive_utc(),
             None,

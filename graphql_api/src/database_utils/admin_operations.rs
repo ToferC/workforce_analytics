@@ -26,6 +26,7 @@ pub fn create_admin_user() {
             email: email_input.trim().to_owned(),
             password: password_input.trim().to_owned(),
             role: "ADMIN".to_owned(),
+            account_type: None,
         };
     
         let mut test_admin = InsertableUser::from(admin_data);

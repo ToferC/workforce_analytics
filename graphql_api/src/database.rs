@@ -53,6 +53,7 @@ pub fn init() {
                 email: admin_email.trim().to_owned(),
                 password: admin_pwd.trim().to_owned(),
                 role: "ADMIN".to_owned(),
+                account_type: None,
             };
         
             let test_admin = InsertableUser::from(admin_data);

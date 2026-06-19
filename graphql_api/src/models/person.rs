@@ -144,6 +144,19 @@ impl Person {
         Ok(res)
     }
 
+    /// The Person linked to a User (auth identity). Human users map to exactly
+    /// one Person; admin and agent users have none, so this returns an error
+    /// for them.
+    pub fn get_by_user_id(user_id: &Uuid) -> Result<Person> {
+        let mut conn = connection()?;
+
+        let res = persons::table
+            .filter(persons::user_id.eq(user_id))
+            .first(&mut conn)?;
+
+        Ok(res)
+    }
+
     pub fn get_by_ids(ids: &Vec<Uuid>) -> Result<Vec<Person>> {
         let mut conn = connection()?;
 

@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::models::{Work, NewWork, Priority, SkillDomain, CapabilityLevel, WorkStatus};
 use crate::common_utils::{UserRole, is_operator, RoleGuard};
+use crate::graphql::authz;
 
 #[derive(Default)]
 pub struct WorkMutation;
@@ -18,9 +19,10 @@ impl WorkMutation {
     )]
     pub async fn create_work(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         data: NewWork,
     ) -> Result<Work> {
+        authz::require_manage_task(context, &data.task_id)?;
         let work = Work::create(&data)?;
         Ok(work)
     }
@@ -32,10 +34,11 @@ impl WorkMutation {
     )]
     pub async fn update_work(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         data: WorkData,
     ) -> Result<Work> {
         let mut work = Work::get_by_id(&data.id)?;
+        authz::require_manage_task(context, &work.task_id)?;
 
         if let Some(s) = data.task_id {
             work.task_id = s;

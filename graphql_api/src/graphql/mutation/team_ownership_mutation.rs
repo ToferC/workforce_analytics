@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use crate::models::{TeamOwnership, NewTeamOwnership};
 use crate::common_utils::{UserRole, is_operator, RoleGuard};
+use crate::graphql::authz;
 
 #[derive(Default)]
 pub struct TeamOwnershipMutation;
@@ -19,9 +20,10 @@ impl TeamOwnershipMutation {
     )]
     pub async fn create_team_ownership(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         data: NewTeamOwnership,
     ) -> Result<TeamOwnership> {
+        authz::require_manage_team(context, &data.team_id)?;
         let team_ownership = TeamOwnership::create(&data)?;
         Ok(team_ownership)
     }
@@ -33,10 +35,11 @@ impl TeamOwnershipMutation {
     )]
     pub async fn update_team_ownership(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         data: TeamOwnershipData,
     ) -> Result<TeamOwnership> {
         let mut team_ownership = TeamOwnership::get_by_id(&data.id)?;
+        authz::require_manage_team(context, &team_ownership.team_id)?;
 
         if let Some(s) = data.owner_role_id {
             team_ownership.owner_role_id = s;

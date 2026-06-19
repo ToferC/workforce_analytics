@@ -1,6 +1,7 @@
 pub(crate) mod query;
 mod mutation;
 mod utilities;
+pub(crate) mod authz;
 // mod subscription;
 
 pub use self::query::*;

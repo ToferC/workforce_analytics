@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use crate::models::{Team, NewTeam, SkillDomain};
 use crate::common_utils::{UserRole, is_operator, RoleGuard};
+use crate::graphql::authz;
 
 #[derive(Default)]
 pub struct TeamMutation;
@@ -19,9 +20,10 @@ impl TeamMutation {
     )]
     pub async fn create_team(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         data: NewTeam,
     ) -> Result<Team> {
+        authz::require_manage_tier(context, &data.org_tier_id)?;
         let team = Team::create(&data)?;
         Ok(team)
     }
@@ -33,9 +35,10 @@ impl TeamMutation {
     )]
     pub async fn update_team(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         data: TeamData,
     ) -> Result<Team> {
+        authz::require_manage_team(context, &data.id)?;
         let mut team = Team::get_by_id(&data.id)?;
 
         if let Some(s) = data.name_en {
@@ -73,9 +76,10 @@ impl TeamMutation {
     /// Un-retire a team by clearing retired_at.
     pub async fn restore_team(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         id: Uuid,
     ) -> Result<Team> {
+        authz::require_manage_team(context, &id)?;
         Team::restore(&id)
     }
 }

@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::models::{Product, NewProduct, Priority, SkillDomain, WorkStatus};
 use crate::common_utils::{UserRole, is_operator, RoleGuard};
+use crate::graphql::authz;
 
 #[derive(Default)]
 pub struct ProductMutation;
@@ -18,9 +19,10 @@ impl ProductMutation {
     )]
     pub async fn create_product(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         data: NewProduct,
     ) -> Result<Product> {
+        authz::require_manage_role(context, &data.product_owner_role_id)?;
         let product = Product::create(&data)?;
         Ok(product)
     }
@@ -32,12 +34,16 @@ impl ProductMutation {
     )]
     pub async fn update_product(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         data: ProductData,
     ) -> Result<Product> {
         let mut product = Product::get_by_id(&data.id)?;
+        // Must manage the product's current owning role...
+        authz::require_manage_role(context, &product.product_owner_role_id)?;
 
         if let Some(s) = data.product_owner_role_id {
+            // ...and the new owning role, when reassigning ownership.
+            authz::require_manage_role(context, &s)?;
             product.product_owner_role_id = s;
         };
 

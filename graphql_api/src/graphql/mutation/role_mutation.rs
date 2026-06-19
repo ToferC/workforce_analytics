@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::models::{Role, RoleAssignment, NewRole, Person, PersonnelType};
 use crate::common_utils::{UserRole,
     is_operator, RoleGuard};
+use crate::graphql::authz;
 use crate::schema::roles;
 // use rdkafka::producer::FutureProducer;
 // use crate::kafka::send_message;
@@ -25,9 +26,11 @@ impl RoleMutation {
     )]
     pub async fn create_role(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         role_data: NewRole,
     ) -> Result<Role> {
+
+        authz::require_manage_team(context, &role_data.team_id)?;
 
         // If the role is assigned to a person, ensure the HR fields
         // provided match the person's personnel type
@@ -71,11 +74,12 @@ impl RoleMutation {
     )]
     pub async fn update_role(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         role_data: RoleData,
     ) -> Result<Role> {
 
         let mut role = Role::get_by_id(&role_data.id)?;
+        authz::require_manage_team(context, &role.team_id)?;
 
         if let Some(id) = role_data.active {
             role.active = id;
@@ -104,10 +108,11 @@ impl RoleMutation {
     )]
     pub async fn assign_person_to_role(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         person_id: Uuid,
         role_id: Uuid,
     ) -> Result<Role> {
+        authz::require_manage_role(context, &role_id)?;
         Role::assign_person(&role_id, &person_id)
     }
 
@@ -119,9 +124,10 @@ impl RoleMutation {
     )]
     pub async fn vacate_role(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         role_id: Uuid,
     ) -> Result<Role> {
+        authz::require_manage_role(context, &role_id)?;
         Role::vacate(&role_id)
     }
 }

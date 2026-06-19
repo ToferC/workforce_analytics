@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use crate::models::{OrgTier, NewOrgTier, SkillDomain};
 use crate::common_utils::{UserRole, is_operator, RoleGuard};
+use crate::graphql::authz;
 
 #[derive(Default)]
 pub struct OrgTierMutation;
@@ -19,9 +20,10 @@ impl OrgTierMutation {
     )]
     pub async fn create_org_tier(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         data: NewOrgTier,
     ) -> Result<OrgTier> {
+        authz::require_manage_parent_tier(context, data.parent_tier.as_ref())?;
         let org_tier = OrgTier::create(&data)?;
         Ok(org_tier)
     }
@@ -33,9 +35,10 @@ impl OrgTierMutation {
     )]
     pub async fn update_org_tier(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         data: OrgTierData,
     ) -> Result<OrgTier> {
+        authz::require_manage_tier(context, &data.id)?;
         let mut org_tier = OrgTier::get_by_id(&data.id)?;
 
         if let Some(s) = data.name_en {
@@ -73,9 +76,10 @@ impl OrgTierMutation {
     /// Un-retire an org tier by clearing retired_at.
     pub async fn restore_org_tier(
         &self,
-        _context: &Context<'_>,
+        context: &Context<'_>,
         id: Uuid,
     ) -> Result<OrgTier> {
+        authz::require_manage_tier(context, &id)?;
         OrgTier::restore(&id)
     }
 }

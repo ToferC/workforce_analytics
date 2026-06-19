@@ -1,19 +1,26 @@
-# Build stage
-#  Base rust image vaiant: rust:1.68-slim requires other dependencies
-FROM rust:1.68 as builder
+# syntax=docker/dockerfile:1
+#
+# Simplest single-stage build: copy the whole workspace, build, and run the
+# release binary in place. Largest image; useful for quick local builds.
+# Build context is the repository root.
 
-RUN apt-get -qq update && apt-get install -y -q \
-    libclang-dev \
-    libssl-dev
-# removed unnecessary packages: openssl clang llvm-dev cmake
+FROM rust:latest AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev \
+    libssl-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# We simply copy all the files for simplicity
-# Files we wish to exclude are listed in the .dockerignore file
+# Copy everything (see .dockerignore for exclusions). The binary resolves
+# templates/static/seeds relative to this working dir at runtime, so running
+# from /app keeps those paths valid.
 COPY . .
 
-RUN cargo build --release
+RUN cargo build --release --bin graphql_api
 
-CMD ["./target/release/workforce_analytics"]
+EXPOSE 8080
 
+CMD ["./target/release/graphql_api"]

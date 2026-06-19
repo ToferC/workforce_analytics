@@ -1,58 +1,41 @@
-# Rust
-FROM rust:latest as build
+# syntax=docker/dockerfile:1
+#
+# Full multi-stage build of the `graphql_api` workspace binary. The runtime
+# stays on the (larger) rust image, which is handy for debugging. For the
+# small production image use Dockerfile.slim instead.
+#
+# Build context is the repository root (Cargo workspace: `graphql_api`, `errors`).
 
-# Install dependencies
-RUN apt-get -qq update
+# ---- Build stage ------------------------------------------------------------
+FROM rust:latest AS build
 
-RUN apt-get install -y -q \
-    clang \
-    llvm-dev \
-    libclang-dev \
-    cmake \
-    openssl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev \
+    libssl-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN cargo install diesel_cli --no-default-features --features postgres
+WORKDIR /app
 
-# Set default user
-RUN USER=root cargo new --bin workforce_analytics
-WORKDIR /workforce_analytics
+# Whole workspace. Migrations are embedded at build time via embed_migrations!().
+COPY Cargo.toml Cargo.lock ./
+COPY graphql_api graphql_api
+COPY errors errors
+COPY migrations migrations
 
-# Copy over manifests
-COPY ./Cargo.lock ./Cargo.lock
-COPY ./Cargo.toml ./Cargo.toml
+RUN cargo build --release --bin graphql_api
 
-# Copy over migrations and templates
-COPY ./migrations ./migrations
-COPY ./templates ./templates
-
-# Copy dummy data (.csv) files
-COPY ./seeds ./seeds
-
-# This build to cache dependencies
-RUN cargo build --release
-RUN rm src/*.rs 
-
-# Copy source tree
-COPY ./src ./src
-
-# Build for release
-RUN rm ./target/release/deps/workforce_analytics*
-RUN cargo build --release
-
-# Final base
+# ---- Runtime stage ----------------------------------------------------------
 FROM rust:latest
 
-# Copy final build artifact
-COPY --from=build /workforce_analytics/target/release/workforce_analytics .
+WORKDIR /app
 
-# Copy dummy data (.csv) files
-COPY --from=build /workforce_analytics/seeds seeds
-# Copy templates
-COPY --from=build /workforce_analytics/templates templates
-
+# Binary plus runtime assets (see Dockerfile.slim for path rationale).
+COPY --from=build /app/target/release/graphql_api ./graphql_api
+COPY graphql_api/templates graphql_api/templates
+COPY graphql_api/static graphql_api/static
+COPY seeds seeds
 
 EXPOSE 8080
 
-# Set startup command
-
-CMD ["./workforce_analytics"]
+CMD ["./graphql_api"]

@@ -1,40 +1,64 @@
-version: "3.9"
+# People Data Analytics — local/dev stack.
+#
+# Secrets and tunables come from a local .env file (see .env.example). Only the
+# values that must differ from .env inside the Docker network are set here.
+#
+#   docker compose up -d db           # start Postgres
+#   docker compose up people-data-api # build (Dockerfile.slim) + run the API
+#
+# The primary web UI now lives in the separate `workforce-frontend` repo. The
+# legacy React org-chart bundled here is opt-in via the "orgchart" profile:
+#   docker compose --profile orgchart up
 
 services:
   db:
-    image: postgres:latest
+    image: postgres:16
     restart: always
     environment:
-      - POSTGRES_USER=christopherallison
-      - POSTGRES_PASSWORD=12345
-      - POSTGRES_DB=workforce_analytics
+      POSTGRES_USER: ${POSTGRES_USER:-christopherallison}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-12345}
+      POSTGRES_DB: ${POSTGRES_DB:-workforce_analytics}
     ports:
-      - 5434:5434
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-christopherallison} -d ${POSTGRES_DB:-workforce_analytics}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   people-data-api:
     build:
-      # dockerfile: "Dockerfile"
-      # dockerfile: "Dockerfile.simple"
-      dockerfile: "Dockerfile.slim"
       context: .
+      dockerfile: Dockerfile.slim
     restart: always
+    env_file:
+      - .env
     environment:
-      - HOST=0.0.0.0
-      - PORT=8080
-      - DATABASE_URL=postgres://christopherallison:12345@db/workforce_analytics?sslmode=disable
-    env_file:
-      - .env
+      # Inside the compose network the API reaches Postgres at host `db`.
+      # This overrides DATABASE_URL from .env (which points at localhost).
+      HOST: 0.0.0.0
+      PORT: "8080"
+      DATABASE_URL: postgres://${POSTGRES_USER:-christopherallison}:${POSTGRES_PASSWORD:-12345}@db/${POSTGRES_DB:-workforce_analytics}?sslmode=disable
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
-      - 8080:8080
+      - "8080:8080"
 
-  frontend:
-    build: "orgchart"
+  # Legacy React org-chart viewer (opt-in). The maintained UI is the separate
+  # workforce-frontend repo.
+  orgchart:
+    build: orgchart
+    profiles: ["orgchart"]
     restart: always
     env_file:
       - .env
     depends_on:
-      - db
+      - people-data-api
     ports:
-      - 8081:8080
+      - "8081:8080"
+
+volumes:
+  db_data:

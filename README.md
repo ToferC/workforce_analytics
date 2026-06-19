@@ -16,22 +16,81 @@ It also includes :
 
 ## Dependencies
 
-- Diesel-cli
+- Rust (stable; workspace uses the 2021 edition and cargo resolver v3)
+- PostgreSQL 14+
+- `diesel_cli` with the postgres feature (for running migrations locally):
+  `cargo install diesel_cli --no-default-features --features postgres`
 
-## Setup
+This is a Cargo **workspace**. The runnable crate is `graphql_api` (binary
+name `graphql_api`); `errors` is a helper member.
+
+## Environment variables
+
+Copy `.env.example` to `.env` and fill in values. The application loads `.env`
+at startup (via `dotenv`).
+
+| Variable | Required | Format / example | Purpose |
+|---|---|---|---|
+| `DATABASE_URL` | Yes | `postgres://user:pass@host/db?sslmode=require` | Postgres connection (Diesel). Use `sslmode=disable` only for local dev. |
+| `SECRET_KEY` | Yes | long random string (`openssl rand -hex 32`) | Presence checked at startup. |
+| `JWT_SECRET_KEY` | Yes | long random string, ≥32 bytes | HMAC secret signing/verifying JWTs (HS256). Rotating invalidates all tokens. |
+| `ADMIN_NAME` | Yes | `"Admin Name"` | Seeds the bootstrap admin user on first run. |
+| `ADMIN_EMAIL` | Yes | `admin@example.com` | Bootstrap admin email / login. |
+| `ADMIN_PASSWORD` | Yes | strong password | Bootstrap admin password. |
+| `ENVIRONMENT` | No (default `test`) | `production` \| `test` | `production` binds to `HOST:PORT`; otherwise binds `0.0.0.0:8080`. |
+| `HOST` | If `production` | `0.0.0.0` | Bind address (production only). |
+| `PORT` | If `production` | `8080` (u16) | Bind port (production only). |
+| `ALLOWED_ORIGINS` | No (default `http://localhost:3000,http://localhost:8080`) | comma-separated origins | CORS allow-list (exact match). |
+| `DISABLE_SCOPED_AUTHZ` | No | `true` \| `1` | Disables hierarchy-scoped authorization (grandfather fallback to flat operator+). Unset = scoped authz enforced. |
+| `BOOTSTRAP_SERVERS`, `SECURITY_PROTOCOL`, `SASL_MECHANISMS`, `SASL_USERNAME`, `SASL_PASSWORD` | No | — | Kafka settings. **Not active** — the kafka module is currently disabled in `src/lib.rs`. |
+
+> Note: earlier docs referenced `PASSWORD_SECRET_KEY`. It is no longer read by
+> the code and can be removed from existing `.env` files.
+
+## Local setup
 
 - Clone the repository
-- Create `.env` file with the following environmental variables:
-  - DATABASE_URL=postgres://christopherallison:12345@localhost/workforce_analytics?sslmode=disable
-  - SECRET_KEY=32CHARSECRETKEY
-  - PASSWORD_SECRET_KEY=32CHARSECRETKEY
-  - JWT_SECRET_KEY=32CHARSECRETKEY
-  - ADMIN_EMAIL=some_admin@email.com 
-  - ADMIN_PASSWORD=ADMINPASSWORD
-  - ADMIN_NAME="Admin Name"
-- Change APP_NAME const in lib.rs to your app
-- `diesel migration run`
-- `cargo run`
+- `cp .env.example .env` and edit values
+- `diesel migration run` (applies `migrations/`; the binary also embeds and runs
+  pending migrations at startup)
+- `cargo run -p graphql_api`
+
+The API serves on `0.0.0.0:8080` by default (GraphQL at `/graphql`).
+
+## Deployment (Docker)
+
+The build context is the repository root. Three Dockerfiles are provided:
+
+| File | Final base | Use |
+|---|---|---|
+| `Dockerfile.slim` | `debian:bookworm-slim` | **Recommended** production image (smallest, non-root). Used by docker-compose. |
+| `Dockerfile` | `rust:latest` | Multi-stage, larger runtime image (debugging). |
+| `Dockerfile.simple` | `rust:latest` | Single-stage; quick local builds. |
+
+All build the `graphql_api` binary and ship the runtime assets it resolves at
+startup: `graphql_api/templates` (Tera), `graphql_api/static` (served at
+`/static`), and `seeds/` (CSV seed data). Migrations are embedded into the
+binary at build time.
+
+### docker-compose (Postgres + API)
+
+```bash
+cp .env.example .env            # set secrets; DATABASE_URL is overridden for the db service
+docker compose up -d db         # start Postgres (with healthcheck + volume)
+docker compose up people-data-api   # build (Dockerfile.slim) and run the API on :8080
+docker compose logs -f
+```
+
+Compose injects `HOST`, `PORT`, and a `DATABASE_URL` pointing at the `db`
+service, so the API reaches Postgres in-network regardless of the `DATABASE_URL`
+in your `.env` (which should target `localhost` for non-Docker runs).
+
+### Build a specific image directly
+
+```bash
+docker build -f Dockerfile.slim -t workforce-analytics-api .
+docker run --env-file .env -e HOST=0.0.0.0 -e PORT=8080 -p 8080:8080 workforce-analytics-api
+```
 
 ## Dan's notes
 

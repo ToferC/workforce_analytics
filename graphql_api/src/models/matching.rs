@@ -3,7 +3,8 @@ use std::collections::{HashMap, HashSet};
 use async_graphql::*;
 use uuid::Uuid;
 
-use crate::models::{Capability, CapabilityLevel, Person, Requirement};
+use crate::models::{Capability, CapabilityLevel, OrgOwnership, OrgTier, Person, Requirement, Role, Team};
+use crate::graphql::query::get_person_ids_under_org_tier;
 
 /// Per-requirement breakdown for a single candidate.
 #[derive(SimpleObject, Clone)]
@@ -16,6 +17,22 @@ pub struct RequirementMatch {
     /// required - actual (negative = over-qualified, 0 = exact, positive = shortfall).
     pub gap: i32,
     pub met: bool,
+}
+
+/// Contact details for the manager who owns a candidate's current team.
+/// Populated for candidates who fall outside the hiring role's managed area, so
+/// the requester knows whose permission is needed to move them.
+#[derive(SimpleObject, Clone)]
+pub struct ManagerContact {
+    /// The owning (manager) Role for the candidate's current team.
+    pub owner_role_id: Uuid,
+    pub owner_role_title: String,
+    /// The candidate's current team name.
+    pub team_name: String,
+    /// Manager's name, if the owning role is currently filled.
+    pub name: Option<String>,
+    pub email: Option<String>,
+    pub phone: Option<String>,
 }
 
 /// A scored candidate for a role.
@@ -31,18 +48,32 @@ pub struct PersonMatchScore {
     /// Sum of positive (shortfall) gaps only.
     pub total_gap: i32,
     pub requirement_gaps: Vec<RequirementMatch>,
+    /// True if the candidate currently holds a role under the OrgTier owned by
+    /// this role's area. The owner (and admins) can reassign these directly.
+    pub in_managed_scope: bool,
+    /// The candidate's manager contact, populated only when the candidate is
+    /// outside the managed area (moving them needs their manager's agreement).
+    pub manager: Option<ManagerContact>,
 }
 
 /// Tiered match result for a role.
 #[derive(SimpleObject)]
 pub struct RoleMatchResult {
     pub role_id: Uuid,
-    /// People who meet every requirement at or above the required level,
-    /// sorted by match_score descending.
-    pub full_matches: Vec<PersonMatchScore>,
-    /// People who meet at least min_coverage of requirements and have no single
-    /// skill gap exceeding max_gap_per_req, sorted by match_score descending.
-    pub partial_matches: Vec<PersonMatchScore>,
+    /// The OrgTier whose owner is responsible for this role (nearest tier with
+    /// an ownership record, walking up from the role's team). `in_managed_scope`
+    /// candidates sit under this tier. None if no owner is assigned anywhere up
+    /// the chain.
+    pub managed_org_tier_id: Option<Uuid>,
+    /// Candidates who currently hold a role under the managed OrgTier — the
+    /// owner/admin can reassign these internally. Sorted by match_score desc.
+    pub managed_full_matches: Vec<PersonMatchScore>,
+    /// Managed-area candidates meeting min_coverage but not every requirement.
+    pub managed_partial_matches: Vec<PersonMatchScore>,
+    /// Full matches outside the managed area; each carries `manager` contact.
+    pub external_full_matches: Vec<PersonMatchScore>,
+    /// Partial matches outside the managed area; each carries `manager` contact.
+    pub external_partial_matches: Vec<PersonMatchScore>,
 }
 
 // Each capability level is a significant leap, so each missing level costs
@@ -56,6 +87,7 @@ fn score_person(
     person_id: Uuid,
     requirements: &[Requirement],
     caps_by_skill: &HashMap<Uuid, Vec<&Capability>>,
+    managed_person_ids: &HashSet<Uuid>,
 ) -> PersonMatchScore {
     let mut gaps = Vec::with_capacity(requirements.len());
     let mut total_gap = 0i32;
@@ -109,7 +141,47 @@ fn score_person(
         coverage,
         total_gap,
         requirement_gaps: gaps,
+        in_managed_scope: managed_person_ids.contains(&person_id),
+        manager: None,
     }
+}
+
+/// Walk up from a role's team to the nearest OrgTier that has an ownership
+/// record — the tier whose owner is responsible for filling this role. Returns
+/// the owned tier id, or None if no owner is assigned anywhere up the chain.
+fn owned_tier_for_role(role_id: Uuid) -> Result<Option<Uuid>> {
+    let role = Role::get_by_id(&role_id)?;
+    let team = Team::get_by_id(&role.team_id)?;
+    let mut tier = OrgTier::get_by_id(&team.org_tier_id)?;
+    loop {
+        if OrgOwnership::get_by_org_tier_id(&tier.id).is_ok() {
+            return Ok(Some(tier.id));
+        }
+        match tier.parent_tier {
+            Some(parent_id) => tier = OrgTier::get_by_id(&parent_id)?,
+            None => return Ok(None),
+        }
+    }
+}
+
+/// Build the manager contact for a candidate: the owner of the team where they
+/// currently hold a role. Returns None if the candidate holds no current role
+/// or the team has no resolvable owner.
+fn manager_contact_for_person(person_id: Uuid) -> Option<ManagerContact> {
+    let role = Role::get_current_for_person(&person_id).ok()?.into_iter().next()?;
+    let team = Team::get_by_id(&role.team_id).ok()?;
+    let owner_role = Role::get_by_id(&team.owner_role_id().ok()?).ok()?;
+
+    let manager = owner_role.person_id.and_then(|pid| Person::get_by_id(&pid).ok());
+
+    Some(ManagerContact {
+        owner_role_id: owner_role.id,
+        owner_role_title: owner_role.title_en.clone(),
+        team_name: team.name_en.clone(),
+        name: manager.as_ref().map(|p| format!("{} {}", p.given_name, p.family_name)),
+        email: manager.as_ref().map(|p| p.email.clone()),
+        phone: manager.as_ref().map(|p| p.phone.clone()),
+    })
 }
 
 /// Finds full and partial candidate matches for a role's requirements.
@@ -130,11 +202,25 @@ pub fn find_fuzzy_matches(
 ) -> Result<RoleMatchResult> {
     let requirements = Requirement::get_by_role_id(role_id)?;
 
+    // Resolve the managed area: the OrgTier whose owner is responsible for this
+    // role, and the set of people holding roles under that subtree.
+    let managed_org_tier_id = owned_tier_for_role(role_id).unwrap_or(None);
+    let managed_person_ids: HashSet<Uuid> = match managed_org_tier_id {
+        Some(tier_id) => get_person_ids_under_org_tier(&tier_id)
+            .unwrap_or_default()
+            .into_iter()
+            .collect(),
+        None => HashSet::new(),
+    };
+
     if requirements.is_empty() {
         return Ok(RoleMatchResult {
             role_id,
-            full_matches: vec![],
-            partial_matches: vec![],
+            managed_org_tier_id,
+            managed_full_matches: vec![],
+            managed_partial_matches: vec![],
+            external_full_matches: vec![],
+            external_partial_matches: vec![],
         });
     }
 
@@ -152,32 +238,57 @@ pub fn find_fuzzy_matches(
     // Unique person_ids seen across all returned capabilities.
     let person_ids: HashSet<Uuid> = all_caps.iter().map(|c| c.person_id).collect();
 
-    let mut full: Vec<PersonMatchScore> = Vec::new();
-    let mut partial: Vec<PersonMatchScore> = Vec::new();
+    // Separate candidates inside the managed area from those outside it. The
+    // owner/admin can reassign managed candidates directly; external candidates
+    // need their manager's agreement, so they carry contact details.
+    let mut managed_full: Vec<PersonMatchScore> = Vec::new();
+    let mut managed_partial: Vec<PersonMatchScore> = Vec::new();
+    let mut external_full: Vec<PersonMatchScore> = Vec::new();
+    let mut external_partial: Vec<PersonMatchScore> = Vec::new();
 
     for person_id in person_ids {
-        let score = score_person(person_id, &requirements, &caps_by_skill);
+        let score = score_person(person_id, &requirements, &caps_by_skill, &managed_person_ids);
 
         // Drop anyone with a single skill gap exceeding the caller's threshold.
         if score.requirement_gaps.iter().any(|g| g.gap > max_gap_per_req) {
             continue;
         }
 
-        if score.coverage >= 1.0 {
-            full.push(score);
-        } else if score.coverage >= min_coverage {
-            partial.push(score);
+        let is_full = score.coverage >= 1.0;
+        let qualifies = is_full || score.coverage >= min_coverage;
+        if !qualifies {
+            continue;
+        }
+
+        match (score.in_managed_scope, is_full) {
+            (true, true) => managed_full.push(score),
+            (true, false) => managed_partial.push(score),
+            (false, true) => external_full.push(score),
+            (false, false) => external_partial.push(score),
         }
     }
 
-    full.sort_by(|a, b| b.match_score.partial_cmp(&a.match_score).unwrap());
-    partial.sort_by(|a, b| b.match_score.partial_cmp(&a.match_score).unwrap());
-    full.truncate(limit);
-    partial.truncate(limit);
+    let sort_and_cap = |v: &mut Vec<PersonMatchScore>| {
+        v.sort_by(|a, b| b.match_score.partial_cmp(&a.match_score).unwrap());
+        v.truncate(limit);
+    };
+    sort_and_cap(&mut managed_full);
+    sort_and_cap(&mut managed_partial);
+    sort_and_cap(&mut external_full);
+    sort_and_cap(&mut external_partial);
+
+    // Attach manager contact to the external candidates we're returning (after
+    // truncation, so we only do this work for displayed rows).
+    for score in external_full.iter_mut().chain(external_partial.iter_mut()) {
+        score.manager = manager_contact_for_person(score.person.id);
+    }
 
     Ok(RoleMatchResult {
         role_id,
-        full_matches: full,
-        partial_matches: partial,
+        managed_org_tier_id,
+        managed_full_matches: managed_full,
+        managed_partial_matches: managed_partial,
+        external_full_matches: external_full,
+        external_partial_matches: external_partial,
     })
 }

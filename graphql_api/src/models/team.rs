@@ -145,6 +145,27 @@ impl Team {
 
         Ok(res)
     }
+
+    /// Resolve the id of the Role that owns (manages) this team: its own
+    /// ownership record, else the owner inherited up the org tier chain.
+    /// Non-async so it can be reused outside resolvers (e.g. match scoping).
+    pub fn owner_role_id(&self) -> Result<Uuid> {
+        match TeamOwnership::get_by_team_id(&self.id) {
+            Ok(team_ownership) => Ok(team_ownership.owner_role_id),
+            Err(_) => {
+                let mut tier = OrgTier::get_by_id(&self.org_tier_id)?;
+                loop {
+                    match crate::models::OrgOwnership::get_by_org_tier_id(&tier.id) {
+                        Ok(ownership) => return Ok(ownership.owner_role_id),
+                        Err(_) => match tier.parent_tier {
+                            Some(parent_id) => tier = OrgTier::get_by_id(&parent_id)?,
+                            None => return Err(async_graphql::Error::new("No owner assigned to this team")),
+                        },
+                    }
+                }
+            },
+        }
+    }
 }
 
 #[Object]
@@ -211,21 +232,7 @@ impl Team {
     /// tier chain). Never panic here: an unwrap would kill the worker for any
     /// team missing ownership.
     pub async fn owner(&self) -> Result<Role> {
-        match TeamOwnership::get_by_team_id(&self.id) {
-            Ok(team_ownership) => Role::get_by_id(&team_ownership.owner_role_id),
-            Err(_) => {
-                let mut tier = OrgTier::get_by_id(&self.org_tier_id)?;
-                loop {
-                    match crate::models::OrgOwnership::get_by_org_tier_id(&tier.id) {
-                        Ok(ownership) => return Role::get_by_id(&ownership.owner_role_id),
-                        Err(_) => match tier.parent_tier {
-                            Some(parent_id) => tier = OrgTier::get_by_id(&parent_id)?,
-                            None => return Err(async_graphql::Error::new("No owner assigned to this team")),
-                        },
-                    }
-                }
-            },
-        }
+        Role::get_by_id(&self.owner_role_id()?)
     }
 
     /// Capability counts for people holding roles in this team.

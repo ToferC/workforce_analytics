@@ -96,6 +96,35 @@ impl Distribution<PersonnelType> for Standard {
 
 // Non Graphql
 impl Person {
+    /// Org tiers (and all their descendants) this person manages by virtue of
+    /// owning an OrgTier or a Team. Empty if the person is not a manager.
+    /// See [`crate::models::authz`] for the span-of-control rules.
+    pub fn managed_tier_ids(&self) -> Result<Vec<Uuid>> {
+        Ok(crate::models::authz::managed_tier_ids_for_person(&self.id)?
+            .into_iter()
+            .collect())
+    }
+
+    /// True if this person manages `tier_id` (it is within their span of control).
+    pub fn can_manage_org_tier(&self, tier_id: &Uuid) -> Result<bool> {
+        crate::models::authz::can_manage_org_tier(&self.id, tier_id)
+    }
+
+    /// True if this person manages the tier that `team_id` belongs to.
+    pub fn can_manage_team(&self, team_id: &Uuid) -> Result<bool> {
+        crate::models::authz::can_manage_team(&self.id, team_id)
+    }
+
+    /// True if this person manages the tier of the team that `role_id` belongs to.
+    pub fn can_manage_role(&self, role_id: &Uuid) -> Result<bool> {
+        crate::models::authz::can_manage_role(&self.id, role_id)
+    }
+
+    /// True if `target_person_id` holds an active role within this person's span.
+    pub fn can_manage_person(&self, target_person_id: &Uuid) -> Result<bool> {
+        crate::models::authz::can_manage_person(&self.id, target_person_id)
+    }
+
     pub fn create(person: &NewPerson) -> Result<Person> {
         let mut conn = connection()?;
         let res = diesel::insert_into(persons::table)

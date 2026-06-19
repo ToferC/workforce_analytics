@@ -23,6 +23,7 @@ mod access_log;
 mod user;
 mod messages;
 mod auth;
+pub mod authz;
 
 pub use person::*;
 pub use organization::*;

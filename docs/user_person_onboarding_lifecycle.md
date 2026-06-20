@@ -144,10 +144,11 @@ bootstrap admin `ACTIVE`. Remove the random-`user_id` hack so the new FK holds.
 
 API leads each phase; the frontend follows once `schema.graphqls` is regenerated.
 
-## 10. Open questions
+## 10. Resolved decisions
 
-- **Email at creation:** required (it's the login id + invite target). OK, or do we need to support
-  provisioning a Person with no email yet (would require relaxing `users.email NOT NULL`)?
-- **Activation delivery:** v1 surfaces the link to the operator. Wire SendGrid email now or later?
-- **Flagging depth:** minimal `record_flags` note (proposed) vs. reusing the existing `messages`
-  model for a richer thread.
+- **Email at creation:** **required** — it is the login id and invite target; `users.email` stays
+  `NOT NULL UNIQUE`.
+- **Activation delivery:** v1 **surfaces the activation link to the operator** (`inviteUser` returns
+  it). No SendGrid dependency yet; email delivery is a later enhancement.
+- **Flagging:** a **minimal `record_flags`** row `{id, person_id, message, created_at, resolved_at}`
+  the person submits and operators resolve — not the richer `messages` model.

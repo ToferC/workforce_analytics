@@ -11,7 +11,7 @@ use super::{create_validations, generate_requirement};
 use crate::models::{Person, Organization, NewPerson, NewOrganization,
     Role, NewRole, RoleAssignment, Team, NewTeam, OrgTier, NewOrgTier, OrgOwnership, NewOrgOwnership,
     TeamOwnership, NewTeamOwnership, MilitaryOccupation, OccupationalGroup, PersonnelType, Rank, SkillDomain, Skill, NewWork, CapabilityLevel, Priority, WorkStatus, Work,
-    NewRequirement, Requirement,
+    NewRequirement, Requirement, User, InsertableUser,
 };
 
 use super::{create_fake_capabilities, generate_dummy_products, generate_dummy_publications_and_contributors, generate_tasks};
@@ -260,12 +260,21 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
         let famn: String = record[1].trim().to_owned();
 
         let addr = addresses.choose(&mut rng).unwrap();
-        
+
+        let email = format!("{}.{}_{}@forces.gc.ca", &gn, &famn, rng.gen_range(0..9999)).to_lowercase();
+
+        // Every Person is backed by a real User (the persons.user_id FK now
+        // enforces this). Seed accounts are PROVISIONED — they exist as data but
+        // cannot sign in until invited/activated, demonstrating the onboarding
+        // lifecycle.
+        let user = User::create(InsertableUser::provisioned(&email, &format!("{} {}", &gn, &famn)))
+            .expect("Unable to create provisioned user for dummy person");
+
         let p = NewPerson::new(
-            uuid::Uuid::new_v4(),
+            user.id,
             famn.to_owned(),
             gn.to_owned(),
-            format!("{}.{}_{}@forces.gc.ca", &gn, &famn, rng.gen_range(0..9999)).to_lowercase(),
+            email,
             gen_rand_number(),
             addr[0].to_owned(),
             addr[1].to_owned(),

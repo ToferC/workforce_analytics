@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-use crate::models::{Person, NewPerson, PersonnelType};
+use crate::models::{Person, NewPersonInput, PersonnelType};
 use crate::common_utils::{UserRole,
     is_operator, RoleGuard};
 use crate::schema::persons;
@@ -26,10 +26,12 @@ impl PersonMutation {
     pub async fn create_person(
         &self,
         _context: &Context<'_>,
-        data: NewPerson,
+        data: NewPersonInput,
     ) -> Result<Person> {
-        
-        let person = Person::create(&data)?;
+
+        // Creates the Person and its provisioned (login-disabled) User account
+        // atomically. The person cannot access the system until invited.
+        let person = Person::create_with_provisioned_user(&data)?;
 
         Ok(person)
     }

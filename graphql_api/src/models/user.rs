@@ -16,6 +16,19 @@ pub const ACCOUNT_TYPE_HUMAN: &str = "HUMAN";
 /// A non-human service account (application / data service); no Person required.
 pub const ACCOUNT_TYPE_AGENT: &str = "AGENT";
 
+/// Account lifecycle states (see docs/user_person_onboarding_lifecycle.md).
+/// Created by an operator/admin; no password, cannot sign in.
+pub const STATUS_PROVISIONED: &str = "PROVISIONED";
+/// An activation token has been issued; awaiting redemption. Cannot sign in.
+pub const STATUS_INVITED: &str = "INVITED";
+/// Password set; can sign in.
+pub const STATUS_ACTIVE: &str = "ACTIVE";
+/// Access revoked; record retained; cannot sign in.
+pub const STATUS_DISABLED: &str = "DISABLED";
+
+/// How long an activation token is valid once issued.
+const ACTIVATION_TOKEN_TTL_DAYS: i64 = 7;
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UserInstance {
     id: String,
@@ -71,6 +84,16 @@ pub struct User {
     /// service. HUMAN users must be linked to a Person; ADMIN and AGENT users
     /// are exempt from that requirement.
     pub account_type: String,
+
+    /// Account lifecycle: PROVISIONED | INVITED | ACTIVE | DISABLED. Only ACTIVE
+    /// users can sign in.
+    pub status: String,
+
+    /// One-time activation token issued by `inviteUser`, cleared on activation.
+    #[graphql(skip)]
+    pub activation_token: Option<String>,
+    #[graphql(skip)]
+    pub activation_expires_at: Option<NaiveDateTime>,
 }
 
 impl User {
@@ -122,6 +145,73 @@ impl User {
 
         Ok(user)
     }
+
+    /// Issue (or re-issue) an activation token for a user, moving them to
+    /// INVITED. Returns the token and its expiry so the caller can surface an
+    /// activation link. The user must have an email to be invited.
+    pub fn invite(id: &Uuid) -> Result<(String, NaiveDateTime)> {
+        let mut conn = connection()?;
+        let now = chrono::Utc::now().naive_utc();
+        let token = Uuid::new_v4().simple().to_string();
+        let expires = now + chrono::Duration::days(ACTIVATION_TOKEN_TTL_DAYS);
+
+        diesel::update(users::table.filter(users::id.eq(id)))
+            .set((
+                users::activation_token.eq(Some(&token)),
+                users::activation_expires_at.eq(Some(expires)),
+                users::status.eq(STATUS_INVITED),
+                users::updated_at.eq(now),
+            ))
+            .execute(&mut conn)?;
+
+        Ok((token, expires))
+    }
+
+    /// Redeem an activation token: set the password, mark ACTIVE, and clear the
+    /// token. Fails if the token is unknown or expired.
+    pub fn activate(token: &str, password: &str) -> Result<Self> {
+        let mut conn = connection()?;
+        let now = chrono::Utc::now().naive_utc();
+
+        let user: User = users::table
+            .filter(users::activation_token.eq(token))
+            .get_result(&mut conn)
+            .map_err(|_| Error::new("Invalid or already-used activation token"))?;
+
+        if let Some(expiry) = user.activation_expires_at {
+            if expiry < now {
+                return Err(Error::new("Activation token has expired"));
+            }
+        }
+
+        let hash = crate::models::hash_password(password)
+            .map_err(|_| Error::new("Unable to hash password"))?
+            .to_string();
+
+        let updated = diesel::update(users::table.filter(users::id.eq(&user.id)))
+            .set((
+                users::hash.eq(hash),
+                users::status.eq(STATUS_ACTIVE),
+                users::activation_token.eq::<Option<String>>(None),
+                users::activation_expires_at.eq::<Option<NaiveDateTime>>(None),
+                users::updated_at.eq(now),
+            ))
+            .get_result(&mut conn)?;
+
+        Ok(updated)
+    }
+
+    /// Set a user's lifecycle status directly (e.g. disable/enable).
+    pub fn set_status(id: &Uuid, status: &str) -> Result<Self> {
+        let mut conn = connection()?;
+        let updated = diesel::update(users::table.filter(users::id.eq(id)))
+            .set((
+                users::status.eq(status),
+                users::updated_at.eq(chrono::Utc::now().naive_utc()),
+            ))
+            .get_result(&mut conn)?;
+        Ok(updated)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable)]
@@ -137,6 +227,33 @@ pub struct InsertableUser {
     pub access_key: String,
     pub approved_by_user_uid: Option<Uuid>,
     pub account_type: String,
+    pub status: String,
+    pub activation_token: Option<String>,
+    pub activation_expires_at: Option<NaiveDateTime>,
+}
+
+impl InsertableUser {
+    /// Build a PROVISIONED human account with no usable password — the form an
+    /// operator-created account takes until the person activates it. Email is
+    /// the future login id and invite target (required).
+    pub fn provisioned(email: &str, name: &str) -> Self {
+        let now = chrono::Utc::now().naive_utc();
+        InsertableUser {
+            hash: "".to_owned(),
+            email: email.to_owned(),
+            role: "USER".to_owned(),
+            name: name.to_owned(),
+            access_level: "detailed".to_owned(),
+            created_at: now,
+            updated_at: now,
+            access_key: "".to_owned(),
+            approved_by_user_uid: None,
+            account_type: ACCOUNT_TYPE_HUMAN.to_owned(),
+            status: STATUS_PROVISIONED.to_owned(),
+            activation_token: None,
+            activation_expires_at: None,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, InputObject)]
@@ -208,6 +325,11 @@ impl From<UserData> for InsertableUser {
             access_level: "detailed".to_owned(),
             approved_by_user_uid: None,
             account_type: account_type.unwrap_or_else(|| ACCOUNT_TYPE_HUMAN.to_owned()),
+            // Admin-created accounts come with a password, so they are usable
+            // immediately. The provisioning path uses InsertableUser::provisioned.
+            status: STATUS_ACTIVE.to_owned(),
+            activation_token: None,
+            activation_expires_at: None,
         }
     }
 }

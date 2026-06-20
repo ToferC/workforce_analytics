@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use chrono::{prelude::*};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
-use diesel::{self, Insertable, Queryable, ExpressionMethods, PgTextExpressionMethods, BoolExpressionMethods};
+use diesel::{self, Connection, Insertable, Queryable, ExpressionMethods, PgTextExpressionMethods, BoolExpressionMethods};
 use diesel::{RunQueryDsl, QueryDsl};
 use rand::{distributions::{Distribution, Standard}, Rng};
 use uuid::Uuid;
@@ -19,7 +19,7 @@ use crate::database::connection;
 use crate::schema::*;
 
 use crate::models::{Role, RoleAssignment, TeamOwnership, Team, OrgTier, OrgOwnership, Capability, Affiliation, LanguageData,
-    Publication, Work};
+    Publication, Work, User, InsertableUser};
 
 use super::{Validation, Requirement};
 
@@ -103,6 +103,48 @@ impl Person {
         .get_result(&mut conn)?;
         
         Ok(res)
+    }
+
+    /// Create a Person together with its (provisioned, login-disabled) User in a
+    /// single transaction, enforcing the User<->Person invariant. The new user
+    /// is PROVISIONED: it exists as data but cannot sign in until an operator
+    /// issues an invite and the person activates it. Email is required (it is the
+    /// future login id and invite target).
+    pub fn create_with_provisioned_user(input: &NewPersonInput) -> Result<Person> {
+        let mut conn = connection()?;
+
+        let person = conn.transaction::<Person, diesel::result::Error, _>(|conn| {
+            let display_name = format!("{} {}", input.given_name.trim(), input.family_name.trim());
+            let new_user = InsertableUser::provisioned(input.email.trim(), display_name.trim());
+            let user: User = diesel::insert_into(users::table)
+                .values(&new_user)
+                .get_result(conn)?;
+
+            let new_person = NewPerson {
+                user_id: user.id,
+                family_name: input.family_name.clone(),
+                given_name: input.given_name.clone(),
+                email: input.email.clone(),
+                phone: input.phone.clone(),
+                work_address: input.work_address.clone(),
+                city: input.city.clone(),
+                province: input.province.clone(),
+                postal_code: input.postal_code.clone(),
+                country: input.country.clone(),
+                organization_id: input.organization_id,
+                peoplesoft_id: input.peoplesoft_id.clone(),
+                orcid_id: input.orcid_id.clone(),
+                personnel_type: input.personnel_type,
+            };
+
+            let person = diesel::insert_into(persons::table)
+                .values(&new_person)
+                .get_result(conn)?;
+
+            Ok(person)
+        })?;
+
+        Ok(person)
     }
 
     pub fn batch_create(persons: Vec<NewPerson>) -> Result<usize> {
@@ -430,6 +472,27 @@ impl NewPerson {
             personnel_type,
         }
     }
+}
+
+/// Input for creating a Person via the API. Carries no `user_id`: the account
+/// is provisioned automatically (see `Person::create_with_provisioned_user`).
+#[derive(Debug, Clone, Deserialize, Serialize, InputObject)]
+pub struct NewPersonInput {
+    pub family_name: String,
+    pub given_name: String,
+    /// Required — the future login id and invite target for the auto-provisioned
+    /// user account.
+    pub email: String,
+    pub phone: String,
+    pub work_address: String,
+    pub city: String,
+    pub province: String,
+    pub postal_code: String,
+    pub country: String,
+    pub organization_id: Uuid,
+    pub peoplesoft_id: String,
+    pub orcid_id: String,
+    pub personnel_type: PersonnelType,
 }
 
 pub fn find_roles_by_requirements_met(person: &Person) -> Result<Vec<Role>> {

@@ -1,7 +1,351 @@
-schema {
-  query: Query
-  mutation: Mutation
+type Affiliation {
+	id: UUID!
+	personId: UUID!
+	organizationId: UUID!
+	homeOrgId: UUID!
+	affiliationRole: String!
+	startDatestamp: NaiveDateTime!
+	endDate: NaiveDateTime
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	person: Person!
+	organization: Organization!
+	homeOrganization: Organization!
 }
+
+"""
+InputObject for Affiliation with Option fields - only include the ones you want to update
+"""
+input AffiliationData {
+	id: UUID!
+	affiliationRole: String
+	startDatestamp: NaiveDateTime
+	endDate: NaiveDateTime
+}
+
+"""
+A representation of a persons ability to use a skill at a specific level
+"""
+type Capability {
+	id: UUID!
+	nameEn: String!
+	nameFr: String!
+	domain: SkillDomain!
+	personId: UUID!
+	skillId: UUID!
+	organizationId: UUID!
+	selfIdentifiedLevel: CapabilityLevel!
+	validatedLevel: CapabilityLevel
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	retiredAt: NaiveDateTime
+	"""
+	Provenance of the current validated level: the central authority who
+	set it and when. Populated directly from the authoritative validation.
+	"""
+	validatedById: UUID
+	validatedAt: NaiveDateTime
+	person: Person!
+	"""
+	The admin user who set the current validated level, if any.
+	"""
+	validatedBy: User
+	skillName: String!
+	skill: Skill!
+	"""
+	Detailed view of validations for this capability
+	"""
+	validations: [Validation!]!
+}
+
+type CapabilityCount {
+	name: String!
+	domain: SkillDomain!
+	level: String!
+	counts: Int!
+}
+
+"""
+InputObject for Capability with Option fields - only include the ones you want to update
+Capabilities will be updated regularly based on validations to a person's capability
+Note that name_en and name_fr are linked to and derived from a skill and cannot be updated independently
+"""
+input CapabilityData {
+	id: UUID!
+	selfIdentifiedLevel: CapabilityLevel
+	validatedLevel: CapabilityLevel
+	retiredAt: NaiveDateTime
+}
+
+"""
+Enums for Capability -> shift to 0 - 4
+"""
+enum CapabilityLevel {
+	DESIRED
+	NOVICE
+	EXPERIENCED
+	EXPERT
+	SPECIALIST
+}
+
+"""
+Result of issuing an activation invite. The caller surfaces the token as part
+of an activation link (e.g. /activate?token=…).
+"""
+type InviteResult {
+	userId: UUID!
+	activationToken: String!
+	expiresAt: NaiveDateTime!
+}
+
+"""
+A named time series (e.g. one per SkillDomain)
+"""
+type LabeledSeries {
+	"""
+	e.g. a SkillDomain value, as a String
+	"""
+	key: String!
+	points: [TimeSeriesPoint!]!
+}
+
+"""
+A representation of a persons' language proficiency
+"""
+type LanguageData {
+	id: UUID!
+	personId: UUID!
+	languageName: LanguageName!
+	reading: LanguageLevel
+	writing: LanguageLevel
+	speaking: LanguageLevel
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+}
+
+"""
+InputObject for LanguageData with Option fields - only include the ones you want to update
+"""
+input LanguageDataUpdate {
+	id: UUID!
+	languageName: LanguageName
+	reading: LanguageLevel
+	writing: LanguageLevel
+	speaking: LanguageLevel
+}
+
+"""
+Government of Canada language proficiency ratings
+A == basic, B == beginner, C == intermediate, E = advanced or exempt
+X == no proficiency
+"""
+enum LanguageLevel {
+	A
+	B
+	C
+	E
+	X
+}
+
+"""
+A selection of languages (to be expanded)
+"""
+enum LanguageName {
+	ENGLISH
+	FRENCH
+	ARABIC
+	CHINESE
+	SPANISH
+	GERMAN
+	JAPANESE
+	KOREAN
+	ITALIAN
+	OTHER
+}
+
+input LoginQuery {
+	email: String!
+	password: String!
+}
+
+"""
+Contact details for the manager who owns a candidate's current team.
+Populated for candidates who fall outside the hiring role's managed area, so
+the requester knows whose permission is needed to move them.
+"""
+type ManagerContact {
+	"""
+	The owning (manager) Role for the candidate's current team.
+	"""
+	ownerRoleId: UUID!
+	ownerRoleTitle: String!
+	"""
+	The candidate's current team name.
+	"""
+	teamName: String!
+	"""
+	Manager's name, if the owning role is currently filled.
+	"""
+	name: String
+	email: String
+	phone: String
+}
+
+"""
+Represents Canadian Army military occupations
+"""
+enum MilitaryOccupation {
+	INFANTRY
+	ARMOURED
+	ARTILLERY
+	COMBAT_ENGINEERS
+	SIGNALS
+	INTELLIGENCE
+	MILITARY_POLICE
+	LOGISTICS_SUPPORT
+	MEDICAL_TECHNICIAN
+	COMMUNICATIONS
+	ELECTRONICS
+	VEHICLE_TECHNICIAN
+	WEAPONS_TECHNICIAN
+	SUPPLY_TECHNICIAN
+	COOK_SUPPORT
+	FINANCE_CLERK
+	HUMAN_RESOURCES_ADMINISTRATOR
+	MILITARY_FIREFIGHTER
+	MATERIALS_MANAGEMENT
+	GEOMATICS_TECHNICIAN
+	MEDICAL_ASSISTANT
+	DENTAL_ASSISTANT
+	PHARMACY_TECHNICIAN
+	CHAPLAIN
+	LEGAL_OFFICER
+	PILOT
+	AIRCREW_SYSTEMS
+	AIR_TRAFFIC_CONTROLLER
+	WEATHER_TECHNICIAN
+	IMAGE_TECHNICIAN
+	MUSICIAN
+	PHYSICAL_FITNESS_INSTRUCTOR
+	CYBER
+	SPECIAL_FORCES
+	OFFICER
+	OTHER
+}
+
+type Mutation {
+	createUser(userData: UserData!): User!
+	updateUser(userData: UserUpdate!): User!
+	"""
+	Grant a provisioned account a path to access: issue an activation token
+	and move the user to INVITED. Returns the token + expiry so the operator
+	can share an activation link (no email is sent in v1).
+	"""
+	inviteUser(userId: UUID!): InviteResult!
+	"""
+	Redeem an activation token by setting a password. Public: this is how an
+	invited person gains access. Moves the account to ACTIVE.
+	"""
+	activateAccount(token: String!, password: String!): Boolean!
+	"""
+	Revoke a user's access (record retained). Admin only.
+	"""
+	disableUser(userId: UUID!): User!
+	"""
+	Re-enable a disabled user. Restores ACTIVE if they have a password,
+	otherwise PROVISIONED (they still need to activate). Admin only.
+	"""
+	enableUser(userId: UUID!): User!
+	signIn(input: LoginQuery!): UserResponse!
+	createPerson(data: NewPersonInput!): Person!
+	updatePerson(data: PersonData!): Person!
+	"""
+	Un-retire a person by clearing retired_at.
+	"""
+	restorePerson(id: UUID!): Person!
+	createRole(roleData: NewRole!): Role!
+	updateRole(roleData: RoleData!): Role!
+	"""
+	Assign a person to a vacant role. Errors if the role is already occupied.
+	"""
+	assignPersonToRole(personId: UUID!, roleId: UUID!): Role!
+	"""
+	Remove the person from a role, leaving it vacant.
+	"""
+	vacateRole(roleId: UUID!): Role!
+	createCapability(data: NewCapability!): Capability!
+	"""
+	An operator may update a capability.
+	To update a validated_level, you must include the Uuid of the validator and their
+	current validated level. If the validator's level is equal or greater than the
+	level they are validating, the system will update validated_level.
+	Need to update Capability to also track the validator_uuid
+	"""
+	updateCapability(data: CapabilityData!): Capability!
+	createSkill(data: NewSkill!): Skill!
+	"""
+	An operator may update a skill.
+	To update a validated_level, you must include the Uuid of the validator and their
+	current validated level. If the validator's level is equal or greater than the
+	level they are validating, the system will update validated_level.
+	Need to update Skill to also track the validator_uuid
+	"""
+	updateSkill(data: SkillData!): Skill!
+	createOrganization(data: NewOrganization!): Organization!
+	updateOrganization(data: OrganizationData!): Organization!
+	"""
+	Un-retire an organization by clearing retired_at. The update
+	resolvers treat a null field as "unchanged", so clearing needs a
+	dedicated mutation.
+	"""
+	restoreOrganization(id: UUID!): Organization!
+	createOrgTier(data: NewOrgTier!): OrgTier!
+	updateOrgTier(data: OrgTierData!): OrgTier!
+	"""
+	Un-retire an org tier by clearing retired_at.
+	"""
+	restoreOrgTier(id: UUID!): OrgTier!
+	createOrgOwnership(data: NewOrgOwnership!): OrgOwnership!
+	updateOrgOwnership(data: OrgOwnershipData!): OrgOwnership!
+	createTeam(data: NewTeam!): Team!
+	updateTeam(data: TeamData!): Team!
+	"""
+	Un-retire a team by clearing retired_at.
+	"""
+	restoreTeam(id: UUID!): Team!
+	createTeamOwnership(data: NewTeamOwnership!): TeamOwnership!
+	updateTeamOwnership(data: TeamOwnershipData!): TeamOwnership!
+	createAffiliation(data: NewAffiliation!): Affiliation!
+	updateAffiliation(data: AffiliationData!): Affiliation!
+	createPublication(data: NewPublication!): Publication!
+	updatePublication(data: PublicationData!): Publication!
+	createPublicationContributor(data: NewPublicationContributor!): PublicationContributor!
+	updatePublicationContributor(data: PublicationContributorData!): PublicationContributor!
+	createWork(data: NewWork!): Work!
+	updateWork(data: WorkData!): Work!
+	createTask(data: NewTask!): Task!
+	updateTask(data: TaskData!): Task!
+	createProduct(data: NewProduct!): Product!
+	updateProduct(data: ProductData!): Product!
+	createRequirement(data: NewRequirement!): Requirement!
+	updateRequirement(data: RequirementData!): Requirement!
+	"""
+	Records a central authority's validation of a person's capability. The
+	capability's validated_level is set directly from this validation, and
+	the validating authority and date are stamped onto the capability for
+	provenance. The validation is retained as date-stamped history.
+	"""
+	createValidation(data: NewValidation!): Validation!
+	"""
+	Updates a validation's level. The associated capability's
+	validated_level is set directly from this authoritative validation,
+	and its validation provenance (authority and date) is refreshed.
+	"""
+	updateValidation(data: ValidationData!): Validation!
+	createLanguageData(data: NewLanguageData!): LanguageData!
+	updateLanguageData(data: LanguageDataUpdate!): LanguageData!
+}
+
 """
 ISO 8601 combined date and time without timezone.
 
@@ -10,6 +354,1325 @@ ISO 8601 combined date and time without timezone.
 * `2015-07-01T08:59:60.123`,
 """
 scalar NaiveDateTime
+
+input NewAffiliation {
+	personId: UUID!
+	organizationId: UUID!
+	homeOrgId: UUID!
+	affiliationRole: String!
+	endDate: NaiveDateTime
+}
+
+input NewCapability {
+	nameEn: String!
+	nameFr: String!
+	domain: SkillDomain!
+	personId: UUID!
+	skillId: UUID!
+	organizationId: UUID!
+	selfIdentifiedLevel: CapabilityLevel!
+}
+
+"""
+Represents an insertable Language
+"""
+input NewLanguageData {
+	personId: UUID!
+	languageName: LanguageName!
+	reading: LanguageLevel
+	writing: LanguageLevel
+	speaking: LanguageLevel
+}
+
+input NewOrgOwnership {
+	ownerRoleId: UUID!
+	orgTierId: UUID!
+}
+
+input NewOrgTier {
+	organizationId: UUID!
+	tierLevel: Int!
+	nameEn: String!
+	nameFr: String!
+	primaryDomain: SkillDomain!
+	parentTier: UUID
+}
+
+"""
+Represents an insertable Organization
+"""
+input NewOrganization {
+	nameEn: String!
+	nameFr: String!
+	acronymEn: String!
+	acronymFr: String!
+	orgType: String!
+	url: String!
+}
+
+"""
+Input for creating a Person via the API. Carries no `user_id`: the account
+is provisioned automatically (see `Person::create_with_provisioned_user`).
+"""
+input NewPersonInput {
+	familyName: String!
+	givenName: String!
+	"""
+	Required — the future login id and invite target for the auto-provisioned
+	user account.
+	"""
+	email: String!
+	phone: String!
+	workAddress: String!
+	city: String!
+	province: String!
+	postalCode: String!
+	country: String!
+	organizationId: UUID!
+	peoplesoftId: String!
+	orcidId: String!
+	personnelType: PersonnelType!
+}
+
+input NewProduct {
+	organizationId: UUID!
+	productOwnerRoleId: UUID!
+	nameEn: String!
+	nameFr: String!
+	descriptionEn: String!
+	descriptionFr: String!
+	primaryDomain: SkillDomain!
+	url: String
+	productStatus: WorkStatus!
+	priority: Priority!
+}
+
+input NewPublication {
+	publishingOrganizationId: UUID!
+	leadAuthorId: UUID!
+	title: String!
+	subjectText: String!
+	publicationStatus: PublicationStatus!
+	urlString: String
+	publishingId: String
+	submittedDate: NaiveDateTime
+	publishedDatestamp: NaiveDateTime
+}
+
+input NewPublicationContributor {
+	publicationId: UUID!
+	contributorId: UUID!
+	contributorRole: String!
+}
+
+input NewRequirement {
+	nameEn: String!
+	nameFr: String!
+	domain: SkillDomain!
+	roleId: UUID!
+	skillId: UUID!
+	requiredLevel: CapabilityLevel!
+}
+
+input NewRole {
+	personId: UUID
+	teamId: UUID!
+	titleEn: String!
+	titleFr: String!
+	effort: Float!
+	active: Boolean!
+	militaryOccupation: MilitaryOccupation
+	rank: Rank
+	occupationalGroup: OccupationalGroup
+	occupationalLevel: Int
+	startDatestamp: NaiveDateTime!
+	endDate: NaiveDateTime
+}
+
+"""
+Represents an insertable Skill
+"""
+input NewSkill {
+	nameEn: String!
+	nameFr: String!
+	descriptionEn: String!
+	descriptionFr: String!
+	domain: SkillDomain!
+}
+
+input NewTask {
+	createdByRoleId: UUID!
+	title: String!
+	domain: SkillDomain!
+	intendedOutcome: String!
+	approvalTier: Int!
+	url: String!
+	startDatestamp: NaiveDateTime!
+	targetCompletionDate: NaiveDateTime!
+	taskStatus: WorkStatus!
+	priority: Priority!
+	productId: UUID
+}
+
+"""
+Linked from HealthProfile
+Linked to Trip
+"""
+input NewTeam {
+	nameEn: String!
+	nameFr: String!
+	organizationId: UUID!
+	orgTierId: UUID!
+	primaryDomain: SkillDomain!
+	descriptionEn: String!
+	descriptionFr: String!
+}
+
+"""
+Linked from HealthProfile
+Linked to Trip
+"""
+input NewTeamOwnership {
+	ownerRoleId: UUID!
+	teamId: UUID!
+	startDatestamp: NaiveDateTime!
+	endDate: NaiveDateTime
+}
+
+input NewValidation {
+	validatorId: UUID!
+	capabilityId: UUID!
+	validatedLevel: CapabilityLevel!
+}
+
+input NewWork {
+	taskId: UUID!
+	roleId: UUID
+	workDescription: String!
+	url: String
+	domain: SkillDomain!
+	skillId: UUID!
+	capabilityLevel: CapabilityLevel!
+	effort: Int!
+	workStatus: WorkStatus!
+	priority: Priority!
+}
+
+"""
+Represents civilian occupational groups (classifications)
+"""
+enum OccupationalGroup {
+	ADMINISTRATIVE_SERVICES
+	COMPUTER_SYSTEMS
+	ECONOMICS_AND_SOCIAL_SCIENCE
+	ENGINEERING
+	EXECUTIVE
+	FINANCIAL_MANAGEMENT
+	HUMAN_RESOURCES
+	INFORMATION_SERVICES
+	PROGRAM_ADMINISTRATION
+	RESEARCH
+	TECHNICAL_SERVICES
+	OTHER
+}
+
+"""
+Represents a relationship between a role (owner) and an organizational tier.
+Ownership records the management authority over a tier; it is tied to the
+position (Role), not the individual, so authority survives reassignment.
+Used to inform approvals and organizational authority.
+"""
+type OrgOwnership {
+	id: UUID!
+	ownerRoleId: UUID!
+	orgTierId: UUID!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	retiredAt: NaiveDateTime
+}
+
+"""
+InputObject for OrgOwnership with Option fields - only include the ones you want to update
+"""
+input OrgOwnershipData {
+	id: UUID!
+	ownerRoleId: UUID
+	orgTierId: UUID
+	retiredAt: NaiveDateTime
+}
+
+"""
+Represents an organizational level starting at the top (CEO or President's office) as 0
+and then increasing in tier number as you go deeper into the organization.
+Used to model an organizational hierarchy independent of people
+"""
+type OrgTier {
+	id: UUID!
+	organizationId: UUID!
+	tierLevel: Int!
+	nameEn: String!
+	nameFr: String!
+	primaryDomain: SkillDomain!
+	parentTier: UUID
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	retiredAt: NaiveDateTime
+	organization: Organization!
+	parentOrganizationTier: OrgTier
+	childOrganizationTier: [OrgTier!]!
+	"""
+	The role that owns (manages) this tier. Ownership is tied to the
+	position, so the owner may be a vacant role; expose `owner.person` for
+	the current incumbent. Tiers created without an explicit ownership
+	record inherit the nearest ancestor's owner until one is assigned.
+	Never panic here: an unwrap would kill the worker for any tier missing
+	ownership.
+	"""
+	owner: Role!
+	teams: [Team!]!
+	"""
+	Capability heatmap rolled up across all teams under this tier and descendants.
+	"""
+	capabilityHeatmap: [TeamCapabilityRow!]!
+	"""
+	Number of distinct people holding active roles under this tier and descendants.
+	"""
+	headcount: Int!
+	"""
+	Capability counts rolled up across this tier and its descendants.
+	"""
+	capabilityCounts: [CapabilityCount!]!
+	"""
+	Sum of active effort across this tier and descendants.
+	"""
+	totalEffort: Int!
+}
+
+"""
+InputObject for OrgTier with Option fields - only include the ones you want to update
+"""
+input OrgTierData {
+	id: UUID!
+	nameEn: String
+	nameFr: String
+	tierLevel: Int
+	primaryDomain: SkillDomain
+	parentTier: UUID
+	retiredAt: NaiveDateTime
+}
+
+"""
+Represents an organization as a core structure within which are
+Person(s), OrgTiers, Publications
+"""
+type Organization {
+	id: UUID!
+	nameEn: String!
+	nameFr: String!
+	acronymEn: String!
+	acronymFr: String!
+	orgType: String!
+	url: String!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	retiredAt: NaiveDateTime
+	affiliations: [Affiliation!]!
+	publications: [Publication!]!
+	products: [Product!]!
+	orgTiers: [OrgTier!]!
+	topOrgTier: [OrgTier!]!
+	capabilityCounts: [CapabilityCount!]!
+}
+
+"""
+InputObject for Organization with Option fields - only include the ones you want to update
+"""
+input OrganizationData {
+	id: UUID!
+	nameEn: String
+	nameFr: String
+	acronymEn: String
+	acronymFr: String
+	orgType: String
+	url: String
+	retiredAt: NaiveDateTime
+}
+
+"""
+Represents a person working in an organization
+Referenced by Team
+Referenced by ReportingRelationship
+Will break out address and contact info soon
+"""
+type Person {
+	id: UUID!
+	userId: UUID!
+	email: String!
+	phone: String!
+	workAddress: String!
+	city: String!
+	province: String!
+	postalCode: String!
+	country: String!
+	organizationId: UUID!
+	peoplesoftId: String!
+	orcidId: String!
+	"""
+	Distinguishes military members from civilian employees,
+	contractors, students and others
+	"""
+	personnelType: PersonnelType!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	retiredAt: NaiveDateTime
+	internalPeoplesoftId: String!
+	"""
+	Returns the person's family or second name
+	"""
+	familyName: String!
+	"""
+	Returns the persons given or first name
+	"""
+	givenName: String!
+	"""
+	Returns the person's organization
+	"""
+	organization: Organization!
+	"""
+	Positions this person used to occupy, derived from their closed tenures.
+	This is the person's career progression and survives the position being
+	reassigned to someone else.
+	"""
+	inactiveRoles: [Role!]!
+	"""
+	The position this person currently occupies, derived from their open
+	tenure. A person holds at most one active role at a time.
+	"""
+	activeRoles: [Role!]!
+	"""
+	Full career history: every tenure this person has held, most recent
+	first, each with its start/end dates and the role it belonged to.
+	"""
+	roleAssignments: [RoleAssignment!]!
+	"""
+	Returns the sum effort of active work across this person's active
+	roles. Maximum sustainable effort is around 10, so lower values
+	indicate capacity to take on new work.
+	"""
+	activeEffort: Int!
+	"""
+	Returns person's affiliations with other organizations
+	"""
+	affiliations: [Affiliation!]!
+	"""
+	Teams owned by this person, derived from the roles they currently
+	occupy. Ownership lives on the Role (the manager position), so this
+	aggregates across the person's active roles.
+	"""
+	ownedTeams: [Team!]!
+	"""
+	Organizational tiers owned by this person, derived from the roles they
+	currently occupy (ownership lives on the manager Role).
+	"""
+	ownedOrgTiers: [OrgTier!]!
+	"""
+	Returns the persons capabilities
+	"""
+	capabilities: [Capability!]!
+	"""
+	Returns a vector of the validations made by the person. Only available to analyst level access and above.
+	"""
+	validations: [Validation!]!
+	publications: [Publication!]!
+	"""
+	Returns a vector of the language results for the person
+	"""
+	languageData: [LanguageData!]!
+	findMatches: [Role!]!
+}
+
+"""
+InputObject for Person with Option fields - only include the ones you want to update
+"""
+input PersonData {
+	id: UUID!
+	userId: UUID
+	familyName: String
+	givenName: String
+	email: String
+	phone: String
+	workAddress: String
+	city: String
+	province: String
+	postalCode: String
+	country: String
+	organizationId: UUID
+	peoplesoftId: String
+	orcidId: String
+	personnelType: PersonnelType
+	updatedAt: NaiveDateTime
+	retiredAt: NaiveDateTime
+}
+
+"""
+A scored candidate for a role.
+"""
+type PersonMatchScore {
+	person: Person!
+	"""
+	Composite score in [0, 1]: coverage minus gap penalties.
+	"""
+	matchScore: Float!
+	requirementsMet: Int!
+	requirementsTotal: Int!
+	"""
+	requirements_met / requirements_total.
+	"""
+	coverage: Float!
+	"""
+	Sum of positive (shortfall) gaps only.
+	"""
+	totalGap: Int!
+	requirementGaps: [RequirementMatch!]!
+	"""
+	True if the candidate currently holds a role under the OrgTier owned by
+	this role's area. The owner (and admins) can reassign these directly.
+	"""
+	inManagedScope: Boolean!
+	"""
+	The candidate's manager contact, populated only when the candidate is
+	outside the managed area (moving them needs their manager's agreement).
+	"""
+	manager: ManagerContact
+}
+
+"""
+Represents the employment category of a person within the organization
+"""
+enum PersonnelType {
+	MILITARY
+	CIVILIAN
+	CONTRACTOR
+	STUDENT
+	OTHER
+}
+
+enum Priority {
+	LOW
+	MEDIUM
+	HIGH
+	CRITICAL
+}
+
+"""
+A product or service delivered by an organization.
+Tasks flow under a product, and multiple people do Work as part of
+a task that contributes to the product. Work carries its capability
+requirement so that people with the required capabilities can be
+identified and matched to the work.
+"""
+type Product {
+	id: UUID!
+	nameEn: String!
+	nameFr: String!
+	descriptionEn: String!
+	descriptionFr: String!
+	primaryDomain: SkillDomain!
+	url: String
+	productStatus: WorkStatus!
+	priority: Priority!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	retiredAt: NaiveDateTime
+	organization: Organization!
+	"""
+	The role accountable for delivery of this product
+	"""
+	productOwner: Role!
+	"""
+	The tasks that flow under this product
+	"""
+	tasks: [Task!]!
+	"""
+	All work elements planned under this product's tasks
+	"""
+	work: [Work!]!
+	"""
+	Work elements under this product's tasks not yet assigned to a role
+	"""
+	vacantWork: [Work!]!
+	"""
+	Total effort of active work planned under this product's tasks
+	"""
+	effort: Int!
+	"""
+	Aggregated skill demand across all active work under this product.
+	Groups by skill (or domain where no specific skill is set) and
+	capability level, returning a count of work items and total effort
+	at each combination. Excludes cancelled and completed work.
+	"""
+	skillDemand: [ProductSkillDemand!]!
+}
+
+"""
+InputObject for Product with Option fields - only include the ones you want to update
+"""
+input ProductData {
+	id: UUID!
+	productOwnerRoleId: UUID
+	nameEn: String
+	nameFr: String
+	descriptionEn: String
+	descriptionFr: String
+	primaryDomain: SkillDomain
+	url: String
+	productStatus: WorkStatus
+	priority: Priority
+}
+
+"""
+Aggregated skill demand for a product, derived from its work items.
+Similar in shape to CapabilityCount and RequirementCount but scoped to
+the active work planned under a product's tasks.
+"""
+type ProductSkillDemand {
+	"""
+	Skill name, or the domain label when no specific skill is attached to the work.
+	"""
+	name: String!
+	"""
+	The specific skill driving this demand, if one is set on the work items.
+	"""
+	skillName: String
+	domain: SkillDomain!
+	level: CapabilityLevel!
+	"""
+	Number of distinct work items requiring this skill at this level.
+	"""
+	workCount: Int!
+	"""
+	Sum of effort across those work items.
+	"""
+	totalEffort: Int!
+}
+
+type Publication {
+	id: UUID!
+	title: String!
+	subjectText: String!
+	publicationStatus: PublicationStatus!
+	urlString: String
+	publishingId: String
+	submittedDate: NaiveDateTime
+	publishedDatestamp: NaiveDateTime
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	leadAuthor: Person!
+	publishingOrganization: Organization!
+	contributors: [Person!]!
+}
+
+type PublicationContributor {
+	publication: Publication!
+	contributor: Person!
+	contributorRole: String!
+}
+
+"""
+InputObject for PublicationContributor with Option fields - only include the ones you want to update
+"""
+input PublicationContributorData {
+	id: UUID!
+	contributorRole: String
+}
+
+"""
+InputObject for Publication with Option fields - only include the ones you want to update
+"""
+input PublicationData {
+	id: UUID!
+	title: String
+	subjectText: String
+	publicationStatus: PublicationStatus
+	urlString: String
+	publishingId: String
+	submittedDate: NaiveDateTime
+	publishedDatestamp: NaiveDateTime
+}
+
+enum PublicationStatus {
+	PLANNING
+	IN_PROGRESS
+	DRAFT
+	SUBMITTED
+	PUBLISHED
+	REJECTED
+	CANCELLED
+}
+
+type Query {
+	"""
+	Returns count number of Capabilities in the system
+	"""
+	capabilities(count: Int!): [Capability!]!
+	"""
+	Returns a capability by its Uuid
+	"""
+	capabilityById(id: UUID!): Capability!
+	"""
+	Accepts a String "name" and returns a vector of capabilities that
+	match in EN or FR against it
+	"""
+	capabilitiesByName(name: String!): [Capability!]!
+	"""
+	Accepts a String "name" and a CapabilityLevel and returns matches against both
+	"""
+	capabilitiesByNameAndLevel(name: String!, level: CapabilityLevel!): [Capability!]!
+	"""
+	Return a count of the number of people who have a capability at each level of the capability
+	"""
+	capabilityCountsByName(name: String!): [CapabilityCount!]!
+	"""
+	Return a CapabilityCount by a specific SkillDomain (SCIENTIFIC, etc.)
+	"""
+	capabilityCountsByDomain(domain: SkillDomain!): [CapabilityCount!]!
+	"""
+	Returns vector of all skills
+	"""
+	skills: [Skill!]!
+	"""
+	Returns a specific skill by ID
+	"""
+	skillById(id: UUID!): Skill!
+	"""
+	Returns a vector of skills matching some part of the name provided
+	"""
+	skillByName(name: String!): [Skill!]!
+	"""
+	Accepts argument of "count" and returns a vector of {count} persons ordered by
+	family name.D
+	"""
+	allPeople: [Person!]!
+	"""
+	Accepts argument of "count" and returns a vector of {count} persons ordered by
+	family name
+	"""
+	People(count: Int!): [Person!]!
+	"""
+	Accepts argument of "count" and returns a vector of {count} persons ordered by
+	family name
+	"""
+	peopleCount: Int!
+	personById(id: UUID!): Person!
+	personByName(name: String!): [Person!]!
+	"""
+	Returns the ownership record linking a team to its owner. Exposes
+	the record id so clients can call updateTeamOwnership to reassign
+	the owner. Errors if the team has no ownership record.
+	"""
+	teamOwnershipByTeamId(teamId: UUID!): TeamOwnership!
+	"""
+	Returns a vector of all travel groups
+	"""
+	allTeams: [Team!]!
+	"""
+	Returns a specific travel group by its UUID
+	"""
+	teamByID(id: UUID!): Team!
+	teamByName(name: String!): [Team!]!
+	"""
+	Returns the ownership record linking an org tier to its owner.
+	Exposes the record id so clients can call updateOrgOwnership to
+	reassign the owner. Errors if the tier has no ownership record.
+	"""
+	orgOwnershipByTierId(orgTierId: UUID!): OrgOwnership!
+	"""
+	Returns a vector of all organizations
+	"""
+	allOrganizations: [Organization!]!
+	"""
+	Accepts argument "count" and returns a vector of {count} organizations
+	"""
+	organizations(count: Int!): [Organization!]!
+	organizationByName(name: String!): [Organization!]!
+	organizationById(id: UUID!): Organization!
+	"""
+	Returns a vector of all  org tiers
+	"""
+	allOrgTiers: [OrgTier!]!
+	"""
+	Returns a vector of org tiers for a specific org ID
+	"""
+	orgTiersByOrgId(id: UUID!): [OrgTier!]!
+	"""
+	Accepts argument "count" and returns a vector of {count} org tiers
+	"""
+	OrgTiers(count: Int!): [OrgTier!]!
+	orgTierById(id: UUID!): OrgTier!
+	orgTierByName(name: String!): [OrgTier!]!
+	orgChart(id: UUID!): [String!]!
+	"""
+	Returns a vector of all users
+	"""
+	allUsers: [User!]!
+	"""
+	Returns a vector of all users
+	"""
+	userByEmail(email: String!): User!
+	"""
+	Returns a vector of all users
+	"""
+	userById(id: UUID!): User!
+	"""
+	Accepts an argument of "count" and returns a vector of {count} active role
+	"""
+	activeRoles(count: Int!): [Role!]!
+	"""
+	Accepts an argument of "count" and returns a vector of {count} active role
+	"""
+	vacantRoles(count: Int!): [Role!]!
+	"""
+	Returns a vector of all persons ordered by family name
+	"""
+	allRoles: [Role!]!
+	roleById(id: UUID!): Role!
+	"""
+	returns a count of the total roles in the system
+	"""
+	roleCount: Int!
+	"""
+	Returns a vector of all publications
+	"""
+	allPublications: [Publication!]!
+	"""
+	Accepts argument "count" and returns a vector of {count} publications
+	"""
+	publicationCount(count: Int!): [Publication!]!
+	"""
+	Accepts argument "title" and returns a vector of publications with that title or subject
+	"""
+	publicationByTitle(title: String!): [Publication!]!
+	"""
+	Accepts id and returns a publications
+	"""
+	publicationById(id: UUID!): Publication!
+	"""
+	Accepts argument of "count" and returns a vector of {count} tasks ordered by
+	family name.D
+	"""
+	allTasks: [Task!]!
+	"""
+	Accepts argument of "count" and returns a vector of {count} tasks ordered by
+	family name
+	"""
+	Tasks(count: Int!): [Task!]!
+	taskById(id: UUID!): Task!
+	taskByName(name: String!): [Task!]!
+	"""
+	Accepts an argument of "count" and returns a vector of {count} work
+	"""
+	work(count: Int!): [Work!]!
+	"""
+	Returns a vector of all persons ordered by family name
+	"""
+	allWork: [Work!]!
+	workById(id: UUID!): Work!
+	"""
+	Accepts an argument of "count" and returns a vector of {count} products
+	"""
+	products(count: Int!): [Product!]!
+	"""
+	Returns a vector of all products
+	"""
+	allProducts: [Product!]!
+	productById(id: UUID!): Product!
+	"""
+	Returns a vector of products matching some part of a provided name
+	"""
+	productsByName(name: String!): [Product!]!
+	"""
+	Returns a vector of products delivered by a specific organization
+	"""
+	productsByOrganizationId(organizationId: UUID!): [Product!]!
+	"""
+	Cumulative validated capability across the organization over time,
+	one series per SkillDomain.
+	"""
+	capabilityGrowth(bucket: TimeBucket!, from: NaiveDateTime, to: NaiveDateTime, domain: SkillDomain, orgTierId: UUID): [LabeledSeries!]!
+	"""
+	Per-domain capability supply vs demand over time.
+	"""
+	capabilitySupplyDemand(bucket: TimeBucket!, from: NaiveDateTime, to: NaiveDateTime, domain: SkillDomain, orgTierId: UUID): [SupplyDemandSeries!]!
+	"""
+	Capability depth per team across all skill domains (for a heatmap).
+	"""
+	teamCapabilityMatrix(orgTierId: UUID): [TeamCapabilityRow!]!
+	"""
+	Derived role transitions over a window, for mobility/promotion analysis.
+	"""
+	talentMovements(from: NaiveDateTime, to: NaiveDateTime, orgTierId: UUID): [TalentMovement!]!
+}
+
+"""
+Represents military rank structure
+"""
+enum Rank {
+	PRIVATE
+	CORPORAL
+	MASTER_CORPORAL
+	SERGEANT
+	WARRANT_OFFICER
+	MASTER_WARRANT_OFFICER
+	CHIEF_WARRANT_OFFICER
+	SECOND_LIEUTENANT
+	LIEUTENANT
+	CAPTAIN
+	MAJOR
+	LIEUTENANT_COLONEL
+	COLONEL
+	BRIGADIER_GENERAL
+	MAJOR_GENERAL
+	LIEUTENANT_GENERAL
+	GENERAL
+}
+
+"""
+A representation of a roles ability to use a skill at a specific level
+"""
+type Requirement {
+	id: UUID!
+	nameEn: String!
+	nameFr: String!
+	domain: SkillDomain!
+	roleId: UUID!
+	skillId: UUID!
+	requiredLevel: CapabilityLevel!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	retiredAt: NaiveDateTime
+	role: Role!
+	skillName: String!
+	skill: Skill!
+}
+
+"""
+InputObject for Requirement with Option fields - only include the ones you want to update
+"""
+input RequirementData {
+	id: UUID!
+	nameEn: String
+	nameFr: String
+	domain: SkillDomain
+	requiredLevel: CapabilityLevel
+	retiredAt: NaiveDateTime
+}
+
+"""
+Per-requirement breakdown for a single candidate.
+"""
+type RequirementMatch {
+	skillId: UUID!
+	skillName: String!
+	requiredLevel: CapabilityLevel!
+	"""
+	None when the person holds no capability for this skill at all.
+	"""
+	actualLevel: CapabilityLevel
+	"""
+	required - actual (negative = over-qualified, 0 = exact, positive = shortfall).
+	"""
+	gap: Int!
+	met: Boolean!
+}
+
+type Role {
+	id: UUID!
+	person: Person
+	team: Team!
+	titleEnglish: String!
+	titleFrench: String!
+	"""
+	Returns the sum effort of all active work underway
+	Maximum work should be around 10
+	"""
+	effort: Int!
+	"""
+	Returns a vector of the work undertaken by this role
+	"""
+	work: [Work!]!
+	active: String!
+	requirements: [Requirement!]!
+	"""
+	Full tenure history for this position: who has occupied it and when,
+	most recent first. The open assignment (no end_date) is the current
+	occupant.
+	"""
+	assignments: [RoleAssignment!]!
+	"""
+	Returns the military occupation for a military role holder, if applicable
+	"""
+	militaryOccupation: String
+	"""
+	Returns the military rank for a military role holder, if applicable
+	"""
+	rank: Rank
+	"""
+	Returns the occupational group for a civilian role holder, if applicable
+	"""
+	occupationalGroup: OccupationalGroup
+	"""
+	Returns the occupational level for a civilian role holder, if applicable
+	"""
+	occupationalLevel: Int
+	startDate: String!
+	endDate: String!
+	createdAt: String!
+	updatedAt: String!
+	findMatches: [Person!]!
+	"""
+	Returns tiered candidates for this role.
+	
+	`full_matches` meet every requirement at or above the required level.
+	`partial_matches` meet at least `min_coverage` of requirements and have
+	no single skill gap exceeding `max_gap_per_req` levels.
+	
+	Each capability level is a significant leap, so each missing level
+	costs 10 points off the composite score (0–100 scale).
+	"""
+	fuzzyMatches(minCoverage: Float! = 0.5, maxGapPerReq: Int! = 1, limit: Int! = 20): RoleMatchResult!
+	startDatestamp: NaiveDateTime!
+	endDatestamp: NaiveDateTime
+}
+
+type RoleAssignment {
+	id: UUID!
+	"""
+	The person who held (or holds) the role during this tenure.
+	"""
+	person: Person!
+	"""
+	The durable position this tenure belongs to.
+	"""
+	role: Role!
+	startDate: String!
+	endDate: String!
+	"""
+	True while the person still occupies the role (no end_date set).
+	"""
+	isCurrent: Boolean!
+	startDatestamp: NaiveDateTime!
+	endDatestamp: NaiveDateTime
+}
+
+"""
+InputObject for Role with Option fields - only include the ones you want to update
+Note the only changable fields are active, start and end.
+It's recommended to create new roles for people vs. edit existing ones to show history
+and progression
+"""
+input RoleData {
+	id: UUID!
+	active: Boolean
+	startDatestamp: NaiveDateTime
+	endDate: NaiveDateTime
+}
+
+"""
+Tiered match result for a role.
+"""
+type RoleMatchResult {
+	roleId: UUID!
+	"""
+	The OrgTier whose owner is responsible for this role (nearest tier with
+	an ownership record, walking up from the role's team). `in_managed_scope`
+	candidates sit under this tier. None if no owner is assigned anywhere up
+	the chain.
+	"""
+	managedOrgTierId: UUID
+	"""
+	Candidates who currently hold a role under the managed OrgTier — the
+	owner/admin can reassign these internally. Sorted by match_score desc.
+	"""
+	managedFullMatches: [PersonMatchScore!]!
+	"""
+	Managed-area candidates meeting min_coverage but not every requirement.
+	"""
+	managedPartialMatches: [PersonMatchScore!]!
+	"""
+	Full matches outside the managed area; each carries `manager` contact.
+	"""
+	externalFullMatches: [PersonMatchScore!]!
+	"""
+	Partial matches outside the managed area; each carries `manager` contact.
+	"""
+	externalPartialMatches: [PersonMatchScore!]!
+}
+
+"""
+Should get this from an API or have standard data
+Now pre-loaded as prt of context
+"""
+type Skill {
+	id: UUID!
+	nameEn: String!
+	nameFr: String!
+	descriptionEn: String!
+	descriptionFr: String!
+	domain: SkillDomain!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	retiredAt: NaiveDateTime
+	capabilities: [Capability!]!
+}
+
+"""
+InputObject for Skill with Option fields - only include the ones you want to update
+Skills will be updated rarely once set by the organization
+"""
+input SkillData {
+	id: UUID!
+	nameEn: String
+	nameFr: String
+	domain: SkillDomain
+	descriptionEn: String
+	descriptionFr: String
+}
+
+enum SkillDomain {
+	COMBAT
+	INTELLIGENCE
+	STRATEGY
+	ENGINEERING
+	MEDICAL
+	JOINT_OPERATIONS
+	SOFTWARE_ENGINEERING
+	CLOUD_PLATFORM_DEV_OPS
+	DATA_ANALYTICS_AND_AI
+	CYBER_SECURITY
+	PRODUCT_AGILE_AND_DELIVERY
+	USER_EXPERIENCE
+	PROCUREMENT_AND_VENDOR_MANAGEMENT
+	PEOPLE_AND_ORGANISATIONAL_LEADERSHIP
+	GOVERNANCE
+	CORPORATE_SERVICES
+}
+
+"""
+Supply vs demand for a single time bucket
+"""
+type SupplyDemandPoint {
+	periodStart: NaiveDateTime!
+	bucket: TimeBucket!
+	"""
+	Count/weight of validated capabilities available as of period end.
+	"""
+	supply: Float!
+	"""
+	Count/weight of required capability from role Requirements + Work as of period end.
+	"""
+	demand: Float!
+}
+
+"""
+Supply/demand time series for one domain
+"""
+type SupplyDemandSeries {
+	"""
+	SkillDomain value as String.
+	"""
+	domain: String!
+	points: [SupplyDemandPoint!]!
+}
+
+"""
+A detected talent movement event
+"""
+type TalentMovement {
+	personId: UUID!
+	at: NaiveDateTime!
+	fromTeamId: UUID
+	toTeamId: UUID
+	fromLevel: String
+	toLevel: String
+	"""
+	PROMOTION | LATERAL | INFLOW | OUTFLOW
+	"""
+	kind: String!
+}
+
+type Task {
+	id: UUID!
+	createdByRoleId: UUID!
+	title: String!
+	domain: SkillDomain!
+	intendedOutcome: String!
+	finalOutcome: String
+	approvalTier: Int!
+	url: String!
+	startDatestamp: NaiveDateTime!
+	targetCompletionDate: NaiveDateTime!
+	taskStatus: WorkStatus!
+	priority: Priority!
+	completedDate: NaiveDateTime
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	work: [Work!]!
+	"""
+	Work under this task not yet assigned to a role
+	"""
+	vacantWork: [Work!]!
+	effort: Int!
+	createdBy: Role!
+	"""
+	The product this task contributes to, if any
+	"""
+	product: Product
+}
+
+"""
+InputObject for Task with Option fields - only include the ones you want to update
+"""
+input TaskData {
+	id: UUID!
+	title: String
+	domain: SkillDomain
+	intendedOutcome: String
+	finalOutcome: String
+	url: String
+	approvalTier: Int
+	startDatestamp: NaiveDateTime
+	targetCompletionDate: NaiveDateTime
+	taskStatus: WorkStatus
+	priority: Priority
+	completedDate: NaiveDateTime
+	productId: UUID
+}
+
+type Team {
+	id: UUID!
+	organization: Organization!
+	organizationLevel: OrgTier!
+	nameEnglish: String!
+	nameFrench: String!
+	descriptionEnglish: String!
+	descriptionFrench: String!
+	retiredAt: String!
+	createdAt: String!
+	updatedAt: String!
+	occupiedRoles: [Role!]!
+	vacantRoles: [Role!]!
+	roles: [Role!]!
+	"""
+	The role that owns (manages) this team. Ownership is tied to the
+	position, so the owner may be a vacant role; expose `owner.person` for
+	the current incumbent. Teams created without an explicit ownership
+	record fall back to their org tier's owner (which itself inherits up the
+	tier chain). Never panic here: an unwrap would kill the worker for any
+	team missing ownership.
+	"""
+	owner: Role!
+	"""
+	Capability counts for people holding roles in this team.
+	"""
+	capabilityCounts: [CapabilityCount!]!
+	"""
+	Capability depth per skill domain for this team (lightweight heatmap row).
+	"""
+	capabilityHeatmap: [TeamCapabilityCell!]!
+	"""
+	Number of distinct people holding active roles on this team.
+	"""
+	headcount: Int!
+	"""
+	Sum of active effort across this team's roles.
+	"""
+	totalEffort: Int!
+}
+
+"""
+A cell in the team capability heatmap
+"""
+type TeamCapabilityCell {
+	domain: String!
+	"""
+	Weighted capability depth (validated; self-identified fallback).
+	"""
+	depth: Float!
+	"""
+	Distinct people contributing at this domain.
+	"""
+	peopleCount: Int!
+}
+
+"""
+A row in the team capability heatmap
+"""
+type TeamCapabilityRow {
+	teamId: UUID!
+	teamName: String!
+	cells: [TeamCapabilityCell!]!
+}
+
+"""
+InputObject for Team with Option fields - only include the ones you want to update
+"""
+input TeamData {
+	id: UUID!
+	nameEn: String
+	nameFr: String
+	primaryDomain: SkillDomain
+	descriptionEn: String
+	descriptionFr: String
+	retiredAt: NaiveDateTime
+}
+
+"""
+Represents ownership of a team by a role (the team's manager position).
+Tied to the Role, not the individual, so authority stays with the position.
+"""
+type TeamOwnership {
+	id: UUID!
+	ownerRoleId: UUID!
+	teamId: UUID!
+	startDatestamp: NaiveDateTime!
+	endDate: NaiveDateTime
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+}
+
+"""
+InputObject for TeamOwnership with Option fields - only include the ones you want to update
+"""
+input TeamOwnershipData {
+	id: UUID!
+	ownerRoleId: UUID
+	teamId: UUID
+	startDatestamp: NaiveDateTime
+	endDate: NaiveDateTime
+}
+
+"""
+Time bucket granularity for analytics series
+"""
+enum TimeBucket {
+	WEEK
+	MONTH
+	QUARTER
+	YEAR
+}
+
+"""
+A single data point in a time series
+"""
+type TimeSeriesPoint {
+	"""
+	Start of the bucket, ISO 8601
+	"""
+	periodStart: NaiveDateTime!
+	bucket: TimeBucket!
+	value: Float!
+}
+
 """
 A UUID is a unique 128-bit number, stored as 16 octets. UUIDs are parsed as
 Strings within GraphQL. UUIDs are used to assign unique identifiers to
@@ -21,845 +1684,100 @@ entities without requiring a central allocating authority.
 * [RFC4122: A Universally Unique Identifier (UUID) URN Namespace](http://tools.ietf.org/html/rfc4122)
 """
 scalar UUID
-type Affiliation {
-  id: UUID!
-  personId: UUID!
-  organizationId: UUID!
-  homeOrgId: UUID!
-  affiliationRole: String!
-  startDatestamp: NaiveDateTime!
-  endDate: NaiveDateTime
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-  person: Person!
-  organization: Organization!
-  homeOrganization: Organization!
-}
-"A representation of a persons ability to use a skill at a specific level"
-type Capability {
-  id: UUID!
-  nameEn: String!
-  nameFr: String!
-  domain: SkillDomain!
-  skillId: UUID!
-  organizationId: UUID!
-  selfIdentifiedLevel: CapabilityLevel!
-  validatedLevel: CapabilityLevel
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-  retiredAt: NaiveDateTime
-  """
-  Provenance of the current validated level: the central authority who
-  set it and when. Populated directly from the authoritative validation.
-  """
-  validatedById: UUID
-  validatedAt: NaiveDateTime
-  person: Person!
-  "The admin user who set the current validated level, if any."
-  validatedBy: User
-  skillName: String!
-  skill: Skill!
-  "Detailed view of validations for this capability"
-  validations: [Validation!]!
-}
-type CapabilityCount {
-  name: String!
-  domain: SkillDomain!
-  level: String!
-  counts: Int!
-}
-"A named time series (e.g. one per SkillDomain)"
-type LabeledSeries {
-  "e.g. a SkillDomain value, as a String"
-  key: String!
-  points: [TimeSeriesPoint!]!
-}
-"A representation of a persons' language proficiency"
-type LanguageData {
-  id: UUID!
-  personId: UUID!
-  languageName: LanguageName!
-  reading: LanguageLevel
-  writing: LanguageLevel
-  speaking: LanguageLevel
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-}
-type Mutation {
-  createUser(userData: UserData!): User!
-  updateUser(userData: UserUpdate!): User!
-  """
-  Grant a provisioned account a path to access: issue an activation token and
-  move the user to INVITED. Returns the token + expiry so the operator can share
-  an activation link (no email is sent in v1).
-  """
-  inviteUser(userId: UUID!): InviteResult!
-  "Redeem an activation token by setting a password. Public; moves the account to ACTIVE."
-  activateAccount(token: String!, password: String!): Boolean!
-  "Revoke a user's access (record retained). Admin only."
-  disableUser(userId: UUID!): User!
-  "Re-enable a disabled user (ACTIVE if they have a password, else PROVISIONED). Admin only."
-  enableUser(userId: UUID!): User!
-  signIn(input: LoginQuery!): UserResponse!
-  createPerson(data: NewPersonInput!): Person!
-  updatePerson(data: PersonData!): Person!
-  "Un-retire a person by clearing retired_at."
-  restorePerson(id: UUID!): Person!
-  createRole(roleData: NewRole!): Role!
-  updateRole(roleData: RoleData!): Role!
-  "Assign a person to a vacant role. Errors if the role is already occupied."
-  assignPersonToRole(personId: UUID!, roleId: UUID!): Role!
-  "Remove the person from a role, leaving it vacant."
-  vacateRole(roleId: UUID!): Role!
-  createCapability(data: NewCapability!): Capability!
-  """
-  An operator may update a capability.
-  To update a validated_level, you must include the Uuid of the validator and their
-  current validated level. If the validator's level is equal or greater than the
-  level they are validating, the system will update validated_level.
-  Need to update Capability to also track the validator_uuid
-  """
-  updateCapability(data: CapabilityData!): Capability!
-  createSkill(data: NewSkill!): Skill!
-  """
-  An operator may update a skill.
-  To update a validated_level, you must include the Uuid of the validator and their
-  current validated level. If the validator's level is equal or greater than the
-  level they are validating, the system will update validated_level.
-  Need to update Skill to also track the validator_uuid
-  """
-  updateSkill(data: SkillData!): Skill!
-  createOrganization(data: NewOrganization!): Organization!
-  updateOrganization(data: OrganizationData!): Organization!
-  """
-  Un-retire an organization by clearing retired_at. The update
-  resolvers treat a null field as "unchanged", so clearing needs a
-  dedicated mutation.
-  """
-  restoreOrganization(id: UUID!): Organization!
-  createOrgTier(data: NewOrgTier!): OrgTier!
-  updateOrgTier(data: OrgTierData!): OrgTier!
-  "Un-retire an org tier by clearing retired_at."
-  restoreOrgTier(id: UUID!): OrgTier!
-  createOrgOwnership(data: NewOrgOwnership!): OrgOwnership!
-  updateOrgOwnership(data: OrgOwnershipData!): OrgOwnership!
-  createTeam(data: NewTeam!): Team!
-  updateTeam(data: TeamData!): Team!
-  "Un-retire a team by clearing retired_at."
-  restoreTeam(id: UUID!): Team!
-  createTeamOwnership(data: NewTeamOwnership!): TeamOwnership!
-  updateTeamOwnership(data: TeamOwnershipData!): TeamOwnership!
-  createAffiliation(data: NewAffiliation!): Affiliation!
-  updateAffiliation(data: AffiliationData!): Affiliation!
-  createPublication(data: NewPublication!): Publication!
-  updatePublication(data: PublicationData!): Publication!
-  createPublicationContributor(data: NewPublicationContributor!): PublicationContributor!
-  updatePublicationContributor(data: PublicationContributorData!): PublicationContributor!
-  createWork(data: NewWork!): Work!
-  updateWork(data: WorkData!): Work!
-  createTask(data: NewTask!): Task!
-  updateTask(data: TaskData!): Task!
-  createProduct(data: NewProduct!): Product!
-  updateProduct(data: ProductData!): Product!
-  createRequirement(data: NewRequirement!): Requirement!
-  updateRequirement(data: RequirementData!): Requirement!
-  """
-  Records a central authority's validation of a person's capability. The
-  capability's validated_level is set directly from this validation, and
-  the validating authority and date are stamped onto the capability for
-  provenance. The validation is retained as date-stamped history.
-  """
-  createValidation(data: NewValidation!): Validation!
-  """
-  Updates a validation's level. The associated capability's
-  validated_level is set directly from this authoritative validation,
-  and its validation provenance (authority and date) is refreshed.
-  """
-  updateValidation(data: ValidationData!): Validation!
-  createLanguageData(data: NewLanguageData!): LanguageData!
-  updateLanguageData(data: LanguageDataUpdate!): LanguageData!
-}
-"""
-Represents a relationship between a person (owner) and an organizational tier
-Will be used to inform approvals and organizational authority
-"""
-type OrgOwnership {
-  id: UUID!
-  ownerRoleId: UUID!
-  orgTierId: UUID!
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-  retiredAt: NaiveDateTime
-}
-"""
-Represents an organizational level starting at the top (CEO or President's office) as 0
-and then increasing in tier number as you go deeper into the organization.
-Used to model an organizational hierarchy independent of people
-"""
-type OrgTier {
-  id: UUID!
-  tierLevel: Int!
-  nameEn: String!
-  nameFr: String!
-  primaryDomain: SkillDomain!
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-  retiredAt: NaiveDateTime
-  organization: Organization!
-  parentOrganizationTier: OrgTier
-  childOrganizationTier: [OrgTier!]!
-  owner: Role!
-  teams: [Team!]!
-  "Capability heatmap rolled up across all teams under this tier and descendants."
-  capabilityHeatmap: [TeamCapabilityRow!]!
-  "Number of distinct people holding active roles under this tier and descendants."
-  headcount: Int!
-  "Capability counts rolled up across this tier and its descendants."
-  capabilityCounts: [CapabilityCount!]!
-  "Sum of active effort across this tier and descendants."
-  totalEffort: Int!
-}
-"""
-Represents an organization as a core structure within which are
-Person(s), OrgTiers, Publications
-"""
-type Organization {
-  id: UUID!
-  nameEn: String!
-  nameFr: String!
-  acronymEn: String!
-  acronymFr: String!
-  orgType: String!
-  url: String!
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-  retiredAt: NaiveDateTime
-  affiliations: [Affiliation!]!
-  publications: [Publication!]!
-  products: [Product!]!
-  orgTiers: [OrgTier!]!
-  topOrgTier: [OrgTier!]!
-  capabilityCounts: [CapabilityCount!]!
-}
-"""
-Represents a person working in an organization
-Referenced by Team
-Referenced by ReportingRelationship
-Will break out address and contact info soon
-"""
-type Person {
-  id: UUID!
-  userId: UUID!
-  email: String!
-  phone: String!
-  workAddress: String!
-  city: String!
-  province: String!
-  postalCode: String!
-  country: String!
-  organizationId: UUID!
-  peoplesoftId: String!
-  orcidId: String!
-  """
-  Distinguishes military members from civilian employees,
-  contractors, students and others
-  """
-  personnelType: PersonnelType!
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-  retiredAt: NaiveDateTime
-  internalPeoplesoftId: String!
-  "Returns the person's family or second name"
-  familyName: String!
-  "Returns the persons given or first name"
-  givenName: String!
-  "Returns the person's organization"
-  organization: Organization!
-  """
-  Positions this person used to occupy, derived from their closed tenures.
-  This is the person's career progression and survives the position being
-  reassigned to someone else.
-  """
-  inactiveRoles: [Role!]!
-  """
-  The position this person currently occupies, derived from their open
-  tenure. A person holds at most one active role at a time.
-  """
-  activeRoles: [Role!]!
-  """
-  Full career history: every tenure this person has held, most recent
-  first, each with its start/end dates and the role it belonged to.
-  """
-  roleAssignments: [RoleAssignment!]!
-  """
-  Returns the sum effort of active work across this person's active
-  roles. Maximum sustainable effort is around 10, so lower values
-  indicate capacity to take on new work.
-  """
-  activeEffort: Int!
-  "Returns person's affiliations with other organizations"
-  affiliations: [Affiliation!]!
-  "Returns a vector of the teams owned by this person"
-  ownedTeams: [Team!]!
-  "Returns a vector of the organizational tiers owned by this person"
-  ownedOrgTiers: [OrgTier!]!
-  "Returns the persons capabilities"
-  capabilities: [Capability!]!
-  "Returns a vector of the validations made by the person. Only available to analyst level access and above."
-  validations: [Validation!]!
-  publications: [Publication!]!
-  "Returns a vector of the language results for the person"
-  languageData: [LanguageData!]!
-  findMatches: [Role!]!
-}
-"A scored candidate for a role."
-type PersonMatchScore {
-  person: Person!
-  "Composite score in [0, 1]: coverage minus gap penalties."
-  matchScore: Float!
-  requirementsMet: Int!
-  requirementsTotal: Int!
-  "requirements_met / requirements_total."
-  coverage: Float!
-  "Sum of positive (shortfall) gaps only."
-  totalGap: Int!
-  requirementGaps: [RequirementMatch!]!
-  """
-  True if the candidate currently holds a role under the OrgTier owned by
-  this role's area. The owner (and admins) can reassign these directly.
-  """
-  inManagedScope: Boolean!
-  """
-  The candidate's manager contact, populated only when the candidate is
-  outside the managed area (moving them needs their manager's agreement).
-  """
-  manager: ManagerContact
-}
-"""
-Contact details for the manager who owns a candidate's current team.
-Populated for candidates who fall outside the hiring role's managed area, so
-the requester knows whose permission is needed to move them.
-"""
-type ManagerContact {
-  "The owning (manager) Role for the candidate's current team."
-  ownerRoleId: UUID!
-  ownerRoleTitle: String!
-  "The candidate's current team name."
-  teamName: String!
-  "Manager's name, if the owning role is currently filled."
-  name: String
-  email: String
-  phone: String
-}
-"""
-A product or service delivered by an organization.
-Tasks flow under a product, and multiple people do Work as part of
-a task that contributes to the product. Work carries its capability
-requirement so that people with the required capabilities can be
-identified and matched to the work.
-"""
-type Product {
-  id: UUID!
-  nameEn: String!
-  nameFr: String!
-  descriptionEn: String!
-  descriptionFr: String!
-  primaryDomain: SkillDomain!
-  url: String
-  productStatus: WorkStatus!
-  priority: Priority!
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-  retiredAt: NaiveDateTime
-  organization: Organization!
-  "The role accountable for delivery of this product"
-  productOwner: Role!
-  "The tasks that flow under this product"
-  tasks: [Task!]!
-  "All work elements planned under this product's tasks"
-  work: [Work!]!
-  "Work elements under this product's tasks not yet assigned to a role"
-  vacantWork: [Work!]!
-  "Total effort of active work planned under this product's tasks"
-  effort: Int!
-  """
-  Aggregated skill demand across all active work under this product.
-  Groups by skill (or domain where no specific skill is set) and
-  capability level, returning a count of work items and total effort
-  at each combination. Excludes cancelled and completed work.
-  """
-  skillDemand: [ProductSkillDemand!]!
-}
-"""
-Aggregated skill demand for a product, derived from its work items.
-Similar in shape to CapabilityCount and RequirementCount but scoped to
-the active work planned under a product's tasks.
-"""
-type ProductSkillDemand {
-  "Skill name, or the domain label when no specific skill is attached to the work."
-  name: String!
-  "The specific skill driving this demand, if one is set on the work items."
-  skillName: String
-  domain: SkillDomain!
-  level: CapabilityLevel!
-  "Number of distinct work items requiring this skill at this level."
-  workCount: Int!
-  "Sum of effort across those work items."
-  totalEffort: Int!
-}
-type Publication {
-  id: UUID!
-  title: String!
-  subjectText: String!
-  publicationStatus: PublicationStatus!
-  urlString: String
-  publishingId: String
-  submittedDate: NaiveDateTime
-  publishedDatestamp: NaiveDateTime
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-  leadAuthor: Person!
-  publishingOrganization: Organization!
-  contributors: [Person!]!
-}
-type PublicationContributor {
-  publication: Publication!
-  contributor: Person!
-  contributorRole: String!
-}
-type Query {
-  "Returns count number of Capabilities in the system"
-  capabilities(count: Int!): [Capability!]!
-  "Returns a capability by its Uuid"
-  capabilityById(id: UUID!): Capability!
-  """
-  Accepts a String "name" and returns a vector of capabilities that
-  match in EN or FR against it
-  """
-  capabilitiesByName(name: String!): [Capability!]!
-  """
-  Accepts a String "name" and a CapabilityLevel and returns matches against both
-  """
-  capabilitiesByNameAndLevel(name: String!, level: CapabilityLevel!): [Capability!]!
-  "Return a count of the number of people who have a capability at each level of the capability"
-  capabilityCountsByName(name: String!): [CapabilityCount!]!
-  "Return a CapabilityCount by a specific SkillDomain (SCIENTIFIC, etc.)"
-  capabilityCountsByDomain(domain: SkillDomain!): [CapabilityCount!]!
-  "Returns vector of all skills"
-  skills: [Skill!]!
-  "Returns a specific skill by ID"
-  skillById(id: UUID!): Skill!
-  "Returns a vector of skills matching some part of the name provided"
-  skillByName(name: String!): [Skill!]!
-  """
-  Accepts argument of "count" and returns a vector of {count} persons ordered by
-  family name.D
-  """
-  allPeople: [Person!]!
-  """
-  Accepts argument of "count" and returns a vector of {count} persons ordered by
-  family name
-  """
-  People(count: Int!): [Person!]!
-  """
-  Accepts argument of "count" and returns a vector of {count} persons ordered by
-  family name
-  """
-  peopleCount: Int!
-  personById(id: UUID!): Person!
-  personByName(name: String!): [Person!]!
-  """
-  Returns the ownership record linking a team to its owner. Exposes
-  the record id so clients can call updateTeamOwnership to reassign
-  the owner. Errors if the team has no ownership record.
-  """
-  teamOwnershipByTeamId(teamId: UUID!): TeamOwnership!
-  "Returns a vector of all travel groups"
-  allTeams: [Team!]!
-  "Returns a specific travel group by its UUID"
-  teamByID(id: UUID!): Team!
-  teamByName(name: String!): [Team!]!
-  """
-  Returns the ownership record linking an org tier to its owner.
-  Exposes the record id so clients can call updateOrgOwnership to
-  reassign the owner. Errors if the tier has no ownership record.
-  """
-  orgOwnershipByTierId(orgTierId: UUID!): OrgOwnership!
-  "Returns a vector of all organizations"
-  allOrganizations: [Organization!]!
-  """
-  Accepts argument "count" and returns a vector of {count} organizations
-  """
-  organizations(count: Int!): [Organization!]!
-  organizationByName(name: String!): [Organization!]!
-  organizationById(id: UUID!): Organization!
-  "Returns a vector of all  org tiers"
-  allOrgTiers: [OrgTier!]!
-  "Returns a vector of org tiers for a specific org ID"
-  orgTiersByOrgId(id: UUID!): [OrgTier!]!
-  """
-  Accepts argument "count" and returns a vector of {count} org tiers
-  """
-  OrgTiers(count: Int!): [OrgTier!]!
-  orgTierById(id: UUID!): OrgTier!
-  orgTierByName(name: String!): [OrgTier!]!
-  orgChart(id: UUID!): [String!]!
-  "Returns a vector of all users"
-  allUsers: [User!]!
-  "Returns a vector of all users"
-  userByEmail(email: String!): User!
-  "Returns a vector of all users"
-  userById(id: UUID!): User!
-  """
-  Accepts an argument of "count" and returns a vector of {count} active role
-  """
-  activeRoles(count: Int!): [Role!]!
-  """
-  Accepts an argument of "count" and returns a vector of {count} active role
-  """
-  vacantRoles(count: Int!): [Role!]!
-  "Returns a vector of all persons ordered by family name"
-  allRoles: [Role!]!
-  roleById(id: UUID!): Role!
-  "returns a count of the total roles in the system"
-  roleCount: Int!
-  "Returns a vector of all publications"
-  allPublications: [Publication!]!
-  """
-  Accepts argument "count" and returns a vector of {count} publications
-  """
-  publicationCount(count: Int!): [Publication!]!
-  """
-  Accepts argument "title" and returns a vector of publications with that title or subject
-  """
-  publicationByTitle(title: String!): [Publication!]!
-  "Accepts id and returns a publications"
-  publicationById(id: UUID!): Publication!
-  """
-  Accepts argument of "count" and returns a vector of {count} tasks ordered by
-  family name.D
-  """
-  allTasks: [Task!]!
-  """
-  Accepts argument of "count" and returns a vector of {count} tasks ordered by
-  family name
-  """
-  Tasks(count: Int!): [Task!]!
-  taskById(id: UUID!): Task!
-  taskByName(name: String!): [Task!]!
-  """
-  Accepts an argument of "count" and returns a vector of {count} work
-  """
-  work(count: Int!): [Work!]!
-  "Returns a vector of all persons ordered by family name"
-  allWork: [Work!]!
-  workById(id: UUID!): Work!
-  """
-  Accepts an argument of "count" and returns a vector of {count} products
-  """
-  products(count: Int!): [Product!]!
-  "Returns a vector of all products"
-  allProducts: [Product!]!
-  productById(id: UUID!): Product!
-  "Returns a vector of products matching some part of a provided name"
-  productsByName(name: String!): [Product!]!
-  "Returns a vector of products delivered by a specific organization"
-  productsByOrganizationId(organizationId: UUID!): [Product!]!
-  """
-  Cumulative validated capability across the organization over time,
-  one series per SkillDomain.
-  """
-  capabilityGrowth(bucket: TimeBucket!, from: NaiveDateTime, to: NaiveDateTime, domain: SkillDomain, orgTierId: UUID): [LabeledSeries!]!
-  "Per-domain capability supply vs demand over time."
-  capabilitySupplyDemand(bucket: TimeBucket!, from: NaiveDateTime, to: NaiveDateTime, domain: SkillDomain, orgTierId: UUID): [SupplyDemandSeries!]!
-  "Capability depth per team across all skill domains (for a heatmap)."
-  teamCapabilityMatrix(orgTierId: UUID): [TeamCapabilityRow!]!
-  "Derived role transitions over a window, for mobility/promotion analysis."
-  talentMovements(from: NaiveDateTime, to: NaiveDateTime, orgTierId: UUID): [TalentMovement!]!
-}
-"A representation of a roles ability to use a skill at a specific level"
-type Requirement {
-  id: UUID!
-  nameEn: String!
-  nameFr: String!
-  domain: SkillDomain!
-  skillId: UUID!
-  requiredLevel: CapabilityLevel!
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-  retiredAt: NaiveDateTime
-  role: Role!
-  skillName: String!
-  skill: Skill!
-}
-"Per-requirement breakdown for a single candidate."
-type RequirementMatch {
-  skillId: UUID!
-  skillName: String!
-  requiredLevel: CapabilityLevel!
-  "None when the person holds no capability for this skill at all."
-  actualLevel: CapabilityLevel
-  "required - actual (negative = over-qualified, 0 = exact, positive = shortfall)."
-  gap: Int!
-  met: Boolean!
-}
-type Role {
-  id: UUID!
-  person: Person
-  team: Team!
-  titleEnglish: String!
-  titleFrench: String!
-  """
-  Returns the sum effort of all active work underway
-  Maximum work should be around 10
-  """
-  effort: Int!
-  "Returns a vector of the work undertaken by this role"
-  work: [Work!]!
-  active: String!
-  requirements: [Requirement!]!
-  """
-  Full tenure history for this position: who has occupied it and when,
-  most recent first. The open assignment (no end_date) is the current
-  occupant.
-  """
-  assignments: [RoleAssignment!]!
-  "Returns the military occupation for a military role holder, if applicable"
-  militaryOccupation: String
-  "Returns the military rank for a military role holder, if applicable"
-  rank: Rank
-  "Returns the occupational group for a civilian role holder, if applicable"
-  occupationalGroup: OccupationalGroup
-  "Returns the occupational level for a civilian role holder, if applicable"
-  occupationalLevel: Int
-  startDate: String!
-  endDate: String!
-  createdAt: String!
-  updatedAt: String!
-  findMatches: [Person!]!
-  """
-  Returns tiered candidates for this role.
-  
-  `full_matches` meet every requirement at or above the required level.
-  `partial_matches` meet at least `min_coverage` of requirements and have
-  no single skill gap exceeding `max_gap_per_req` levels.
-  
-  Each capability level is a significant leap, so each missing level
-  costs 10 points off the composite score (0–100 scale).
-  """
-  fuzzyMatches(minCoverage: Float! = 0.5, maxGapPerReq: Int! = 1, limit: Int! = 20): RoleMatchResult!
-  startDatestamp: NaiveDateTime!
-  endDatestamp: NaiveDateTime
-}
-type RoleAssignment {
-  id: UUID!
-  "The person who held (or holds) the role during this tenure."
-  person: Person!
-  "The durable position this tenure belongs to."
-  role: Role!
-  startDate: String!
-  endDate: String!
-  "True while the person still occupies the role (no end_date set)."
-  isCurrent: Boolean!
-  startDatestamp: NaiveDateTime!
-  endDatestamp: NaiveDateTime
-}
-"Tiered match result for a role."
-type RoleMatchResult {
-  roleId: UUID!
-  """
-  The OrgTier whose owner is responsible for this role (nearest tier with an
-  ownership record, walking up from the role's team). Managed candidates sit
-  under this tier. Null if no owner is assigned anywhere up the chain.
-  """
-  managedOrgTierId: UUID
-  """
-  Candidates who currently hold a role under the managed OrgTier — the owner
-  or an admin can reassign these internally. Sorted by match_score descending.
-  """
-  managedFullMatches: [PersonMatchScore!]!
-  "Managed-area candidates meeting min_coverage but not every requirement."
-  managedPartialMatches: [PersonMatchScore!]!
-  "Full matches outside the managed area; each carries manager contact."
-  externalFullMatches: [PersonMatchScore!]!
-  "Partial matches outside the managed area; each carries manager contact."
-  externalPartialMatches: [PersonMatchScore!]!
-}
-"""
-Should get this from an API or have standard data
-Now pre-loaded as prt of context
-"""
-type Skill {
-  id: UUID!
-  nameEn: String!
-  nameFr: String!
-  descriptionEn: String!
-  descriptionFr: String!
-  domain: SkillDomain!
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-  retiredAt: NaiveDateTime
-  capabilities: [Capability!]!
-}
-"Supply vs demand for a single time bucket"
-type SupplyDemandPoint {
-  periodStart: NaiveDateTime!
-  bucket: TimeBucket!
-  "Count/weight of validated capabilities available as of period end."
-  supply: Float!
-  "Count/weight of required capability from role Requirements + Work as of period end."
-  demand: Float!
-}
-"Supply/demand time series for one domain"
-type SupplyDemandSeries {
-  "SkillDomain value as String."
-  domain: String!
-  points: [SupplyDemandPoint!]!
-}
-"A detected talent movement event"
-type TalentMovement {
-  personId: UUID!
-  at: NaiveDateTime!
-  fromTeamId: UUID
-  toTeamId: UUID
-  fromLevel: String
-  toLevel: String
-  "PROMOTION | LATERAL | INFLOW | OUTFLOW"
-  kind: String!
-}
-type Task {
-  id: UUID!
-  createdByRoleId: UUID!
-  title: String!
-  domain: SkillDomain!
-  intendedOutcome: String!
-  finalOutcome: String
-  approvalTier: Int!
-  url: String!
-  startDatestamp: NaiveDateTime!
-  targetCompletionDate: NaiveDateTime!
-  taskStatus: WorkStatus!
-  priority: Priority!
-  completedDate: NaiveDateTime
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-  work: [Work!]!
-  "Work under this task not yet assigned to a role"
-  vacantWork: [Work!]!
-  effort: Int!
-  createdBy: Role!
-  "The product this task contributes to, if any"
-  product: Product
-}
-type Team {
-  id: UUID!
-  organization: Organization!
-  organizationLevel: OrgTier!
-  nameEnglish: String!
-  nameFrench: String!
-  descriptionEnglish: String!
-  descriptionFrench: String!
-  retiredAt: String!
-  createdAt: String!
-  updatedAt: String!
-  occupiedRoles: [Role!]!
-  vacantRoles: [Role!]!
-  roles: [Role!]!
-  owner: Role!
-  "Capability counts for people holding roles in this team."
-  capabilityCounts: [CapabilityCount!]!
-  "Capability depth per skill domain for this team (lightweight heatmap row)."
-  capabilityHeatmap: [TeamCapabilityCell!]!
-  "Number of distinct people holding active roles on this team."
-  headcount: Int!
-  "Sum of active effort across this team's roles."
-  totalEffort: Int!
-}
-"A cell in the team capability heatmap"
-type TeamCapabilityCell {
-  domain: String!
-  "Weighted capability depth (validated; self-identified fallback)."
-  depth: Float!
-  "Distinct people contributing at this domain."
-  peopleCount: Int!
-}
-"A row in the team capability heatmap"
-type TeamCapabilityRow {
-  teamId: UUID!
-  teamName: String!
-  cells: [TeamCapabilityCell!]!
-}
-type TeamOwnership {
-  id: UUID!
-  ownerRoleId: UUID!
-  teamId: UUID!
-  startDatestamp: NaiveDateTime!
-  endDate: NaiveDateTime
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-}
-"A single data point in a time series"
-type TimeSeriesPoint {
-  "Start of the bucket, ISO 8601"
-  periodStart: NaiveDateTime!
-  bucket: TimeBucket!
-  value: Float!
-}
+
 type User {
-  id: UUID!
-  email: String!
-  role: String!
-  name: String!
-  accessLevel: String!
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-  "Access Level: Admin"
-  accessKey: String!
-  "Access Level: Admin"
-  approvedByUserUid: UUID
-  """
-  Principal kind: "HUMAN" (default) or "AGENT". An AGENT is a non-human
-  service account that queries the API on behalf of an application or data
-  service. HUMAN users must be linked to a Person; ADMIN and AGENT users
-  are exempt from that requirement.
-  """
-  accountType: String!
-  """
-  Account lifecycle: PROVISIONED | INVITED | ACTIVE | DISABLED. Only ACTIVE
-  users can sign in.
-  """
-  status: String!
+	id: UUID!
+	email: String!
+	role: String!
+	name: String!
+	accessLevel: String!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	"""
+	Access Level: Admin
+	"""
+	accessKey: String!
+	"""
+	Access Level: Admin
+	"""
+	approvedByUserUid: UUID
+	"""
+	Principal kind: "HUMAN" (default) or "AGENT". An AGENT is a non-human
+	service account that queries the API on behalf of an application or data
+	service. HUMAN users must be linked to a Person; ADMIN and AGENT users
+	are exempt from that requirement.
+	"""
+	accountType: String!
+	"""
+	Account lifecycle: PROVISIONED | INVITED | ACTIVE | DISABLED. Only ACTIVE
+	users can sign in.
+	"""
+	status: String!
 }
+
 """
-Result of issuing an activation invite. The caller surfaces the token as part
-of an activation link (e.g. /activate?token=…).
+Input Struct to create a new user. Only accessible by Administrators.
 """
-type InviteResult {
-  userId: UUID!
-  activationToken: String!
-  expiresAt: NaiveDateTime!
+input UserData {
+	name: String!
+	email: String!
+	password: String!
+	"""
+	UserRole in system: USER, OPERATOR, ANALYST, ADMIN
+	"""
+	role: String!
+	"""
+	Principal kind: "HUMAN" (default) or "AGENT". Agents are non-human
+	service accounts and are not required to be linked to a Person.
+	"""
+	accountType: String
 }
+
 type UserResponse {
-  id: UUID!
-  bearer: String!
-  role: String!
-  email: String!
-  expiresAt: NaiveDateTime!
+	id: UUID!
+	bearer: String!
+	role: String!
+	email: String!
+	expiresAt: NaiveDateTime!
 }
+
+"""
+Input Struct to create a new user. Only accessible by Administrators.
+"""
+input UserUpdate {
+	id: UUID!
+	name: String
+	email: String
+	password: String
+	"""
+	UserRole in system: USER, OPERATOR, ANALYST, ADMIN
+	"""
+	role: String
+}
+
 """
 A central authority's validation of an individual's Capability. Each
 validation is retained and date-stamped as provenance; the most recent
 one sets the capability's validated level directly.
 """
 type Validation {
-  id: UUID!
-  validatorId: UUID!
-  capabilityId: UUID!
-  validatedLevel: CapabilityLevel!
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-  validator: User!
+	id: UUID!
+	validatorId: UUID!
+	capabilityId: UUID!
+	validatedLevel: CapabilityLevel!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	validator: User!
 }
+
+"""
+InputObject for Validation with Option fields - only include the ones you want to update
+"""
+input ValidationData {
+	id: UUID!
+	validatedLevel: CapabilityLevel
+}
+
 """
 Data structure for a relationship between a person and work
 This is a many to many relationship as multiple people may be
@@ -869,582 +1787,69 @@ Work may be planned under a task with its capability requirement
 (domain and capability_level) before a role is assigned
 """
 type Work {
-  id: UUID!
-  workDescription: String!
-  url: String
-  domain: SkillDomain!
-  capabilityLevel: CapabilityLevel!
-  effort: Int!
-  workStatus: WorkStatus!
-  priority: Priority!
-  createdAt: NaiveDateTime!
-  updatedAt: NaiveDateTime!
-  task: Task!
-  role: Role
-  "The specific skill this work requires"
-  skill: Skill!
-  """
-  Capabilities (and through them, people) validated at or above
-  the level required by this work, ordered by validated level.
-  Matches on the work's required skill. Accepts an optional count
-  (default 10).
-  """
-  capabilityMatches(count: Int): [Capability!]!
+	id: UUID!
+	workDescription: String!
+	url: String
+	domain: SkillDomain!
+	capabilityLevel: CapabilityLevel!
+	effort: Int!
+	workStatus: WorkStatus!
+	priority: Priority!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	task: Task!
+	role: Role
+	"""
+	The specific skill this work requires
+	"""
+	skill: Skill!
+	"""
+	Capabilities (and through them, people) validated at or above
+	the level required by this work, ordered by validated level.
+	Matches on the work's required skill. Accepts an optional count
+	(default 10).
+	"""
+	capabilityMatches(count: Int): [Capability!]!
 }
-"Enums for Capability -> shift to 0 - 4"
-enum CapabilityLevel {
-  DESIRED
-  NOVICE
-  EXPERIENCED
-  EXPERT
-  SPECIALIST
-}
+
 """
-Government of Canada language proficiency ratings
-A == basic, B == beginner, C == intermediate, E = advanced or exempt
-X == no proficiency
+InputObject for Work with Option fields - only include the ones you want to update
 """
-enum LanguageLevel {
-  A
-  B
-  C
-  E
-  X
-}
-"A selection of languages (to be expanded)"
-enum LanguageName {
-  ENGLISH
-  FRENCH
-  ARABIC
-  CHINESE
-  SPANISH
-  GERMAN
-  JAPANESE
-  KOREAN
-  ITALIAN
-  OTHER
-}
-"Represents Canadian Army military occupations"
-enum MilitaryOccupation {
-  INFANTRY
-  ARMOURED
-  ARTILLERY
-  COMBAT_ENGINEERS
-  SIGNALS
-  INTELLIGENCE
-  MILITARY_POLICE
-  LOGISTICS_SUPPORT
-  MEDICAL_TECHNICIAN
-  COMMUNICATIONS
-  ELECTRONICS
-  VEHICLE_TECHNICIAN
-  WEAPONS_TECHNICIAN
-  SUPPLY_TECHNICIAN
-  COOK_SUPPORT
-  FINANCE_CLERK
-  HUMAN_RESOURCES_ADMINISTRATOR
-  MILITARY_FIREFIGHTER
-  MATERIALS_MANAGEMENT
-  GEOMATICS_TECHNICIAN
-  MEDICAL_ASSISTANT
-  DENTAL_ASSISTANT
-  PHARMACY_TECHNICIAN
-  CHAPLAIN
-  LEGAL_OFFICER
-  PILOT
-  AIRCREW_SYSTEMS
-  AIR_TRAFFIC_CONTROLLER
-  WEATHER_TECHNICIAN
-  IMAGE_TECHNICIAN
-  MUSICIAN
-  PHYSICAL_FITNESS_INSTRUCTOR
-  CYBER
-  SPECIAL_FORCES
-  OFFICER
-  OTHER
-}
-"Represents civilian occupational groups (classifications)"
-enum OccupationalGroup {
-  ADMINISTRATIVE_SERVICES
-  COMPUTER_SYSTEMS
-  ECONOMICS_AND_SOCIAL_SCIENCE
-  ENGINEERING
-  EXECUTIVE
-  FINANCIAL_MANAGEMENT
-  HUMAN_RESOURCES
-  INFORMATION_SERVICES
-  PROGRAM_ADMINISTRATION
-  RESEARCH
-  TECHNICAL_SERVICES
-  OTHER
-}
-"Represents the employment category of a person within the organization"
-enum PersonnelType {
-  MILITARY
-  CIVILIAN
-  CONTRACTOR
-  STUDENT
-  OTHER
-}
-enum Priority {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-enum PublicationStatus {
-  PLANNING
-  IN_PROGRESS
-  DRAFT
-  SUBMITTED
-  PUBLISHED
-  REJECTED
-  CANCELLED
-}
-"Represents military rank structure"
-enum Rank {
-  PRIVATE
-  CORPORAL
-  MASTER_CORPORAL
-  SERGEANT
-  WARRANT_OFFICER
-  MASTER_WARRANT_OFFICER
-  CHIEF_WARRANT_OFFICER
-  SECOND_LIEUTENANT
-  LIEUTENANT
-  CAPTAIN
-  MAJOR
-  LIEUTENANT_COLONEL
-  COLONEL
-  BRIGADIER_GENERAL
-  MAJOR_GENERAL
-  LIEUTENANT_GENERAL
-  GENERAL
-}
-enum SkillDomain {
-  COMBAT
-  INTELLIGENCE
-  STRATEGY
-  ENGINEERING
-  MEDICAL
-  JOINT_OPERATIONS
-  SOFTWARE_ENGINEERING
-  CLOUD_PLATFORM_DEV_OPS
-  DATA_ANALYTICS_AND_AI
-  CYBER_SECURITY
-  PRODUCT_AGILE_AND_DELIVERY
-  USER_EXPERIENCE
-  PROCUREMENT_AND_VENDOR_MANAGEMENT
-  PEOPLE_AND_ORGANISATIONAL_LEADERSHIP
-  GOVERNANCE
-  CORPORATE_SERVICES
-}
-"Time bucket granularity for analytics series"
-enum TimeBucket {
-  WEEK
-  MONTH
-  QUARTER
-  YEAR
-}
-enum WorkStatus {
-  PLANNING
-  IN_PROGRESS
-  COMPLETED
-  BLOCKED
-  CANCELLED
-}
-"InputObject for Affiliation with Option fields - only include the ones you want to update"
-input AffiliationData {
-  id: UUID!
-  affiliationRole: String
-  startDatestamp: NaiveDateTime
-  endDate: NaiveDateTime
-}
-"""
-InputObject for Capability with Option fields - only include the ones you want to update
-Capabilities will be updated regularly based on validations to a person's capability
-Note that name_en and name_fr are linked to and derived from a skill and cannot be updated independently
-"""
-input CapabilityData {
-  id: UUID!
-  selfIdentifiedLevel: CapabilityLevel
-  validatedLevel: CapabilityLevel
-  retiredAt: NaiveDateTime
-}
-"InputObject for LanguageData with Option fields - only include the ones you want to update"
-input LanguageDataUpdate {
-  id: UUID!
-  languageName: LanguageName
-  reading: LanguageLevel
-  writing: LanguageLevel
-  speaking: LanguageLevel
-}
-input LoginQuery {
-  email: String!
-  password: String!
-}
-input NewAffiliation {
-  personId: UUID!
-  organizationId: UUID!
-  homeOrgId: UUID!
-  affiliationRole: String!
-  endDate: NaiveDateTime
-}
-input NewCapability {
-  nameEn: String!
-  nameFr: String!
-  domain: SkillDomain!
-  personId: UUID!
-  skillId: UUID!
-  organizationId: UUID!
-  selfIdentifiedLevel: CapabilityLevel!
-}
-"Represents an insertable Language"
-input NewLanguageData {
-  personId: UUID!
-  languageName: LanguageName!
-  reading: LanguageLevel
-  writing: LanguageLevel
-  speaking: LanguageLevel
-}
-input NewOrgOwnership {
-  ownerRoleId: UUID!
-  orgTierId: UUID!
-}
-input NewOrgTier {
-  organizationId: UUID!
-  tierLevel: Int!
-  nameEn: String!
-  nameFr: String!
-  primaryDomain: SkillDomain!
-  parentTier: UUID
-}
-"Represents an insertable Organization"
-input NewOrganization {
-  nameEn: String!
-  nameFr: String!
-  acronymEn: String!
-  acronymFr: String!
-  orgType: String!
-  url: String!
-}
-"Referenced by Roles, TeamOwnership, OrgOwnership"
-input NewPersonInput {
-  familyName: String!
-  givenName: String!
-  "Required — the future login id and invite target for the auto-provisioned user account."
-  email: String!
-  phone: String!
-  workAddress: String!
-  city: String!
-  province: String!
-  postalCode: String!
-  country: String!
-  organizationId: UUID!
-  peoplesoftId: String!
-  orcidId: String!
-  personnelType: PersonnelType!
-}
-input NewProduct {
-  organizationId: UUID!
-  productOwnerRoleId: UUID!
-  nameEn: String!
-  nameFr: String!
-  descriptionEn: String!
-  descriptionFr: String!
-  primaryDomain: SkillDomain!
-  url: String
-  productStatus: WorkStatus!
-  priority: Priority!
-}
-input NewPublication {
-  publishingOrganizationId: UUID!
-  leadAuthorId: UUID!
-  title: String!
-  subjectText: String!
-  publicationStatus: PublicationStatus!
-  urlString: String
-  publishingId: String
-  submittedDate: NaiveDateTime
-  publishedDatestamp: NaiveDateTime
-}
-input NewPublicationContributor {
-  publicationId: UUID!
-  contributorId: UUID!
-  contributorRole: String!
-}
-input NewRequirement {
-  nameEn: String!
-  nameFr: String!
-  domain: SkillDomain!
-  roleId: UUID!
-  skillId: UUID!
-  requiredLevel: CapabilityLevel!
-}
-input NewRole {
-  personId: UUID
-  teamId: UUID!
-  titleEn: String!
-  titleFr: String!
-  effort: Float!
-  active: Boolean!
-  militaryOccupation: MilitaryOccupation
-  rank: Rank
-  occupationalGroup: OccupationalGroup
-  occupationalLevel: Int
-  startDatestamp: NaiveDateTime!
-  endDate: NaiveDateTime
-}
-"Represents an insertable Skill"
-input NewSkill {
-  nameEn: String!
-  nameFr: String!
-  descriptionEn: String!
-  descriptionFr: String!
-  domain: SkillDomain!
-}
-input NewTask {
-  createdByRoleId: UUID!
-  title: String!
-  domain: SkillDomain!
-  intendedOutcome: String!
-  approvalTier: Int!
-  url: String!
-  startDatestamp: NaiveDateTime!
-  targetCompletionDate: NaiveDateTime!
-  taskStatus: WorkStatus!
-  priority: Priority!
-  productId: UUID
-}
-"""
-Linked from HealthProfile
-Linked to Trip
-"""
-input NewTeam {
-  nameEn: String!
-  nameFr: String!
-  organizationId: UUID!
-  orgTierId: UUID!
-  primaryDomain: SkillDomain!
-  descriptionEn: String!
-  descriptionFr: String!
-}
-"""
-Linked from HealthProfile
-Linked to Trip
-"""
-input NewTeamOwnership {
-  ownerRoleId: UUID!
-  teamId: UUID!
-  startDatestamp: NaiveDateTime!
-  endDate: NaiveDateTime
-}
-input NewValidation {
-  validatorId: UUID!
-  capabilityId: UUID!
-  validatedLevel: CapabilityLevel!
-}
-input NewWork {
-  taskId: UUID!
-  roleId: UUID
-  workDescription: String!
-  url: String
-  domain: SkillDomain!
-  skillId: UUID!
-  capabilityLevel: CapabilityLevel!
-  effort: Int!
-  workStatus: WorkStatus!
-  priority: Priority!
-}
-"InputObject for OrgOwnership with Option fields - only include the ones you want to update"
-input OrgOwnershipData {
-  id: UUID!
-  ownerRoleId: UUID
-  orgTierId: UUID
-  retiredAt: NaiveDateTime
-}
-"InputObject for OrgTier with Option fields - only include the ones you want to update"
-input OrgTierData {
-  id: UUID!
-  nameEn: String
-  nameFr: String
-  tierLevel: Int
-  primaryDomain: SkillDomain
-  parentTier: UUID
-  retiredAt: NaiveDateTime
-}
-"InputObject for Organization with Option fields - only include the ones you want to update"
-input OrganizationData {
-  id: UUID!
-  nameEn: String
-  nameFr: String
-  acronymEn: String
-  acronymFr: String
-  orgType: String
-  url: String
-  retiredAt: NaiveDateTime
-}
-"InputObject for Person with Option fields - only include the ones you want to update"
-input PersonData {
-  id: UUID!
-  userId: UUID
-  familyName: String
-  givenName: String
-  email: String
-  phone: String
-  workAddress: String
-  city: String
-  province: String
-  postalCode: String
-  country: String
-  organizationId: UUID
-  peoplesoftId: String
-  orcidId: String
-  personnelType: PersonnelType
-  updatedAt: NaiveDateTime
-  retiredAt: NaiveDateTime
-}
-"InputObject for Product with Option fields - only include the ones you want to update"
-input ProductData {
-  id: UUID!
-  productOwnerRoleId: UUID
-  nameEn: String
-  nameFr: String
-  descriptionEn: String
-  descriptionFr: String
-  primaryDomain: SkillDomain
-  url: String
-  productStatus: WorkStatus
-  priority: Priority
-}
-"InputObject for PublicationContributor with Option fields - only include the ones you want to update"
-input PublicationContributorData {
-  id: UUID!
-  contributorRole: String
-}
-"InputObject for Publication with Option fields - only include the ones you want to update"
-input PublicationData {
-  id: UUID!
-  title: String
-  subjectText: String
-  publicationStatus: PublicationStatus
-  urlString: String
-  publishingId: String
-  submittedDate: NaiveDateTime
-  publishedDatestamp: NaiveDateTime
-}
-"InputObject for Requirement with Option fields - only include the ones you want to update"
-input RequirementData {
-  id: UUID!
-  nameEn: String
-  nameFr: String
-  domain: SkillDomain
-  requiredLevel: CapabilityLevel
-  retiredAt: NaiveDateTime
-}
-"""
-InputObject for Role with Option fields - only include the ones you want to update
-Note the only changable fields are active, start and end.
-It's recommended to create new roles for people vs. edit existing ones to show history
-and progression
-"""
-input RoleData {
-  id: UUID!
-  active: Boolean
-  startDatestamp: NaiveDateTime
-  endDate: NaiveDateTime
-}
-"""
-InputObject for Skill with Option fields - only include the ones you want to update
-Skills will be updated rarely once set by the organization
-"""
-input SkillData {
-  id: UUID!
-  nameEn: String
-  nameFr: String
-  domain: SkillDomain
-  descriptionEn: String
-  descriptionFr: String
-}
-"InputObject for Task with Option fields - only include the ones you want to update"
-input TaskData {
-  id: UUID!
-  title: String
-  domain: SkillDomain
-  intendedOutcome: String
-  finalOutcome: String
-  url: String
-  approvalTier: Int
-  startDatestamp: NaiveDateTime
-  targetCompletionDate: NaiveDateTime
-  taskStatus: WorkStatus
-  priority: Priority
-  completedDate: NaiveDateTime
-  productId: UUID
-}
-"InputObject for Team with Option fields - only include the ones you want to update"
-input TeamData {
-  id: UUID!
-  nameEn: String
-  nameFr: String
-  primaryDomain: SkillDomain
-  descriptionEn: String
-  descriptionFr: String
-  retiredAt: NaiveDateTime
-}
-"InputObject for TeamOwnership with Option fields - only include the ones you want to update"
-input TeamOwnershipData {
-  id: UUID!
-  ownerRoleId: UUID
-  teamId: UUID
-  startDatestamp: NaiveDateTime
-  endDate: NaiveDateTime
-}
-"Input Struct to create a new user. Only accessible by Administrators."
-input UserData {
-  name: String!
-  email: String!
-  password: String!
-  "UserRole in system: USER, OPERATOR, ANALYST, ADMIN"
-  role: String!
-  """
-  Principal kind: "HUMAN" (default) or "AGENT". Agents are non-human service
-  accounts and are not required to be linked to a Person.
-  """
-  accountType: String
-}
-"Input Struct to create a new user. Only accessible by Administrators."
-input UserUpdate {
-  id: UUID!
-  name: String
-  email: String
-  password: String
-  "UserRole in system: USER, OPERATOR, ANALYST, ADMIN"
-  role: String
-}
-"InputObject for Validation with Option fields - only include the ones you want to update"
-input ValidationData {
-  id: UUID!
-  validatedLevel: CapabilityLevel
-}
-"InputObject for Work with Option fields - only include the ones you want to update"
 input WorkData {
-  id: UUID!
-  taskId: UUID
-  roleId: UUID
-  workDescription: String
-  url: String
-  domain: SkillDomain
-  skillId: UUID
-  capabilityLevel: CapabilityLevel
-  effort: Int
-  workStatus: WorkStatus
-  priority: Priority
+	id: UUID!
+	taskId: UUID
+	roleId: UUID
+	workDescription: String
+	url: String
+	domain: SkillDomain
+	skillId: UUID
+	capabilityLevel: CapabilityLevel
+	effort: Int
+	workStatus: WorkStatus
+	priority: Priority
 }
-"Indicates that an Input Object is a OneOf Input Object (and thus requires exactly one of its field be provided)"
-directive @oneOf on INPUT_OBJECT
-"Provides a scalar specification URL for specifying the behavior of custom scalar types."
-directive @specifiedBy(
-    "URL that specifies the behavior of this scalar."
-    url: String!
-  ) on SCALAR
+
+enum WorkStatus {
+	PLANNING
+	IN_PROGRESS
+	COMPLETED
+	BLOCKED
+	CANCELLED
+}
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Provides a scalar specification URL for specifying the behavior of custom scalar types.
+"""
+directive @specifiedBy(url: String!) on SCALAR
+schema {
+	query: Query
+	mutation: Mutation
+}

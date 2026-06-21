@@ -9,7 +9,7 @@ use crate::graphql::mutation::{
     TeamMutation, TeamOwnershipMutation, AffiliationMutation,
     PublicationMutation, PublicationContributorMutation,
     WorkMutation, TaskMutation, ProductMutation, RequirementMutation,
-    ValidationMutation, LanguageMutation,
+    ValidationMutation, LanguageMutation, SelfServiceMutation,
 };
 
 #[derive(MergedObject, Default)]
@@ -33,4 +33,5 @@ pub struct Mutation(
     RequirementMutation,
     ValidationMutation,
     LanguageMutation,
+    SelfServiceMutation,
 );

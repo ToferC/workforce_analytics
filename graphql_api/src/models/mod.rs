@@ -15,6 +15,7 @@ mod product;
 mod language;
 mod publication;
 mod publication_contributor;
+mod record_flag;
 mod requirement;
 mod matching;
 
@@ -41,6 +42,7 @@ pub use product::*;
 pub use language::*;
 pub use publication::*;
 pub use publication_contributor::*;
+pub use record_flag::*;
 pub use requirement::*;
 pub use matching::*;
 

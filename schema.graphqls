@@ -192,6 +192,18 @@ type ManagerContact {
 }
 
 """
+The authenticated caller's account and linked person record. Drives the
+self-service "My profile" experience.
+"""
+type Me {
+	user: User!
+	"""
+	The Person linked to this account, if any (admins/agents may have none).
+	"""
+	person: Person
+}
+
+"""
 Represents Canadian Army military occupations
 """
 enum MilitaryOccupation {
@@ -344,6 +356,37 @@ type Mutation {
 	updateValidation(data: ValidationData!): Validation!
 	createLanguageData(data: NewLanguageData!): LanguageData!
 	updateLanguageData(data: LanguageDataUpdate!): LanguageData!
+	"""
+	Update the caller's own Person record (contact details). Authorized by
+	ownership: the record must be linked to the caller's user account, so no
+	role guard is needed — a plain authenticated user may edit only themself.
+	"""
+	updateMyPerson(data: MyPersonUpdate!): Person!
+	"""
+	Raise a correction flag against the caller's own record for operators to
+	review.
+	"""
+	flagRecordIssue(message: String!): RecordFlag!
+	"""
+	Mark a record flag resolved. Operator/admin only.
+	"""
+	resolveRecordFlag(id: UUID!): RecordFlag!
+}
+
+"""
+Fields a person may change on their own record. All optional; omitted fields
+are left unchanged.
+"""
+input MyPersonUpdate {
+	familyName: String
+	givenName: String
+	email: String
+	phone: String
+	workAddress: String
+	city: String
+	province: String
+	postalCode: String
+	country: String
 }
 
 """
@@ -1211,6 +1254,15 @@ type Query {
 	Derived role transitions over a window, for mobility/promotion analysis.
 	"""
 	talentMovements(from: NaiveDateTime, to: NaiveDateTime, orgTierId: UUID): [TalentMovement!]!
+	"""
+	The currently authenticated user and their linked Person.
+	"""
+	me: Me!
+	"""
+	Unresolved record-correction flags, oldest first — the operator review
+	queue. Operator/admin only.
+	"""
+	recordFlags: [RecordFlag!]!
 }
 
 """
@@ -1234,6 +1286,24 @@ enum Rank {
 	MAJOR_GENERAL
 	LIEUTENANT_GENERAL
 	GENERAL
+}
+
+"""
+A self-service correction request raised by a Person against their own
+record. Operators/admins review and resolve these. Deliberately minimal.
+"""
+type RecordFlag {
+	id: UUID!
+	"""
+	The Person the flag is about (the submitter's own record).
+	"""
+	personId: UUID!
+	message: String!
+	createdAt: NaiveDateTime!
+	"""
+	Set when an operator/admin has actioned the flag.
+	"""
+	resolvedAt: NaiveDateTime
 }
 
 """

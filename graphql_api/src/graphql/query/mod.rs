@@ -11,6 +11,7 @@ mod publication_query;
 mod task;
 mod work;
 mod product;
+mod self_service_query;
 
 pub use self::query::*;
 pub use self::analytics_query::*;
@@ -25,4 +26,5 @@ pub use self::publication_query::*;
 pub use self::task::*;
 pub use self::work::*;
 pub use self::product::*;
+pub use self::self_service_query::*;
 

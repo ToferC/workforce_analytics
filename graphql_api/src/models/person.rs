@@ -495,43 +495,49 @@ pub struct NewPersonInput {
     pub personnel_type: PersonnelType,
 }
 
+/// Vacant, active roles this person qualifies for: those where they meet *every*
+/// requirement. A person's demonstrated level on a skill is their validated
+/// level if present, otherwise their self-identified level — so matching works
+/// before capabilities have been formally validated.
 pub fn find_roles_by_requirements_met(person: &Person) -> Result<Vec<Role>> {
 
+    // Best level the person can demonstrate per skill.
     let capabilities = Capability::get_by_person_id(person.id)?;
-
-    let mut role_ids: Vec<Uuid> = Vec::new();
-
+    let mut best_by_skill: HashMap<Uuid, i32> = HashMap::new();
     for cap in capabilities {
-
-        // A capability with no validations yet has no validated level, so
-        // it can't be matched against requirements. Skip it rather than
-        // unwrapping (which panicked the person / findMatches query).
-        let validated_level = match cap.validated_level {
-            Some(level) => level,
-            None => continue,
-        };
-
-        let reqs = Requirement::get_by_skill_id_and_level(cap.skill_id, validated_level)?;
-
-        for r in reqs {
-            role_ids.push(r.role_id);
-        };
+        let level = cap.validated_level.unwrap_or(cap.self_identified_level).as_int();
+        let entry = best_by_skill.entry(cap.skill_id).or_insert(i32::MIN);
+        if level > *entry {
+            *entry = level;
+        }
     }
 
-    let id_counts: HashMap<Uuid, i32> =
-        role_ids.iter()
-            .fold(HashMap::new(), |mut map, id| {
-                *map.entry(*id).or_insert(0) += 1;
-                map
-            });
+    // Candidate roles: active and vacant (open positions the person could fill).
+    let vacant_roles = Role::get_vacant(10_000)?;
+    if vacant_roles.is_empty() {
+        return Ok(vec![]);
+    }
+    let vacant_ids: std::collections::HashSet<Uuid> = vacant_roles.iter().map(|r| r.id).collect();
 
-    let mut validated_ids: Vec<Uuid> = Vec::new();
-
-    for (k, v) in id_counts {
-        if v >= 3 {
-            validated_ids.push(k);
+    // Requirements grouped by candidate role (two queries total, no N+1).
+    let mut reqs_by_role: HashMap<Uuid, Vec<Requirement>> = HashMap::new();
+    for req in Requirement::get_all()? {
+        if vacant_ids.contains(&req.role_id) {
+            reqs_by_role.entry(req.role_id).or_default().push(req);
         }
-    };
+    }
 
-    Role::get_active_vacant_by_ids(&validated_ids)
+    // A role matches when the person meets every one of its requirements.
+    let matches = vacant_roles
+        .into_iter()
+        .filter(|role| match reqs_by_role.get(&role.id) {
+            Some(reqs) => reqs.iter().all(|r| {
+                best_by_skill.get(&r.skill_id).copied().unwrap_or(i32::MIN) >= r.required_level.as_int()
+            }),
+            // No requirements defined → nothing to qualify against; exclude.
+            None => false,
+        })
+        .collect();
+
+    Ok(matches)
 }

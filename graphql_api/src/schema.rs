@@ -228,6 +228,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    record_flags (id) {
+        id -> Uuid,
+        person_id -> Uuid,
+        message -> Varchar,
+        created_at -> Timestamp,
+        resolved_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::PublicationStatus;
 
@@ -478,7 +488,7 @@ diesel::joinable!(org_tier_ownerships -> roles (owner_role_id));
 diesel::joinable!(org_tiers -> organizations (organization_id));
 diesel::joinable!(persons -> organizations (organization_id));
 diesel::joinable!(persons -> users (user_id));
-diesel::joinable!(products -> organizations (organization_id));
+diesel::joinable!(record_flags -> persons (person_id));diesel::joinable!(products -> organizations (organization_id));
 diesel::joinable!(products -> roles (product_owner_role_id));
 diesel::joinable!(publication_contributors -> persons (contributor_id));
 diesel::joinable!(publication_contributors -> publications (publication_id));
@@ -514,6 +524,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     products,
     publication_contributors,
     publications,
+    record_flags,
     requirements,
     role_assignments,
     roles,

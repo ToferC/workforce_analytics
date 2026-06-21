@@ -88,8 +88,20 @@ type LanguageData {
 type Mutation {
   createUser(userData: UserData!): User!
   updateUser(userData: UserUpdate!): User!
+  """
+  Grant a provisioned account a path to access: issue an activation token and
+  move the user to INVITED. Returns the token + expiry so the operator can share
+  an activation link (no email is sent in v1).
+  """
+  inviteUser(userId: UUID!): InviteResult!
+  "Redeem an activation token by setting a password. Public; moves the account to ACTIVE."
+  activateAccount(token: String!, password: String!): Boolean!
+  "Revoke a user's access (record retained). Admin only."
+  disableUser(userId: UUID!): User!
+  "Re-enable a disabled user (ACTIVE if they have a password, else PROVISIONED). Admin only."
+  enableUser(userId: UUID!): User!
   signIn(input: LoginQuery!): UserResponse!
-  createPerson(data: NewPerson!): Person!
+  createPerson(data: NewPersonInput!): Person!
   updatePerson(data: PersonData!): Person!
   "Un-retire a person by clearing retired_at."
   restorePerson(id: UUID!): Person!
@@ -812,6 +824,20 @@ type User {
   are exempt from that requirement.
   """
   accountType: String!
+  """
+  Account lifecycle: PROVISIONED | INVITED | ACTIVE | DISABLED. Only ACTIVE
+  users can sign in.
+  """
+  status: String!
+}
+"""
+Result of issuing an activation invite. The caller surfaces the token as part
+of an activation link (e.g. /activate?token=…).
+"""
+type InviteResult {
+  userId: UUID!
+  activationToken: String!
+  expiresAt: NaiveDateTime!
 }
 type UserResponse {
   id: UUID!
@@ -1103,10 +1129,10 @@ input NewOrganization {
   url: String!
 }
 "Referenced by Roles, TeamOwnership, OrgOwnership"
-input NewPerson {
-  userId: UUID!
+input NewPersonInput {
   familyName: String!
   givenName: String!
+  "Required — the future login id and invite target for the auto-provisioned user account."
   email: String!
   phone: String!
   workAddress: String!

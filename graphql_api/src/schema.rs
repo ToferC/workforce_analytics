@@ -413,6 +413,11 @@ diesel::table! {
         approved_by_user_uid -> Nullable<Uuid>,
         #[max_length = 16]
         account_type -> Varchar,
+        #[max_length = 16]
+        status -> Varchar,
+        #[max_length = 128]
+        activation_token -> Nullable<Varchar>,
+        activation_expires_at -> Nullable<Timestamp>,
     }
 }
 
@@ -472,6 +477,7 @@ diesel::joinable!(org_tier_ownerships -> org_tiers (org_tier_id));
 diesel::joinable!(org_tier_ownerships -> roles (owner_role_id));
 diesel::joinable!(org_tiers -> organizations (organization_id));
 diesel::joinable!(persons -> organizations (organization_id));
+diesel::joinable!(persons -> users (user_id));
 diesel::joinable!(products -> organizations (organization_id));
 diesel::joinable!(products -> roles (product_owner_role_id));
 diesel::joinable!(publication_contributors -> persons (contributor_id));

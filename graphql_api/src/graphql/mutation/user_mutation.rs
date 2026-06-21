@@ -7,9 +7,10 @@ use chrono::NaiveDateTime;
 
 use crate::models::{InsertableUser, LoginQuery,
     User, UserData, create_token, decode_token,
-    verify_password, UserUpdate, hash_password};
+    verify_password, UserUpdate, hash_password,
+    STATUS_ACTIVE, STATUS_DISABLED, STATUS_PROVISIONED};
 use crate::common_utils::{UserRole,
-    is_admin, RoleGuard};
+    is_admin, is_operator, RoleGuard};
 // use rdkafka::producer::FutureProducer;
 // use crate::kafka::send_message;
 
@@ -23,6 +24,15 @@ pub struct UserResponse {
     role: String,
     email: String,
     expires_at: NaiveDateTime,
+}
+
+/// Result of issuing an activation invite. The caller surfaces the token as part
+/// of an activation link (e.g. /activate?token=…).
+#[derive(Debug, Serialize, Deserialize, SimpleObject)]
+pub struct InviteResult {
+    pub user_id: Uuid,
+    pub activation_token: String,
+    pub expires_at: NaiveDateTime,
 }
 
 // Mutation Example
@@ -130,6 +140,74 @@ impl UserMutation {
         updated_user
     }
 
+    /// Grant a provisioned account a path to access: issue an activation token
+    /// and move the user to INVITED. Returns the token + expiry so the operator
+    /// can share an activation link (no email is sent in v1).
+    #[graphql(
+        name = "inviteUser",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    pub async fn invite_user(
+        &self,
+        _context: &Context<'_>,
+        user_id: Uuid,
+    ) -> Result<InviteResult> {
+        let user = User::get_by_id(&user_id)?;
+        if user.email.trim().is_empty() {
+            return Err(Error::new("Cannot invite a user without an email address."));
+        }
+        let (token, expires_at) = User::invite(&user_id)?;
+        Ok(InviteResult { user_id, activation_token: token, expires_at })
+    }
+
+    /// Redeem an activation token by setting a password. Public: this is how an
+    /// invited person gains access. Moves the account to ACTIVE.
+    #[graphql(name = "activateAccount")]
+    pub async fn activate_account(
+        &self,
+        _context: &Context<'_>,
+        token: String,
+        password: String,
+    ) -> Result<bool> {
+        if password.trim().len() < 8 {
+            return Err(Error::new("Password must be at least 8 characters."));
+        }
+        User::activate(token.trim(), &password)?;
+        Ok(true)
+    }
+
+    /// Revoke a user's access (record retained). Admin only.
+    #[graphql(
+        name = "disableUser",
+        guard = "RoleGuard::new(UserRole::Admin)",
+        visible = "is_admin",
+    )]
+    pub async fn disable_user(
+        &self,
+        _context: &Context<'_>,
+        user_id: Uuid,
+    ) -> Result<User> {
+        User::set_status(&user_id, STATUS_DISABLED)
+    }
+
+    /// Re-enable a disabled user. Restores ACTIVE if they have a password,
+    /// otherwise PROVISIONED (they still need to activate). Admin only.
+    #[graphql(
+        name = "enableUser",
+        guard = "RoleGuard::new(UserRole::Admin)",
+        visible = "is_admin",
+    )]
+    pub async fn enable_user(
+        &self,
+        _context: &Context<'_>,
+        user_id: Uuid,
+    ) -> Result<User> {
+        let user = User::get_by_id(&user_id)?;
+        let status = if user.hash.is_empty() { STATUS_PROVISIONED } else { STATUS_ACTIVE };
+        User::set_status(&user_id, status)
+    }
+
     pub async fn sign_in(
         &self,
         _context: &Context<'_>,
@@ -141,6 +219,15 @@ impl UserMutation {
 
             if let Ok(matching) = verify_password(user.hash.to_string(), &input.password) {
                 if matching {
+                    // Only ACTIVE accounts may sign in. PROVISIONED/INVITED
+                    // accounts have no access until activated; DISABLED are
+                    // revoked.
+                    if user.status != STATUS_ACTIVE {
+                        return Err(Error::new(
+                            "This account is not active. Ask an administrator to grant access, then activate your invitation.",
+                        ));
+                    }
+
                     let role = UserRole::from_str(user.role.as_str())
                         .expect("Cannot convert &str to UserRole");
 

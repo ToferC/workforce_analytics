@@ -7,7 +7,7 @@ use chrono::NaiveDateTime;
 
 use crate::models::{InsertableUser, LoginQuery,
     User, UserData, create_token, decode_token,
-    verify_password, UserUpdate, hash_password,
+    verify_password, UserUpdate, hash_password, Person,
     STATUS_ACTIVE, STATUS_DISABLED, STATUS_PROVISIONED};
 use crate::common_utils::{UserRole,
     is_admin, is_operator, RoleGuard};
@@ -206,6 +206,35 @@ impl UserMutation {
         let user = User::get_by_id(&user_id)?;
         let status = if user.hash.is_empty() { STATUS_PROVISIONED } else { STATUS_ACTIVE };
         User::set_status(&user_id, status)
+    }
+
+    /// Grant access to a person's account by person id, for operators who manage
+    /// people but cannot read user records directly (userByEmail is admin-only).
+    /// Resolves the person's account and issues an activation invite. Refuses if
+    /// the account is already ACTIVE, so it is safe to call without first
+    /// inspecting account status.
+    #[graphql(
+        name = "invitePerson",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    pub async fn invite_person(
+        &self,
+        _context: &Context<'_>,
+        person_id: Uuid,
+    ) -> Result<InviteResult> {
+        let person = Person::get_by_id(&person_id)?;
+        let user = User::get_by_id(&person.user_id)?;
+
+        if user.email.trim().is_empty() {
+            return Err(Error::new("Cannot invite a user without an email address."));
+        }
+        if user.status == STATUS_ACTIVE {
+            return Err(Error::new("This person's account is already active."));
+        }
+
+        let (token, expires_at) = User::invite(&person.user_id)?;
+        Ok(InviteResult { user_id: person.user_id, activation_token: token, expires_at })
     }
 
     pub async fn sign_in(

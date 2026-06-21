@@ -268,6 +268,14 @@ type Mutation {
 	otherwise PROVISIONED (they still need to activate). Admin only.
 	"""
 	enableUser(userId: UUID!): User!
+	"""
+	Grant access to a person's account by person id, for operators who manage
+	people but cannot read user records directly (userByEmail is admin-only).
+	Resolves the person's account and issues an activation invite. Refuses if
+	the account is already ACTIVE, so it is safe to call without first
+	inspecting account status.
+	"""
+	invitePerson(personId: UUID!): InviteResult!
 	signIn(input: LoginQuery!): UserResponse!
 	createPerson(data: NewPersonInput!): Person!
 	updatePerson(data: PersonData!): Person!

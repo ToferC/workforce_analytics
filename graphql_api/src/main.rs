@@ -20,17 +20,6 @@ async fn main() -> std::io::Result<()> {
     database::init();
     println!("DB initialization done in {}s.", now.elapsed().as_secs());
 
-    // One-off seeding path. Run as a separate process (e.g. `heroku run
-    // "./target/release/graphql_api --seed"`) so the heavy demo-data
-    // generation never blocks web dyno boot and trips Heroku's R10 timeout.
-    if env::args().any(|arg| arg == "--seed") {
-        println!("Running one-off database seed");
-        let seed_start = Instant::now();
-        database::seed();
-        println!("Seed finished in {}s.", seed_start.elapsed().as_secs());
-        return Ok(());
-    }
-
     let environment = env::var("ENVIRONMENT");
 
     let environment = match environment {

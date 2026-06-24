@@ -75,9 +75,10 @@ fn ensure_admin() {
 /// Heavy, one-off demo-data seeding (skills, org structure, people,
 /// capabilities, validations, publications, tasks, products). This can take
 /// well over a minute against a remote database, so it must NOT run during web
-/// dyno boot. Invoke it as a one-off process instead, e.g. on Heroku:
+/// dyno boot. It lives in the dedicated `seed` binary (src/bin/seed.rs) and is
+/// invoked as a one-off process, e.g. on Heroku:
 ///
-///     heroku run "./target/release/graphql_api --seed" -a <api-app>
+///     heroku run "./target/release/seed" -a <api-app>
 ///
 /// Guarded so it is a no-op if the database already contains seed data, making
 /// it safe to re-run. To re-seed from scratch, reset the database first.

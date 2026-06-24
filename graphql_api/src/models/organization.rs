@@ -92,6 +92,82 @@ impl Organization {
         Ok(res)
     }
 
+    /// Create an organization together with a starter hierarchy so it is not an
+    /// empty shell. A bare organization has no tiers and no owner, which leaves
+    /// it invisible in the org chart and with no authority to inherit. This
+    /// seeds, in a single transaction:
+    ///   * a top-level org tier (level 0, no parent);
+    ///   * an executive team under that tier (roles must belong to a team);
+    ///   * a vacant "head" role on that team — ownership attaches to the
+    ///     position, not a person, so it survives staffing changes;
+    ///   * an ownership record making that role the owner of the top tier.
+    /// The whole structure commits or rolls back as a unit, so a new
+    /// organization is never left half-built.
+    pub fn create_with_defaults(organization: &NewOrganization) -> Result<Organization> {
+        use crate::models::{NewOrgTier, NewTeam, NewRole, NewOrgOwnership, Team, Role};
+
+        let mut conn = connection()?;
+
+        let org = conn.transaction::<Organization, diesel::result::Error, _>(|conn| {
+            let now = chrono::Utc::now().naive_utc();
+
+            let org: Organization = diesel::insert_into(organizations::table)
+                .values(organization)
+                .get_result(conn)?;
+
+            let tier: OrgTier = diesel::insert_into(org_tiers::table)
+                .values(NewOrgTier {
+                    organization_id: org.id,
+                    tier_level: 0,
+                    name_en: "Executive".to_string(),
+                    name_fr: "Direction".to_string(),
+                    primary_domain: SkillDomain::Governance,
+                    parent_tier: None,
+                })
+                .get_result(conn)?;
+
+            let team: Team = diesel::insert_into(teams::table)
+                .values(NewTeam {
+                    name_en: "Executive Office".to_string(),
+                    name_fr: "Bureau de la direction".to_string(),
+                    organization_id: org.id,
+                    org_tier_id: tier.id,
+                    primary_domain: SkillDomain::Governance,
+                    description_en: "Senior leadership of the organization.".to_string(),
+                    description_fr: "Direction générale de l'organisation.".to_string(),
+                })
+                .get_result(conn)?;
+
+            let role: Role = diesel::insert_into(roles::table)
+                .values(NewRole {
+                    person_id: None,
+                    team_id: team.id,
+                    title_en: format!("Head, {}", org.name_en),
+                    title_fr: format!("Chef, {}", org.name_fr),
+                    effort: 1.0,
+                    active: true,
+                    military_occupation: None,
+                    rank: None,
+                    occupational_group: None,
+                    occupational_level: None,
+                    start_datestamp: now,
+                    end_date: None,
+                })
+                .get_result(conn)?;
+
+            diesel::insert_into(org_tier_ownerships::table)
+                .values(NewOrgOwnership {
+                    owner_role_id: role.id,
+                    org_tier_id: tier.id,
+                })
+                .execute(conn)?;
+
+            Ok(org)
+        })?;
+
+        Ok(org)
+    }
+
     pub fn get_by_id(id: &Uuid) -> Result<Organization> {
         let mut conn = connection()?;
 

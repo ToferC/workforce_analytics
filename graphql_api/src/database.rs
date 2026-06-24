@@ -33,8 +33,9 @@ fn run_migration(conn: &mut PgConnection) {
 /// Web-boot path: run migrations and make sure the admin user exists, then
 /// return immediately so the HTTP server can bind to $PORT well within
 /// Heroku's 60s boot window. Heavy demo-data generation is intentionally NOT
-/// run here — it lives in `seed()` and is invoked as a one-off command (see
-/// `main.rs` / the `--seed` flag) so it can't trigger an R10 boot timeout.
+/// run here — it lives in `seed()`, invoked as a one-off command via the
+/// dedicated `seed` binary (src/bin/seed.rs), so it can't trigger an R10 boot
+/// timeout.
 pub fn init() {
 
     lazy_static::initialize(&POOL);

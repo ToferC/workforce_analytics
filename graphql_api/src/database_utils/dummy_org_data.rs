@@ -316,6 +316,16 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
 
     // Set up Teams and roles data
     println!("Set up teams and roles");
+
+    // Branch/centre/division tiers are get_or_create'd (deduped in the DB by
+    // name) but were pushed onto `org_tiers` on every CSV row, so the same tier
+    // appeared many times. Processing those duplicates created multiple owner
+    // roles + ownership records per tier and burned through the people pool —
+    // exhausting it mid-loop and aborting the whole seed before publications,
+    // validations and products ran. Process each distinct tier exactly once.
+    let mut seen_tier_ids = std::collections::HashSet::new();
+    org_tiers.retain(|ot| seen_tier_ids.insert(ot.id));
+
     let mut progress_tier = ProgressLogger::new("Inserting teams and roles".to_owned(),org_tiers.len());
 
 
@@ -332,8 +342,16 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
     for ot in org_tiers.clone() {
         // allocate people to org tiers - starting at the top
 
-        // set org_tier_owner
-        let owner_id = people_ids.pop().unwrap();
+        // set org_tier_owner. Never unwrap the pop: if the people pool is
+        // exhausted, stop staffing tiers gracefully so the rest of the seed
+        // (publications, validations, products) still runs instead of panicking.
+        let owner_id = match people_ids.pop() {
+            Some(id) => id,
+            None => {
+                println!("People pool exhausted - stopping org tier staffing early");
+                break;
+            }
+        };
 
         // get domain skills
         let domain_skills = Skill::get_by_domain(ot.primary_domain)

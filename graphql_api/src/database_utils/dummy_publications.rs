@@ -24,11 +24,19 @@ pub fn generate_dummy_publications_and_contributors(science_org_ids: &Vec<Uuid>)
 
     let mut publications = Vec::new();
 
-    
-    for i in 0..20 {
+    // Cap at the number of available scientists: scientist_ids and
+    // scientist_capabilities are 1:1, so indexing scientist_capabilities[i]
+    // below is only safe while i stays within that count. Fewer than 20 expert
+    // scientists must not panic and abort the rest of the seed.
+    let publication_count = scientist_ids.len().min(20);
+
+    for i in 0..publication_count {
 
         // Choose a scientist
-        let scientist_id = scientist_ids.pop().unwrap();
+        let scientist_id = match scientist_ids.pop() {
+            Some(id) => id,
+            None => break,
+        };
 
         let new_publication = NewPublication::new(
             *science_org_ids.choose(&mut rng).unwrap(),

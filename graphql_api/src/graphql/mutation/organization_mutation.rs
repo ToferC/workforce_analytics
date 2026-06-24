@@ -22,7 +22,10 @@ impl OrganizationMutation {
         _context: &Context<'_>,
         data: NewOrganization,
     ) -> Result<Organization> {
-        let organization = Organization::create(&data)?;
+        // Seed a starter hierarchy (top tier + executive team + vacant head
+        // role that owns the tier) so a new organization is not an empty shell
+        // with no tiers and no owner to inherit authority from.
+        let organization = Organization::create_with_defaults(&data)?;
         Ok(organization)
     }
 

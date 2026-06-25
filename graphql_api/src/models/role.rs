@@ -14,7 +14,7 @@ use crate::config_variables::DATE_FORMAT;
 use crate::schema::*;
 use crate::database::connection;
 
-use super::{Person, Team, Work, Requirement, Capability, RoleMatchResult, find_fuzzy_matches};
+use super::{Person, Team, Work, Requirement, Capability, Product, RoleMatchResult, find_fuzzy_matches};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset)]
 #[diesel(table_name = roles)]
@@ -170,6 +170,14 @@ impl Role {
 
     pub async fn end_datestamp(&self) -> Result<Option<NaiveDateTime>> {
         Ok(self.end_date)
+    }
+
+    pub async fn owned_products(&self) -> Result<Vec<Product>> {
+        let mut conn = connection()?;
+        let product = products::table
+            .filter(products::product_owner_role_id.eq(self.id))
+            .load::<Product>(&mut conn)?;
+        Ok(product)
     }
 }
 

@@ -56,7 +56,7 @@ async fn main() -> std::io::Result<()> {
         let mut cors = Cors::default()
             .allowed_methods(vec!["GET", "POST", "OPTIONS"])
             .allowed_headers(vec![header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT])
-            .max_age(3600);
+            .max_age(14400);
 
         for origin in allowed_origins.split(',') {
             cors = cors.allowed_origin(origin.trim());

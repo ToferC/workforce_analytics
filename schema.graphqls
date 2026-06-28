@@ -293,6 +293,13 @@ type Mutation {
 	Remove the person from a role, leaving it vacant.
 	"""
 	vacateRole(roleId: UUID!): Role!
+	"""
+	Set (or clear) the position a role reports to. Pass `reportsToRoleId`
+	= null to clear the explicit edge and fall back to the team owner.
+	Rejects self-references and cycles. The caller must manage the role's
+	team.
+	"""
+	setRoleReportsTo(roleId: UUID!, reportsToRoleId: UUID): Role!
 	createCapability(data: NewCapability!): Capability!
 	"""
 	An operator may update a capability.
@@ -538,6 +545,11 @@ input NewRole {
 	occupationalLevel: Int
 	startDatestamp: NaiveDateTime!
 	endDate: NaiveDateTime
+	"""
+	Optional reporting line to another Role. Defaults to null (falls back to
+	the team owner).
+	"""
+	reportsTo: UUID
 }
 
 """
@@ -1421,6 +1433,27 @@ type Role {
 	startDatestamp: NaiveDateTime!
 	endDatestamp: NaiveDateTime
 	ownedProducts: [Product!]!
+	"""
+	Raw id of the position this role explicitly reports to, if any. NULL
+	means it falls back to the team owner — use `manager` for the resolved
+	effective manager.
+	"""
+	reportsToId: UUID
+	"""
+	The position this role explicitly reports to, if one is set. Returns
+	null when the role inherits its team owner as manager (see `manager`).
+	"""
+	reportsTo: Role
+	"""
+	The effective manager position for this role: its explicit `reports_to`
+	if set, otherwise the owner role of its team. Null only when the role is
+	itself the team owner. This is the edge the org chart should draw.
+	"""
+	manager: Role
+	"""
+	The positions that report directly to this one (explicit edges only).
+	"""
+	directReports: [Role!]!
 }
 
 type RoleAssignment {

@@ -14,7 +14,7 @@ use crate::config_variables::DATE_FORMAT;
 use crate::schema::*;
 use crate::database::connection;
 
-use super::{Person, Team, Work, Requirement, Capability, Product, RoleMatchResult, find_fuzzy_matches};
+use super::{Person, Team, TeamOwnership, Work, Requirement, Capability, Product, RoleMatchResult, find_fuzzy_matches};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset)]
 #[diesel(table_name = roles)]
@@ -42,6 +42,12 @@ pub struct Role {
     pub end_date: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+
+    /// The Role this position reports to. Position->position (not person->
+    /// person): you report to a position, which may be vacant. NULL means
+    /// "reports to my team's owner role" (see `manager`), so this is only set
+    /// when a position needs a manager other than the default team owner.
+    pub reports_to: Option<Uuid>,
 }
 
 #[Object]
@@ -179,6 +185,44 @@ impl Role {
             .load::<Product>(&mut conn)?;
         Ok(product)
     }
+
+    /// Raw id of the position this role explicitly reports to, if any. NULL
+    /// means it falls back to the team owner — use `manager` for the resolved
+    /// effective manager.
+    pub async fn reports_to_id(&self) -> Option<Uuid> {
+        self.reports_to
+    }
+
+    /// The position this role explicitly reports to, if one is set. Returns
+    /// None when the role inherits its team owner as manager (see `manager`).
+    pub async fn reports_to(&self) -> Result<Option<Role>> {
+        match self.reports_to {
+            Some(id) => Ok(Some(Role::get_by_id(&id)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// The effective manager position for this role: its explicit `reports_to`
+    /// if set, otherwise the owner role of its team. Returns None only when the
+    /// role is itself the team owner (or the team has no owner), i.e. there is
+    /// no position above it within the team. This is the edge the org chart
+    /// should draw.
+    pub async fn manager(&self) -> Result<Option<Role>> {
+        if let Some(id) = self.reports_to {
+            return Ok(Some(Role::get_by_id(&id)?));
+        }
+        match TeamOwnership::get_by_team_id(&self.team_id) {
+            Ok(ownership) if ownership.owner_role_id != self.id => {
+                Ok(Some(Role::get_by_id(&ownership.owner_role_id)?))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// The positions that report directly to this one (explicit edges only).
+    pub async fn direct_reports(&self) -> Result<Vec<Role>> {
+        Role::get_direct_reports(&self.id)
+    }
 }
 
 
@@ -262,6 +306,56 @@ impl Role {
         let mut conn = connection()?;
         let role = roles::table.filter(roles::id.eq(id)).first(&mut conn)?;
         Ok(role)
+    }
+
+    /// Positions that report directly to the given role (explicit edges only).
+    pub fn get_direct_reports(id: &Uuid) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+        let res = roles::table
+            .filter(roles::reports_to.eq(id))
+            .load::<Role>(&mut conn)?;
+        Ok(res)
+    }
+
+    /// Set (or clear, with None) the position this role reports to. Rejects a
+    /// self-reference and any edge that would introduce a cycle: the reporting
+    /// graph must stay acyclic so the org chart is a tree.
+    pub fn set_reports_to(role_id: &Uuid, manager: Option<Uuid>) -> Result<Self> {
+        let mut conn = connection()?;
+
+        if let Some(manager_id) = manager {
+            if manager_id == *role_id {
+                return Err(Error::new("A role cannot report to itself"));
+            }
+
+            // Walk up from the proposed manager; if we reach role_id, the edge
+            // would close a cycle. Load (id, reports_to) pairs once and follow
+            // the chain in memory.
+            let edges: Vec<(Uuid, Option<Uuid>)> = roles::table
+                .select((roles::id, roles::reports_to))
+                .load::<(Uuid, Option<Uuid>)>(&mut conn)?;
+
+            let mut current = Some(manager_id);
+            let mut seen = std::collections::HashSet::new();
+            while let Some(node) = current {
+                if node == *role_id {
+                    return Err(Error::new(
+                        "That reporting line would create a cycle",
+                    ));
+                }
+                if !seen.insert(node) {
+                    break; // pre-existing cycle in data; stop rather than loop
+                }
+                current = edges.iter().find(|(id, _)| *id == node).and_then(|(_, p)| *p);
+            }
+        }
+
+        let now = chrono::Utc::now().naive_utc();
+        let res = diesel::update(roles::table.filter(roles::id.eq(role_id)))
+            .set((roles::reports_to.eq(manager), roles::updated_at.eq(now)))
+            .get_result(&mut conn)?;
+
+        Ok(res)
     }
 
     pub fn get_active_vacant_by_ids(ids: &Vec<Uuid>) -> Result<Vec<Self>> {
@@ -512,6 +606,10 @@ pub struct NewRole {
     pub occupational_level: Option<i32>,
     pub start_datestamp: NaiveDateTime,
     pub end_date: Option<NaiveDateTime>,
+    /// Optional reporting line to another Role. Defaults to None (falls back to
+    /// the team owner). See `Role::reports_to`.
+    #[graphql(default)]
+    pub reports_to: Option<Uuid>,
 }
 
 impl NewRole {
@@ -543,6 +641,7 @@ impl NewRole {
             occupational_level,
             start_datestamp,
             end_date,
+            reports_to: None,
         }
     }
 }

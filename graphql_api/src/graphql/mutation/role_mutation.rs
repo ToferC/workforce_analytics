@@ -130,6 +130,25 @@ impl RoleMutation {
         authz::require_manage_role(context, &role_id)?;
         Role::vacate(&role_id)
     }
+
+    /// Set (or clear) the position a role reports to. Pass `reports_to_role_id`
+    /// = null to clear the explicit edge and fall back to the team owner.
+    /// Rejects self-references and cycles. The caller must manage the role's
+    /// team.
+    #[graphql(
+        name = "setRoleReportsTo",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    pub async fn set_role_reports_to(
+        &self,
+        context: &Context<'_>,
+        role_id: Uuid,
+        reports_to_role_id: Option<Uuid>,
+    ) -> Result<Role> {
+        authz::require_manage_role(context, &role_id)?;
+        Role::set_reports_to(&role_id, reports_to_role_id)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, Insertable, AsChangeset, InputObject)]

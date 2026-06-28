@@ -306,6 +306,7 @@ diesel::table! {
         end_date -> Nullable<Timestamp>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        reports_to -> Nullable<Uuid>,
     }
 }
 

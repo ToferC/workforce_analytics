@@ -535,6 +535,10 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
                 None
             );
 
+            // Team members report to the tier's manager role created above, so
+            // the seeded data exercises the reporting spine end to end.
+            nr.reports_to = Some(role_res.id);
+
             let role_res = Role::create(&nr).unwrap();
 
             // Create requirements for role

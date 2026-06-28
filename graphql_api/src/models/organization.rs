@@ -152,6 +152,7 @@ impl Organization {
                     occupational_level: None,
                     start_datestamp: now,
                     end_date: None,
+                    reports_to: None,
                 })
                 .get_result(conn)?;
 

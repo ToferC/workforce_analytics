@@ -1454,6 +1454,13 @@ type Role {
 	The positions that report directly to this one (explicit edges only).
 	"""
 	directReports: [Role!]!
+	"""
+	A single seniority score (higher = more senior): the org-tier level
+	dominates and rank/classification breaks ties within a tier. Comparable
+	across the org when tiers differ, and within one personnel stream when
+	tiers are equal. Null when the tier is unknown.
+	"""
+	seniorityScore: Int
 }
 
 type RoleAssignment {

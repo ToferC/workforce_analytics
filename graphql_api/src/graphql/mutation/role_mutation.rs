@@ -55,6 +55,17 @@ impl RoleMutation {
             }
         }
 
+        // A new role with an explicit reporting line must report to a more
+        // senior position (same rule as setRoleReportsTo).
+        if let Some(manager_id) = role_data.reports_to {
+            Role::check_create_reports_to(
+                &role_data.team_id,
+                role_data.rank,
+                role_data.occupational_level,
+                &manager_id,
+            )?;
+        }
+
         let role = Role::create(&role_data)?;
 
         // A person holds one active role at a time. If this new role was

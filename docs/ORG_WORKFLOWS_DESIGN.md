@@ -205,11 +205,14 @@ mutations (reports_to, ownership, create/retire) leave only `updated_at`.
 3. **Offer workflow + manager panel (Dive 2)** — the largest piece; consumes
    reports_to (routing), `fuzzyMatches` (discovery), audit (trail), email (notify).
 
-## Open decisions
+## Confirmed decisions
 
-- **Offer consent:** losing-manager approval only, or also require the candidate
-  (person) to accept?
-- **Seniority strictness:** hard-block vs warn when scores are unknown or
-  cross-stream.
-- **Audit approach:** confirm app-level `audit_events` (3A) over DB triggers.
+- **Offer consent:** **losing-manager approval only** — the candidate's current
+  manager accepts/declines; no separate candidate-consent step in v1. (The
+  `status` machine is still shaped to allow adding one later.)
+- **Seniority strictness:** **warn-and-allow** when seniority is indeterminate
+  (missing rank/level, or equal-tier cross-stream); hard-block only definitive
+  peer/junior lines. *(Shipped in Dive 1.)*
+- **Audit approach:** **app-level `audit_events` (3A)**, actor captured from the
+  GraphQL context — not DB triggers.
 </content>

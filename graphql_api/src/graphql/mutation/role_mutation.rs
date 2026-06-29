@@ -3,7 +3,9 @@ use chrono::NaiveDateTime;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-use crate::models::{Role, RoleAssignment, NewRole, Person, PersonnelType};
+use serde_json::json;
+
+use crate::models::{Role, RoleAssignment, NewRole, Person, PersonnelType, AuditEvent};
 use crate::common_utils::{UserRole,
     is_operator, RoleGuard};
 use crate::graphql::authz;
@@ -55,6 +57,17 @@ impl RoleMutation {
             }
         }
 
+        // A new role with an explicit reporting line must report to a more
+        // senior position (same rule as setRoleReportsTo).
+        if let Some(manager_id) = role_data.reports_to {
+            Role::check_create_reports_to(
+                &role_data.team_id,
+                role_data.rank,
+                role_data.occupational_level,
+                &manager_id,
+            )?;
+        }
+
         let role = Role::create(&role_data)?;
 
         // A person holds one active role at a time. If this new role was
@@ -63,6 +76,20 @@ impl RoleMutation {
         if let Some(person_id) = role.person_id {
             RoleAssignment::close_others_for_person(&person_id, &role.id)?;
         }
+
+        AuditEvent::log(
+            context,
+            "role.create",
+            "role",
+            Some(role.id),
+            format!("Created role “{}”", role.title_en),
+            Some(json!({
+                "team_id": role.team_id,
+                "person_id": role.person_id,
+                "reports_to": role.reports_to,
+            })),
+            None,
+        );
 
         Ok(role)
     }
@@ -97,6 +124,20 @@ impl RoleMutation {
         // in-memory edit while the database row was left untouched.
         let role = role.update()?;
 
+        AuditEvent::log(
+            context,
+            "role.update",
+            "role",
+            Some(role.id),
+            format!("Updated role “{}”", role.title_en),
+            Some(json!({
+                "active": role.active,
+                "start_datestamp": role.start_datestamp,
+                "end_date": role.end_date,
+            })),
+            None,
+        );
+
         Ok(role)
     }
 
@@ -113,7 +154,19 @@ impl RoleMutation {
         role_id: Uuid,
     ) -> Result<Role> {
         authz::require_manage_role(context, &role_id)?;
-        Role::assign_person(&role_id, &person_id)
+        let role = Role::assign_person(&role_id, &person_id)?;
+
+        AuditEvent::log(
+            context,
+            "role.assign",
+            "role",
+            Some(role.id),
+            format!("Assigned person to role “{}”", role.title_en),
+            Some(json!({ "person_id": person_id })),
+            None,
+        );
+
+        Ok(role)
     }
 
     /// Remove the person from a role, leaving it vacant.
@@ -128,7 +181,19 @@ impl RoleMutation {
         role_id: Uuid,
     ) -> Result<Role> {
         authz::require_manage_role(context, &role_id)?;
-        Role::vacate(&role_id)
+        let role = Role::vacate(&role_id)?;
+
+        AuditEvent::log(
+            context,
+            "role.vacate",
+            "role",
+            Some(role.id),
+            format!("Vacated role “{}”", role.title_en),
+            None,
+            None,
+        );
+
+        Ok(role)
     }
 
     /// Set (or clear) the position a role reports to. Pass `reports_to_role_id`
@@ -147,7 +212,19 @@ impl RoleMutation {
         reports_to_role_id: Option<Uuid>,
     ) -> Result<Role> {
         authz::require_manage_role(context, &role_id)?;
-        Role::set_reports_to(&role_id, reports_to_role_id)
+        let role = Role::set_reports_to(&role_id, reports_to_role_id)?;
+
+        AuditEvent::log(
+            context,
+            "role.reports_to.set",
+            "role",
+            Some(role.id),
+            "Set reporting line".to_string(),
+            Some(json!({ "reports_to": reports_to_role_id })),
+            None,
+        );
+
+        Ok(role)
     }
 }
 

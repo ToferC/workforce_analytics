@@ -62,6 +62,23 @@ diesel::table! {
 }
 
 diesel::table! {
+    audit_events (id) {
+        id -> Uuid,
+        occurred_at -> Timestamp,
+        actor_user_id -> Nullable<Uuid>,
+        actor_role_id -> Nullable<Uuid>,
+        #[max_length = 64]
+        action -> Varchar,
+        #[max_length = 48]
+        entity_type -> Varchar,
+        entity_id -> Nullable<Uuid>,
+        summary -> Nullable<Text>,
+        payload -> Nullable<Jsonb>,
+        correlation_id -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::SkillDomain;
     use super::sql_types::CapabilityLevel;
@@ -516,6 +533,7 @@ diesel::joinable!(works -> tasks (task_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     affiliations,
+    audit_events,
     capabilities,
     language_datas,
     org_tier_ownerships,

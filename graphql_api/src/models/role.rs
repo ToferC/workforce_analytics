@@ -12,9 +12,9 @@ use async_graphql::*;
 use crate::config_variables::DATE_FORMAT;
 
 use crate::schema::*;
-use crate::database::connection;
+use crate::database::{connection, DbConnection};
 
-use super::{Person, Team, TeamOwnership, Work, Requirement, Capability, Product, RoleMatchResult, find_fuzzy_matches};
+use super::{Person, Team, TeamOwnership, OrgTier, Work, Requirement, Capability, Product, RoleMatchResult, find_fuzzy_matches};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset)]
 #[diesel(table_name = roles)]
@@ -223,6 +223,18 @@ impl Role {
     pub async fn direct_reports(&self) -> Result<Vec<Role>> {
         Role::get_direct_reports(&self.id)
     }
+
+    /// A single seniority score for this position: the org-tier level dominates
+    /// (a more senior tier outranks any rank below it) and rank/classification
+    /// breaks ties within a tier. Higher = more senior. Comparable across the
+    /// whole org when tiers differ, and within a single personnel stream
+    /// (military or civilian) when tiers are equal; equal tier across different
+    /// streams is not meaningfully comparable. Null when the tier is unknown.
+    pub async fn seniority_score(&self) -> Result<Option<i64>> {
+        let mut conn = connection()?;
+        let s = seniority_of(&mut conn, &self.team_id, self.rank, self.occupational_level);
+        Ok(s.score())
+    }
 }
 
 
@@ -348,6 +360,21 @@ impl Role {
                 }
                 current = edges.iter().find(|(id, _)| *id == node).and_then(|(_, p)| *p);
             }
+
+            // An organization is a hierarchy: a position must report to a
+            // strictly more senior one. A definitive peer/junior line is
+            // rejected; an indeterminate one (missing rank, or cross-stream
+            // military↔civilian) is allowed so incomplete HR data can't block
+            // legitimate structure.
+            let role = Role::get_by_id(role_id)?;
+            let mgr = Role::get_by_id(&manager_id)?;
+            if seniority_validation_enabled()
+                && compare_seniority(&mut conn, &role, &mgr) == SeniorityCmp::NotSenior
+            {
+                return Err(Error::new(
+                    "A role must report to a more senior position — it cannot report to a peer of the same rank or to a more junior role",
+                ));
+            }
         }
 
         let now = chrono::Utc::now().naive_utc();
@@ -356,6 +383,30 @@ impl Role {
             .get_result(&mut conn)?;
 
         Ok(res)
+    }
+
+    /// Validate a proposed reporting line at role-creation time, before the new
+    /// role exists. Mirrors the seniority rule in `set_reports_to`. The new
+    /// role's seniority is derived from the fields it will be created with.
+    pub fn check_create_reports_to(
+        team_id: &Uuid,
+        rank: Option<Rank>,
+        occupational_level: Option<i32>,
+        manager_id: &Uuid,
+    ) -> Result<()> {
+        if !seniority_validation_enabled() {
+            return Ok(());
+        }
+        let mut conn = connection()?;
+        let mgr = Role::get_by_id(manager_id)?;
+        let role_s = seniority_of(&mut conn, team_id, rank, occupational_level);
+        let mgr_s = seniority_of(&mut conn, &mgr.team_id, mgr.rank, mgr.occupational_level);
+        if compare(&role_s, &mgr_s) == SeniorityCmp::NotSenior {
+            return Err(Error::new(
+                "A role must report to a more senior position — it cannot report to a peer of the same rank or to a more junior role",
+            ));
+        }
+        Ok(())
     }
 
     pub fn get_active_vacant_by_ids(ids: &Vec<Uuid>) -> Result<Vec<Self>> {
@@ -1067,4 +1118,126 @@ pub fn find_people_by_requirements_met(requirements: Vec<Requirement>) -> Result
 
 
     Person::get_by_ids(&validated_ids)
+}
+
+// ── Seniority (reports_to hierarchy validation) ─────────────────────────────
+//
+// An organization is a hierarchy: a position must report to a strictly more
+// senior one. The genuinely comparable axis across personnel streams is the
+// org-tier *level* (L0 DM/CDS … L4 manager), which is stream-agnostic; within a
+// single tier we break ties on military rank or civilian classification level.
+// Comparing a military rank to a civilian classification is not well-defined, so
+// equal-tier cross-stream (and any case with missing data) is treated as
+// indeterminate — allowed, not blocked, so incomplete HR data can't wedge the
+// org chart.
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Stream {
+    Military,
+    Civilian,
+    Unknown,
+}
+
+struct Seniority {
+    /// Org-tier level; lower is more senior. None when it can't be resolved.
+    tier: Option<i64>,
+    stream: Stream,
+    /// Within-tier ordinal: military rank index or civilian level. Higher is
+    /// more senior.
+    index: Option<i64>,
+}
+
+impl Seniority {
+    /// A single comparable score (higher = more senior): tier dominates,
+    /// within-tier ordinal breaks ties. None when the tier is unknown.
+    fn score(&self) -> Option<i64> {
+        self.tier.map(|t| (100 - t) * 1000 + self.index.unwrap_or(0))
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum SeniorityCmp {
+    /// The manager is definitively more senior — the edge is valid.
+    ManagerSenior,
+    /// The manager is definitively a peer (same rank) or junior — invalid.
+    NotSenior,
+    /// Seniority can't be compared (missing data or equal-tier cross-stream).
+    Indeterminate,
+}
+
+/// Resolve a position's seniority from its team's org tier and HR fields.
+fn seniority_of(
+    conn: &mut DbConnection,
+    team_id: &Uuid,
+    rank: Option<Rank>,
+    occupational_level: Option<i32>,
+) -> Seniority {
+    let tier = teams::table
+        .find(*team_id)
+        .first::<Team>(conn)
+        .ok()
+        .and_then(|t| org_tiers::table.find(t.org_tier_id).first::<OrgTier>(conn).ok())
+        .map(|ot| ot.tier_level as i64);
+
+    let stream = if rank.is_some() {
+        Stream::Military
+    } else if occupational_level.is_some() {
+        Stream::Civilian
+    } else {
+        Stream::Unknown
+    };
+
+    let index = match stream {
+        // Rank is a fieldless enum declared from junior to senior, so its
+        // discriminant is the seniority ordinal.
+        Stream::Military => rank.map(|r| r as i64),
+        Stream::Civilian => occupational_level.map(|l| l as i64),
+        Stream::Unknown => None,
+    };
+
+    Seniority { tier, stream, index }
+}
+
+/// Compare a role against a proposed manager.
+fn compare(role: &Seniority, mgr: &Seniority) -> SeniorityCmp {
+    match (role.tier, mgr.tier) {
+        (Some(r), Some(m)) => {
+            if m < r {
+                return SeniorityCmp::ManagerSenior; // more senior tier
+            }
+            if m > r {
+                return SeniorityCmp::NotSenior; // junior tier
+            }
+            // Same tier: only comparable within one personnel stream.
+            if role.stream == Stream::Unknown
+                || mgr.stream == Stream::Unknown
+                || role.stream != mgr.stream
+            {
+                return SeniorityCmp::Indeterminate;
+            }
+            match (role.index, mgr.index) {
+                (Some(ri), Some(mi)) if mi > ri => SeniorityCmp::ManagerSenior,
+                (Some(ri), Some(mi)) if mi < ri => SeniorityCmp::NotSenior,
+                (Some(_), Some(_)) => SeniorityCmp::NotSenior, // equal rank = peer
+                _ => SeniorityCmp::Indeterminate,
+            }
+        }
+        _ => SeniorityCmp::Indeterminate,
+    }
+}
+
+fn compare_seniority(conn: &mut DbConnection, role: &Role, mgr: &Role) -> SeniorityCmp {
+    let rs = seniority_of(conn, &role.team_id, role.rank, role.occupational_level);
+    let ms = seniority_of(conn, &mgr.team_id, mgr.rank, mgr.occupational_level);
+    compare(&rs, &ms)
+}
+
+/// Whether the seniority rule is enforced. Enabled by default; set
+/// `DISABLE_SENIORITY_VALIDATION=true` to relax it during a grandfather window
+/// while rank/classification data is being populated.
+fn seniority_validation_enabled() -> bool {
+    !matches!(
+        std::env::var("DISABLE_SENIORITY_VALIDATION").ok().as_deref(),
+        Some("true") | Some("1")
+    )
 }

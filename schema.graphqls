@@ -1073,7 +1073,42 @@ enum PublicationStatus {
 	CANCELLED
 }
 
+"""
+An append-only record of one mutating action taken through the API.
+"""
+type AuditEvent {
+	id: UUID!
+	occurredAt: NaiveDateTime!
+	actorUserId: UUID
+	actorRoleId: UUID
+	"""
+	Dotted action key, e.g. "role.reports_to.set".
+	"""
+	action: String!
+	entityType: String!
+	entityId: UUID
+	summary: String
+	"""
+	Structured detail, serialized as a JSON string.
+	"""
+	payload: String
+	correlationId: UUID
+	"""
+	The actor's position at the time, if it could be resolved.
+	"""
+	actorRole: Role
+}
+
 type Query {
+	"""
+	Most recent audit events across the system, newest first. Admin only.
+	"""
+	recentAuditEvents(limit: Int! = 50): [AuditEvent!]!
+	"""
+	Audit history for a single entity (e.g. entity_type "role"), newest
+	first. Admin only.
+	"""
+	auditEventsForEntity(entityType: String!, entityId: UUID!, limit: Int! = 50): [AuditEvent!]!
 	"""
 	Returns count number of Capabilities in the system
 	"""
@@ -1454,6 +1489,13 @@ type Role {
 	The positions that report directly to this one (explicit edges only).
 	"""
 	directReports: [Role!]!
+	"""
+	A single seniority score (higher = more senior): the org-tier level
+	dominates and rank/classification breaks ties within a tier. Comparable
+	across the org when tiers differ, and within one personnel stream when
+	tiers are equal. Null when the tier is unknown.
+	"""
+	seniorityScore: Int
 }
 
 type RoleAssignment {

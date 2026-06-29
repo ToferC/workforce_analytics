@@ -542,67 +542,78 @@ impl Role {
         let mut conn = connection()?;
 
         let role = conn.transaction::<Role, diesel::result::Error, _>(|conn| {
-            let now = chrono::Utc::now().naive_utc();
-
-            // Close the current occupant's tenure on this role, if any.
-            diesel::update(
-                role_assignments::table
-                    .filter(role_assignments::role_id.eq(role_id))
-                    .filter(role_assignments::end_date.is_null()),
-            )
-            .set((
-                role_assignments::end_date.eq(now),
-                role_assignments::updated_at.eq(now),
-            ))
-            .execute(conn)?;
-
-            // Close this person's open tenure on any other role.
-            diesel::update(
-                role_assignments::table
-                    .filter(role_assignments::person_id.eq(person_id))
-                    .filter(role_assignments::end_date.is_null()),
-            )
-            .set((
-                role_assignments::end_date.eq(now),
-                role_assignments::updated_at.eq(now),
-            ))
-            .execute(conn)?;
-
-            // Clear the current-occupant pointer on the role(s) the person just
-            // left, so those positions read as vacant.
-            diesel::update(
-                roles::table
-                    .filter(roles::person_id.eq(person_id))
-                    .filter(roles::id.ne(role_id)),
-            )
-            .set((
-                roles::person_id.eq(None::<Uuid>),
-                roles::updated_at.eq(now),
-            ))
-            .execute(conn)?;
-
-            // Open the new tenure.
-            diesel::insert_into(role_assignments::table)
-                .values(NewRoleAssignment {
-                    role_id: *role_id,
-                    person_id: *person_id,
-                    start_date: now,
-                    end_date: None,
-                })
-                .execute(conn)?;
-
-            // Point the role at its new current occupant.
-            let updated = diesel::update(roles::table.filter(roles::id.eq(role_id)))
-                .set((
-                    roles::person_id.eq(Some(person_id)),
-                    roles::updated_at.eq(now),
-                ))
-                .get_result(conn)?;
-
-            Ok(updated)
+            Role::assign_person_txn(conn, role_id, person_id)
         })?;
 
         Ok(role)
+    }
+
+    /// The body of [`assign_person`], runnable inside a caller's transaction so
+    /// the assignment commits atomically with surrounding work (e.g. accepting
+    /// a transfer offer marks the offer Completed in the same transaction).
+    pub fn assign_person_txn(
+        conn: &mut DbConnection,
+        role_id: &Uuid,
+        person_id: &Uuid,
+    ) -> std::result::Result<Self, diesel::result::Error> {
+        let now = chrono::Utc::now().naive_utc();
+
+        // Close the current occupant's tenure on this role, if any.
+        diesel::update(
+            role_assignments::table
+                .filter(role_assignments::role_id.eq(role_id))
+                .filter(role_assignments::end_date.is_null()),
+        )
+        .set((
+            role_assignments::end_date.eq(now),
+            role_assignments::updated_at.eq(now),
+        ))
+        .execute(conn)?;
+
+        // Close this person's open tenure on any other role.
+        diesel::update(
+            role_assignments::table
+                .filter(role_assignments::person_id.eq(person_id))
+                .filter(role_assignments::end_date.is_null()),
+        )
+        .set((
+            role_assignments::end_date.eq(now),
+            role_assignments::updated_at.eq(now),
+        ))
+        .execute(conn)?;
+
+        // Clear the current-occupant pointer on the role(s) the person just
+        // left, so those positions read as vacant.
+        diesel::update(
+            roles::table
+                .filter(roles::person_id.eq(person_id))
+                .filter(roles::id.ne(role_id)),
+        )
+        .set((
+            roles::person_id.eq(None::<Uuid>),
+            roles::updated_at.eq(now),
+        ))
+        .execute(conn)?;
+
+        // Open the new tenure.
+        diesel::insert_into(role_assignments::table)
+            .values(NewRoleAssignment {
+                role_id: *role_id,
+                person_id: *person_id,
+                start_date: now,
+                end_date: None,
+            })
+            .execute(conn)?;
+
+        // Point the role at its new current occupant.
+        let updated = diesel::update(roles::table.filter(roles::id.eq(role_id)))
+            .set((
+                roles::person_id.eq(Some(person_id)),
+                roles::updated_at.eq(now),
+            ))
+            .get_result(conn)?;
+
+        Ok(updated)
     }
 
     /// Remove the person from this role, leaving the position vacant but still

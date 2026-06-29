@@ -1,6 +1,6 @@
 use async_graphql::*;
 
-use crate::graphql::query::{CapabilityQuery, PersonQuery, TeamQuery, OrganizationQuery, UserQuery, RoleQuery, AnalyticsQuery, SelfServiceQuery, AuditQuery};
+use crate::graphql::query::{CapabilityQuery, PersonQuery, TeamQuery, OrganizationQuery, UserQuery, RoleQuery, AnalyticsQuery, SelfServiceQuery, AuditQuery, RoleOfferQuery};
 
 use super::{ProductQuery, PublicationQuery, TaskQuery, WorkQuery};
 
@@ -19,4 +19,5 @@ pub struct Query(
     AnalyticsQuery,
     SelfServiceQuery,
     AuditQuery,
+    RoleOfferQuery,
 );

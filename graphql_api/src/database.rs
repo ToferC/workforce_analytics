@@ -22,7 +22,19 @@ lazy_static! {
     pub static ref POOL: PostgresPool = {
         let db_url = env::var("DATABASE_URL").expect("Database url not set");
         let manager = ConnectionManager::<PgConnection>::new(db_url);
-        PostgresPool::new(manager).expect("Failed to create DB Pool")
+        // The GraphQL resolvers check out a connection per nested field, so a
+        // single deeply-nested request can need several connections at once.
+        // r2d2's default max_size of 10 is too small for that access pattern
+        // and leads to checkout timeouts under concurrency. Allow tuning via
+        // DB_POOL_MAX_SIZE to match the database's max_connections.
+        let max_size = env::var("DB_POOL_MAX_SIZE")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(20);
+        PostgresPool::builder()
+            .max_size(max_size)
+            .build(manager)
+            .expect("Failed to create DB Pool")
     };
 }
 

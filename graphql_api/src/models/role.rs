@@ -58,9 +58,11 @@ impl Role {
     }
 
     pub async fn person(&self) -> Option<Person> {
-
+        // Resolve to None on a lookup error rather than `.unwrap()`, which
+        // would panic the worker and fail the whole request (and any others
+        // sharing the thread) for a transient DB hiccup.
         match self.person_id {
-            Some(p) => Some(Person::get_by_id(&p).unwrap()),
+            Some(p) => Person::get_by_id(&p).ok(),
             None => None
         }
     }

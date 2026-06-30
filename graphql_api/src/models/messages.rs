@@ -46,7 +46,7 @@ impl PILResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Insertable, SimpleObject)]
-#[table_name = "travel_responses"]
+#[diesel(table_name = travel_responses)]
 /// A struct representing the API response for a specific traveller
 /// Likely to be part of a Vec<TravelResponse>
 /// Will also be added to database for audit and data purposes.

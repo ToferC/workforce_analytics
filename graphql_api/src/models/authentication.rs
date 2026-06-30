@@ -13,7 +13,7 @@ use diesel::RunQueryDsl;
 use diesel::{QueryDsl};
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, Debug, Identifiable, AsChangeset, Clone)]
-#[table_name = "email_verification_code"]
+#[diesel(table_name = email_verification_code)]
 pub struct EmailVerification {
     pub id: Uuid,
     pub email_address: String,
@@ -22,7 +22,7 @@ pub struct EmailVerification {
 }
 
 #[derive(Debug, Serialize, Deserialize, AsChangeset, Insertable)]
-#[table_name = "email_verification_code"]
+#[diesel(table_name = email_verification_code)]
 pub struct InsertableVerification {
     pub email_address: String,
     pub activation_code: String,
@@ -75,7 +75,7 @@ impl EmailVerification {
 }
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, Debug, Identifiable, AsChangeset, Clone)]
-#[table_name = "password_reset_token"]
+#[diesel(table_name = password_reset_token)]
 pub struct PasswordResetToken {
     pub id: Uuid,
     pub email_address: String,
@@ -84,7 +84,7 @@ pub struct PasswordResetToken {
 }
 
 #[derive(Debug, Serialize, Deserialize, AsChangeset, Insertable)]
-#[table_name = "password_reset_token"]
+#[diesel(table_name = password_reset_token)]
 pub struct InsertablePasswordResetToken {
     pub email_address: String,
     pub reset_token: String,

@@ -19,7 +19,7 @@ use crate::models::{CapabilityCount, CapabilityLevel, Affiliation, SkillDomain, 
 use super::OrgTier;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, AsChangeset, SimpleObject)]
-#[table_name = "organizations"]
+#[diesel(table_name = organizations)]
 #[graphql(complex)]
 /// Represents an organization as a core structure within which are
 /// Person(s), OrgTiers, Publications
@@ -247,7 +247,7 @@ impl Organization {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, InputObject)]
-#[table_name = "organizations"]
+#[diesel(table_name = organizations)]
 /// Represents an insertable Organization
 pub struct NewOrganization {
     pub name_en: String,

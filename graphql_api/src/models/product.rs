@@ -226,7 +226,7 @@ impl Product {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, InputObject)]
-#[table_name = "products"]
+#[diesel(table_name = products)]
 pub struct NewProduct {
     pub organization_id: Uuid, // Organization
     pub product_owner_role_id: Uuid, // Role

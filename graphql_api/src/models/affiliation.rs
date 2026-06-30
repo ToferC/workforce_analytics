@@ -12,7 +12,7 @@ use crate::models::{Person, Organization};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, SimpleObject)]
 #[graphql(complex)]
-#[table_name = "affiliations"]
+#[diesel(table_name = affiliations)]
 pub struct Affiliation {
     pub id: Uuid,
     pub person_id: Uuid,
@@ -121,7 +121,7 @@ impl Affiliation {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, SimpleObject, InputObject)]
-#[table_name = "affiliations"]
+#[diesel(table_name = affiliations)]
 pub struct NewAffiliation {
     pub person_id: Uuid,
     pub organization_id: Uuid,

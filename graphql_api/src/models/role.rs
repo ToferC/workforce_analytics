@@ -8,8 +8,10 @@ use rand::{distributions::{Distribution, Standard}, Rng};
 use diesel::{RunQueryDsl, QueryDsl};
 use uuid::Uuid;
 use async_graphql::*;
+use async_graphql::dataloader::DataLoader;
 
 use crate::config_variables::DATE_FORMAT;
+use crate::graphql::loaders::{PersonLoader, TeamLoader, WorkByRoleLoader};
 
 use crate::schema::*;
 use crate::database::{connection, DbConnection};
@@ -57,18 +59,25 @@ impl Role {
         self.id
     }
 
-    pub async fn person(&self) -> Option<Person> {
-        // Resolve to None on a lookup error rather than `.unwrap()`, which
-        // would panic the worker and fail the whole request (and any others
-        // sharing the thread) for a transient DB hiccup.
+    pub async fn person(&self, ctx: &Context<'_>) -> Option<Person> {
+        // Batched via DataLoader. Resolve to None on a missing row or load
+        // error rather than panicking the worker for a transient DB hiccup.
         match self.person_id {
-            Some(p) => Person::get_by_id(&p).ok(),
+            Some(p) => ctx
+                .data_unchecked::<DataLoader<PersonLoader>>()
+                .load_one(p)
+                .await
+                .ok()
+                .flatten(),
             None => None
         }
     }
 
-    pub async fn team(&self) -> Result<Team> {
-        Team::get_by_id(&self.team_id)
+    pub async fn team(&self, ctx: &Context<'_>) -> Result<Team> {
+        ctx.data_unchecked::<DataLoader<TeamLoader>>()
+            .load_one(self.team_id)
+            .await?
+            .ok_or_else(|| Error::new("Team not found"))
     }
 
     pub async fn title_english(&self) -> Result<String> {
@@ -86,8 +95,12 @@ impl Role {
     }
 
     /// Returns a vector of the work undertaken by this role
-    pub async fn work(&self) -> Result<Vec<Work>> {
-        Work::get_by_role_id(&self.id)
+    pub async fn work(&self, ctx: &Context<'_>) -> Result<Vec<Work>> {
+        Ok(ctx
+            .data_unchecked::<DataLoader<WorkByRoleLoader>>()
+            .load_one(self.id)
+            .await?
+            .unwrap_or_default())
     }
 
     pub async fn active(&self) -> Result<String> {
@@ -320,6 +333,13 @@ impl Role {
         let mut conn = connection()?;
         let role = roles::table.filter(roles::id.eq(id)).first(&mut conn)?;
         Ok(role)
+    }
+
+    /// Batched lookup for the DataLoader: fetch many roles in one query.
+    pub fn get_by_ids(ids: &[Uuid]) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+        let res = roles::table.filter(roles::id.eq_any(ids)).load::<Role>(&mut conn)?;
+        Ok(res)
     }
 
     /// Positions that report directly to the given role (explicit edges only).

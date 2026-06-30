@@ -55,18 +55,27 @@ migration transaction. If these tables grow large, recreate the index as
 `CREATE INDEX CONCURRENTLY` in a standalone, non-transactional migration to
 avoid write locks on a live database.
 
-### B2 — Introduce DataLoader batching (N+1 root cause)
-`graphql/utilities.rs` still carries the note *"may want to remove once
-dataloaders in place"* — they were never added. Field resolvers call single-id
-getters: `Role::person` → `Person::get_by_id` (per role), `Role::work` →
-`Work::get_by_role_id`, `Work::task`, `Task::product`, `Person::capabilities`,
-each per parent row.
+### B2 — DataLoader batching (N+1 root cause) ✅
+Field resolvers called single-id getters per parent row — `Role::person` →
+`Person::get_by_id`, `Role::work` → `Work::get_by_role_id`, `Work::task`,
+`Work::role`, `Task::product`, `Team::owner` — turning a list of N parents into
+N+ queries.
 
-Add `async_graphql::dataloader::DataLoader` for the batchable edges:
-person-by-id, team-by-id, work-by-role-id, task-by-id, product-by-task-id, and
-capabilities-by-person-id. Each collapses N queries into a single
-`WHERE id = ANY($1)` (or `WHERE fk = ANY($1)`). This is the single biggest
-structural win; the B1 indexes also make the batched `ANY()` queries fast.
+`async_graphql::dataloader::DataLoader`s now batch these edges
+(`graphql/loaders.rs`): `PersonLoader`, `TeamLoader`, `RoleLoader`,
+`TaskLoader`, `ProductLoader` (keyed by id), and `WorkByRoleLoader` (one-to-many
+by `role_id`). Each collapses N lookups into a single `WHERE id = ANY($1)` /
+`WHERE role_id = ANY($1)`, backed by the batched `get_by_ids` / `get_by_role_ids`
+model methods. The B1 indexes keep those `ANY()` scans fast.
+
+The loaders are registered **per request** in `handlers::endpoints::graphql`, so
+their cache never outlives a single request — a schema-global loader would serve
+stale rows after a mutation. The hot `team → role → person / work → task →
+product` chain that previously cost ~180 queries now batches to a handful.
+
+Follow-up: extend loaders to the remaining single-id edges
+(`RoleAssignment::person/role`, `Role::manager/reports_to`,
+`Person::capabilities` as a by-person-id list loader) as those views warrant.
 
 ### B3 — Connection pool sizing & robustness ✅ (partial)
 - The pool was built with `PostgresPool::new(manager)` and **no `max_size`**,
@@ -129,8 +138,8 @@ frontend's mirrored `schema.graphql` together, per the frontend `CLAUDE.md`.
 
 1. **B1 indexes** — one migration, no code, immediate broad speedup. ✅
 2. **B3 pool size + `.unwrap()` fix** — a few lines, removes a stability cliff. ✅
-3. **F2 / F1 trim + paginate** the list and dropdown queries — frontend-only,
+3. **B2 DataLoaders** on the 5–6 hot edges — the real structural fix for N+1. ✅
+4. **F2 / F1 trim + paginate** the list and dropdown queries — frontend-only,
    cuts rows transferred and server fan-out.
-4. **B2 DataLoaders** on the 5–6 hot edges — the real structural fix for N+1.
 5. **B4 depth/complexity limits** and **F3 round-trip parallelism** — hardening
    and latency polish.

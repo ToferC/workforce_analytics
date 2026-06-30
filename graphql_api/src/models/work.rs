@@ -10,10 +10,12 @@ use diesel::{self, Insertable, Queryable, ExpressionMethods, BoolExpressionMetho
 use diesel::{RunQueryDsl, QueryDsl};
 use uuid::Uuid;
 use async_graphql::*;
+use async_graphql::dataloader::DataLoader;
 
 use crate::schema::*;
 use crate::models::{SkillDomain, Role, Task, Capability, CapabilityLevel, Skill};
 use crate::database::connection;
+use crate::graphql::loaders::{TaskLoader, RoleLoader};
 
 /// Data structure for a relationship between a person and work
 /// This is a many to many relationship as multiple people may be
@@ -45,13 +47,16 @@ pub struct Work {
 
 #[ComplexObject]
 impl Work {
-    pub async fn task(&self) -> Result<Task> {
-        Task::get_by_id(&self.task_id)
+    pub async fn task(&self, ctx: &Context<'_>) -> Result<Task> {
+        ctx.data_unchecked::<DataLoader<TaskLoader>>()
+            .load_one(self.task_id)
+            .await?
+            .ok_or_else(|| Error::new("Task not found"))
     }
 
-    pub async fn role(&self) -> Result<Option<Role>> {
+    pub async fn role(&self, ctx: &Context<'_>) -> Result<Option<Role>> {
         match self.role_id {
-            Some(id) => Ok(Some(Role::get_by_id(&id)?)),
+            Some(id) => Ok(ctx.data_unchecked::<DataLoader<RoleLoader>>().load_one(id).await?),
             None => Ok(None),
         }
     }
@@ -156,6 +161,20 @@ impl Work {
         let res = works::table
             .filter(works::role_id.eq(role_id))
             .order_by(works::created_at)
+            .load::<Work>(&mut conn)?;
+
+        Ok(res)
+    }
+
+    /// Batched lookup for the DataLoader: fetch the work for many roles in one
+    /// query. Returns a flat list ordered by role then creation; the loader
+    /// groups it by `role_id`.
+    pub fn get_by_role_ids(role_ids: &[Uuid]) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let res = works::table
+            .filter(works::role_id.eq_any(role_ids))
+            .order_by((works::role_id, works::created_at))
             .load::<Work>(&mut conn)?;
 
         Ok(res)

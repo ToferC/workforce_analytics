@@ -33,8 +33,25 @@ pub fn create_schema_with_context(pg_pool: PostgresPool) -> async_graphql::Schem
     let identity: Option<String> = None;
 
     let kafka_consumer_counter = Mutex::new(0);
-    
+
+    // Guard against pathological queries (deep recursive nesting through
+    // role -> manager -> team -> owner cycles, or huge field fan-out) that
+    // would amplify the resolvers' per-field database work. The deepest
+    // legitimate client query nests ~6 levels, so 15 leaves generous
+    // headroom. Both limits are env-overridable so a genuinely larger query
+    // can be unblocked without a redeploy.
+    let max_depth = std::env::var("GRAPHQL_MAX_DEPTH")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(15);
+    let max_complexity = std::env::var("GRAPHQL_MAX_COMPLEXITY")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(1000);
+
     Schema::build(Query::default(), Mutation::default(), EmptySubscription)
+        .limit_depth(max_depth)
+        .limit_complexity(max_complexity)
         // Database connection
         .data(arc_pool)
         // Live cached data -> may want to remove once dataloaders in place

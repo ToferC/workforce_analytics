@@ -1,4 +1,5 @@
 mod audit_event;
+mod role_offer;
 mod person;
 mod organization;
 mod team;
@@ -27,6 +28,7 @@ mod messages;
 mod auth;
 
 pub use audit_event::*;
+pub use role_offer::*;
 pub use person::*;
 pub use organization::*;
 pub use team::*;

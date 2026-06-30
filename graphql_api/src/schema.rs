@@ -38,6 +38,10 @@ pub mod sql_types {
     pub struct Rank;
 
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "role_offer_status"))]
+    pub struct RoleOfferStatus;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "skill_domain"))]
     pub struct SkillDomain;
 
@@ -75,6 +79,28 @@ diesel::table! {
         summary -> Nullable<Text>,
         payload -> Nullable<Jsonb>,
         correlation_id -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::RoleOfferStatus;
+
+    role_offers (id) {
+        id -> Uuid,
+        role_id -> Uuid,
+        person_id -> Uuid,
+        offered_by_role_id -> Uuid,
+        from_role_id -> Nullable<Uuid>,
+        approver_role_id -> Nullable<Uuid>,
+        status -> RoleOfferStatus,
+        message -> Nullable<Text>,
+        decision_note -> Nullable<Text>,
+        decided_by_role_id -> Nullable<Uuid>,
+        decided_at -> Nullable<Timestamp>,
+        expires_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -546,6 +572,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     record_flags,
     requirements,
     role_assignments,
+    role_offers,
     roles,
     skills,
     tasks,

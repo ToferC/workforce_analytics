@@ -300,6 +300,26 @@ type Mutation {
 	team.
 	"""
 	setRoleReportsTo(roleId: UUID!, reportsToRoleId: UUID): Role!
+	"""
+	Offer a vacant role to a person outside the caller's managed area. Routed
+	to the candidate's current manager for approval; the transfer happens only
+	on accept. For a candidate you already manage, assign directly instead.
+	"""
+	createRoleOffer(roleId: UUID!, personId: UUID!, message: String): RoleOffer!
+	"""
+	Accept a pending offer: executes the transfer atomically and marks it
+	Completed. The caller must manage the candidate's current team.
+	"""
+	acceptRoleOffer(offerId: UUID!, note: String): RoleOffer!
+	"""
+	Decline a pending offer. The caller must manage the candidate's current
+	team.
+	"""
+	declineRoleOffer(offerId: UUID!, note: String): RoleOffer!
+	"""
+	Withdraw a pending offer. The caller must manage the hiring team.
+	"""
+	withdrawRoleOffer(offerId: UUID!, note: String): RoleOffer!
 	createCapability(data: NewCapability!): Capability!
 	"""
 	An operator may update a capability.
@@ -1076,6 +1096,57 @@ enum PublicationStatus {
 """
 An append-only record of one mutating action taken through the API.
 """
+"""
+Lifecycle of a transfer offer.
+"""
+enum RoleOfferStatus {
+	PENDING
+	ACCEPTED
+	DECLINED
+	WITHDRAWN
+	EXPIRED
+	COMPLETED
+}
+
+"""
+An offer to move a person into a (vacant) role, pending the approval of the
+candidate's current manager.
+"""
+type RoleOffer {
+	id: UUID!
+	status: RoleOfferStatus!
+	message: String
+	decisionNote: String
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+	decidedAt: NaiveDateTime
+	expiresAt: NaiveDateTime
+	"""
+	The offered (target) position.
+	"""
+	role: Role!
+	"""
+	The candidate.
+	"""
+	person: Person!
+	"""
+	The hiring manager's position that made the offer.
+	"""
+	offeredByRole: Role!
+	"""
+	The candidate's role at the time of the offer.
+	"""
+	fromRole: Role
+	"""
+	The position responsible for approving (the losing manager).
+	"""
+	approverRole: Role
+	"""
+	The position that decided the offer, once decided.
+	"""
+	decidedByRole: Role
+}
+
 type AuditEvent {
 	id: UUID!
 	occurredAt: NaiveDateTime!
@@ -1109,6 +1180,18 @@ type Query {
 	first. Admin only.
 	"""
 	auditEventsForEntity(entityType: String!, entityId: UUID!, limit: Int! = 50): [AuditEvent!]!
+	"""
+	Pending transfer offers awaiting my decision (I manage the candidate).
+	"""
+	incomingRoleOffers: [RoleOffer!]!
+	"""
+	Transfer offers I have made (any status).
+	"""
+	outgoingRoleOffers: [RoleOffer!]!
+	"""
+	A single transfer offer by id.
+	"""
+	roleOfferById(id: UUID!): RoleOffer!
 	"""
 	Returns count number of Capabilities in the system
 	"""

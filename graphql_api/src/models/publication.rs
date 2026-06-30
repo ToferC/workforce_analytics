@@ -183,7 +183,7 @@ impl Publication {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, SimpleObject, InputObject)]
-#[table_name = "publications"]
+#[diesel(table_name = publications)]
 pub struct NewPublication {
     pub publishing_organization_id: Uuid,
     pub lead_author_id: Uuid, // Person

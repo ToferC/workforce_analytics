@@ -11,7 +11,7 @@ use rand::{Rng, thread_rng};
 use crate::schema::*;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset)]
-#[table_name = "credentials"]
+#[diesel(table_name = credentials)]
 // External certifications or credentials like degrees, professional certs, etc
 pub struct Credential {
     pub id: Uuid,
@@ -75,7 +75,7 @@ impl Credential {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, SimpleObject)]
-#[table_name = "credentials"]
+#[diesel(table_name = credentials)]
 pub struct NewCredential {
     pub person_id: Uuid,
     pub provider: String,

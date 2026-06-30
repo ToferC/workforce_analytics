@@ -21,7 +21,7 @@ use crate::schema::*;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, AsChangeset, SimpleObject, PartialEq)]
 #[graphql(complex)]
-#[table_name = "skills"]
+#[diesel(table_name = skills)]
 /// Should get this from an API or have standard data
 /// Now pre-loaded as prt of context
 pub struct Skill {
@@ -223,7 +223,7 @@ impl Skill {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, InputObject)]
-#[table_name = "skills"]
+#[diesel(table_name = skills)]
 /// Represents an insertable Skill
 pub struct NewSkill {
     name_en: String,

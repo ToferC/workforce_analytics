@@ -13,7 +13,7 @@ use crate::database::connection;
 use super::{Publication, Person};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset)]
-#[table_name = "publication_contributors"]
+#[diesel(table_name = publication_contributors)]
 /// Data structure connecting persons in heirarchical relationship
 pub struct PublicationContributor {
     pub id: Uuid,
@@ -121,7 +121,7 @@ impl PublicationContributor {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, SimpleObject, InputObject)]
-#[table_name = "publication_contributors"]
+#[diesel(table_name = publication_contributors)]
 pub struct NewPublicationContributor {
     pub publication_id: Uuid, // Publication
     pub contributor_id: Uuid, // Person

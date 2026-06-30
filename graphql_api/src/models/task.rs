@@ -16,7 +16,7 @@ use super::{Work, Role, Product};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, SimpleObject)]
 #[graphql(complex)]
-#[table_name = "tasks"]
+#[diesel(table_name = tasks)]
 pub struct Task {
     pub id: Uuid,
     pub created_by_role_id: Uuid, // Person
@@ -165,7 +165,7 @@ impl Task {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, SimpleObject, InputObject)]
-#[table_name = "tasks"]
+#[diesel(table_name = tasks)]
 pub struct NewTask {
     pub created_by_role_id: Uuid, // Person
     pub title: String,

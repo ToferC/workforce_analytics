@@ -17,7 +17,7 @@ use crate::schema::*;
 
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, AsChangeset, SimpleObject, PartialEq)]
-#[table_name = "language_datas"]
+#[diesel(table_name = language_datas)]
 /// A representation of a persons' language proficiency
 pub struct LanguageData {
     pub id: Uuid,
@@ -134,7 +134,7 @@ impl LanguageData {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, InputObject)]
-#[table_name = "language_datas"]
+#[diesel(table_name = language_datas)]
 /// Represents an insertable Language
 pub struct NewLanguageData {
     pub person_id: Uuid,

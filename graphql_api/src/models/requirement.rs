@@ -241,7 +241,7 @@ impl Requirement {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, InputObject)]
-#[table_name = "requirements"]
+#[diesel(table_name = requirements)]
 pub struct NewRequirement {
     pub name_en: String,
     pub name_fr: String,

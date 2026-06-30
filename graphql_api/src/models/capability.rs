@@ -379,7 +379,7 @@ impl Capability {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, InputObject)]
-#[table_name = "capabilities"]
+#[diesel(table_name = capabilities)]
 pub struct NewCapability {
     pub name_en: String,
     pub name_fr: String,

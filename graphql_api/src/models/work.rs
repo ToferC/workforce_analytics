@@ -23,7 +23,7 @@ use crate::database::connection;
 /// (domain and capability_level) before a role is assigned
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, SimpleObject)]
 #[graphql(complex)]
-#[table_name = "works"]
+#[diesel(table_name = works)]
 pub struct Work {
     pub id: Uuid,
     #[graphql(skip)]
@@ -292,7 +292,7 @@ impl Work {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, InputObject)]
-#[table_name = "works"]
+#[diesel(table_name = works)]
 pub struct NewWork {
     pub task_id: Uuid,
     pub role_id: Option<Uuid>,

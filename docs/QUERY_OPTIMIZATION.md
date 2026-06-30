@@ -90,10 +90,15 @@ Follow-up: extend loaders to the remaining single-id edges
   becomes viable, further reducing checkout churn. Audit the remaining
   `.unwrap()`/`.expect()` calls in resolver paths for the same panic risk.
 
-### B4 — Query depth / complexity limits
-`Schema::build(...)` sets neither `.limit_depth()` nor `.limit_complexity()`. A
-deeply nested query amplifies the N+1 without bound. Add both as a safety valve
-(and as defense against hostile queries).
+### B4 — Query depth / complexity limits ✅
+`Schema::build(...)` previously set neither `.limit_depth()` nor
+`.limit_complexity()`, so a deeply nested or huge query could amplify the
+resolvers' per-field work without bound. The schema now applies
+`.limit_depth(15)` and `.limit_complexity(1000)` (`graphql/utilities.rs`). The
+deepest legitimate client query nests ~6 levels, so 15 leaves generous headroom
+while blocking pathological recursion (e.g. `role → manager → team → owner`
+cycles). Both are overridable via `GRAPHQL_MAX_DEPTH` / `GRAPHQL_MAX_COMPLEXITY`
+so a genuinely larger query can be unblocked without a redeploy.
 
 ---
 
@@ -139,7 +144,7 @@ frontend's mirrored `schema.graphql` together, per the frontend `CLAUDE.md`.
 1. **B1 indexes** — one migration, no code, immediate broad speedup. ✅
 2. **B3 pool size + `.unwrap()` fix** — a few lines, removes a stability cliff. ✅
 3. **B2 DataLoaders** on the 5–6 hot edges — the real structural fix for N+1. ✅
-4. **F2 / F1 trim + paginate** the list and dropdown queries — frontend-only,
+4. **B4 depth/complexity limits** — hardening against pathological queries. ✅
+5. **F2 / F1 trim + paginate** the list and dropdown queries — frontend-only,
    cuts rows transferred and server fan-out.
-5. **B4 depth/complexity limits** and **F3 round-trip parallelism** — hardening
-   and latency polish.
+6. **F3 round-trip parallelism** — latency polish in the frontend handlers.

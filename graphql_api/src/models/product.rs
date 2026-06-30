@@ -141,6 +141,15 @@ impl Product {
         Ok(res)
     }
 
+    /// Batched lookup for the DataLoader: fetch many products in one query.
+    pub fn get_by_ids(ids: &[Uuid]) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+        let res = products::table
+            .filter(products::id.eq_any(ids))
+            .load::<Product>(&mut conn)?;
+        Ok(res)
+    }
+
     pub fn get_by_name(name: &String) -> Result<Vec<Self>> {
         let mut conn = connection()?;
 

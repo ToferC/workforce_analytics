@@ -6,9 +6,11 @@ use diesel::{self, Insertable, Queryable, ExpressionMethods, BoolExpressionMetho
 use diesel::{RunQueryDsl, QueryDsl};
 use uuid::Uuid;
 use async_graphql::*;
+use async_graphql::dataloader::DataLoader;
 
 use crate::schema::*;
 use crate::database::connection;
+use crate::graphql::loaders::ProductLoader;
 
 use crate::models::{Priority, SkillDomain, WorkStatus};
 
@@ -57,9 +59,9 @@ impl Task {
     }
 
     /// The product this task contributes to, if any
-    pub async fn product(&self) -> Result<Option<Product>> {
+    pub async fn product(&self, ctx: &Context<'_>) -> Result<Option<Product>> {
         match self.product_id {
-            Some(id) => Ok(Some(Product::get_by_id(&id)?)),
+            Some(id) => Ok(ctx.data_unchecked::<DataLoader<ProductLoader>>().load_one(id).await?),
             None => Ok(None),
         }
     }
@@ -118,6 +120,13 @@ impl Task {
     pub fn get_by_id(id: &Uuid) -> Result<Self> {
         let mut conn = connection()?;
         let res = tasks::table.filter(tasks::id.eq(id)).first(&mut conn)?;
+        Ok(res)
+    }
+
+    /// Batched lookup for the DataLoader: fetch many tasks in one query.
+    pub fn get_by_ids(ids: &[Uuid]) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+        let res = tasks::table.filter(tasks::id.eq_any(ids)).load::<Task>(&mut conn)?;
         Ok(res)
     }
 

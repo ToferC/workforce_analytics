@@ -6,12 +6,14 @@ use diesel::{self, Insertable, Queryable, BoolExpressionMethods, ExpressionMetho
 use diesel::{RunQueryDsl, QueryDsl};
 use uuid::Uuid;
 use async_graphql::*;
+use async_graphql::dataloader::DataLoader;
 use crate::models::{Organization, OrgTier};
 
 use crate::config_variables::DATE_FORMAT;
 
 use crate::schema::*;
 use crate::database::connection;
+use crate::graphql::loaders::RoleLoader;
 
 use super::{Role, TeamOwnership, SkillDomain};
 
@@ -231,8 +233,11 @@ impl Team {
     /// record fall back to their org tier's owner (which itself inherits up the
     /// tier chain). Never panic here: an unwrap would kill the worker for any
     /// team missing ownership.
-    pub async fn owner(&self) -> Result<Role> {
-        Role::get_by_id(&self.owner_role_id()?)
+    pub async fn owner(&self, ctx: &Context<'_>) -> Result<Role> {
+        ctx.data_unchecked::<DataLoader<RoleLoader>>()
+            .load_one(self.owner_role_id()?)
+            .await?
+            .ok_or_else(|| Error::new("Owner role not found"))
     }
 
     /// Capability counts for people holding roles in this team.

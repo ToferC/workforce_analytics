@@ -1363,9 +1363,18 @@ type Query {
 	"""
 	work(count: Int!): [Work!]!
 	"""
-	Returns a vector of all persons ordered by family name
+	Returns work, filtered and paginated server-side. All arguments are
+	optional and backward compatible: with none supplied this returns every
+	work item (the previous behaviour). `status` narrows to one work status;
+	`unassignedOnly` keeps only work with no assigned role. Pair with
+	`workCount` for the total under the same filters.
 	"""
-	allWork: [Work!]!
+	allWork(status: WorkStatus, unassignedOnly: Boolean! = false, limit: Int, offset: Int! = 0): [Work!]!
+	"""
+	Total number of work items matching the given filters (ignoring
+	pagination), for driving `allWork` page controls.
+	"""
+	workCount(status: WorkStatus, unassignedOnly: Boolean! = false): Int!
 	workById(id: UUID!): Work!
 	"""
 	Accepts an argument of "count" and returns a vector of {count} products

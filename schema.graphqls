@@ -1253,9 +1253,18 @@ type Query {
 	"""
 	teamOwnershipByTeamId(teamId: UUID!): TeamOwnership!
 	"""
-	Returns a vector of all travel groups
+	Returns teams, filtered and paginated server-side. All arguments are
+	optional and backward compatible: with none supplied this returns every
+	non-retired team (the previous behaviour). `search` matches the English
+	or French name; pass `limit`/`offset` to page. Pair with `teamsCount`
+	for the total under the same filters.
 	"""
-	allTeams: [Team!]!
+	allTeams(search: String, includeRetired: Boolean! = false, limit: Int, offset: Int! = 0): [Team!]!
+	"""
+	Total number of teams matching the given filters (ignoring pagination),
+	for driving `allTeams` page controls.
+	"""
+	teamsCount(search: String, includeRetired: Boolean! = false): Int!
 	"""
 	Returns a specific travel group by its UUID
 	"""

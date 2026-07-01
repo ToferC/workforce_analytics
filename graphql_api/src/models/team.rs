@@ -105,6 +105,48 @@ impl Team {
         Ok(res)
     }
 
+    /// Server-side filtered + paginated team list. `search` matches
+    /// name_en/name_fr (case-insensitive); retired teams are excluded unless
+    /// `include_retired`. A `None` limit returns every matching row (preserving
+    /// the old "fetch all" behaviour for callers that don't paginate).
+    pub fn get_filtered(search: Option<&str>, include_retired: bool, limit: Option<i64>, offset: i64) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let mut query = teams::table.into_boxed();
+        if !include_retired {
+            query = query.filter(teams::retired_at.is_null());
+        }
+        if let Some(s) = search {
+            let pattern = format!("%{}%", s);
+            query = query.filter(teams::name_en.ilike(pattern.clone()).or(teams::name_fr.ilike(pattern)));
+        }
+        query = query.order_by(teams::name_en);
+        if let Some(l) = limit {
+            query = query.limit(l).offset(offset);
+        }
+
+        let res = query.load::<Team>(&mut conn)?;
+        Ok(res)
+    }
+
+    /// Total number of teams matching the same filters as `get_filtered`,
+    /// ignoring limit/offset — for driving pagination controls.
+    pub fn count_filtered(search: Option<&str>, include_retired: bool) -> Result<i64> {
+        let mut conn = connection()?;
+
+        let mut query = teams::table.into_boxed();
+        if !include_retired {
+            query = query.filter(teams::retired_at.is_null());
+        }
+        if let Some(s) = search {
+            let pattern = format!("%{}%", s);
+            query = query.filter(teams::name_en.ilike(pattern.clone()).or(teams::name_fr.ilike(pattern)));
+        }
+
+        let total = query.count().get_result(&mut conn)?;
+        Ok(total)
+    }
+
     pub fn get_by_org_tier_id(id: &Uuid) -> Result<Vec<Self>> {
         let mut conn = connection()?;
 

@@ -104,34 +104,41 @@ so a genuinely larger query can be unblocked without a redeploy.
 
 ## Frontend recommendations
 
-### F1 — Stop fetching whole tables to filter/paginate client-side
+### F1 — Stop fetching whole tables to filter/paginate client-side ⬜ (remaining)
 - `team_index` loads `all_teams`, then filters by query/retired and caps at
   `INDEX_PAGE_CAP` **in Rust**.
 - `work_index` loads `all_work` and filters status/unassigned client-side;
   `vacancies` loads `all_work` and keeps `role.is_none()`.
-- Dropdowns load entire tables: `role_options` = `all_roles`,
-  `product_options` = `all_products`, `skill_options` = `all_skills`, and the
-  work form's task picker = `all_tasks`.
 
 Each transfers and resolves every row (and every row's nested N+1) to show one
-page or one `<select>`. Add server-side filter/limit arguments, and use
-lightweight `{id, label}`-only queries for pickers.
+page. The fix is server-side filter/limit/offset **arguments** on the list
+resolvers — which changes the API and its `schema.graphql` (mirrored in both
+repos), so it is deliberately held for a scoped, cross-repo pass. (The lean
+`{id, label}` picker queries this item also called for landed under F2.)
 
-### F2 — Trim over-fetched nested fields in list queries
-- `all_roles` pulls `person` and `team { organization }` for every role — 2–3
-  extra per-row lookups × all roles.
-- `all_products` requests `effort`, a computed aggregate that sums each
-  product's work server-side.
+### F2 — Trim over-fetched fields in the dropdown queries ✅
+The `<select>` helpers reused the heavy list queries just to build labels:
+`all_roles` pulls `person` and `team { organization }` per role, and
+`all_products` requests `effort` — a computed aggregate that sums each product's
+work server-side — for every product. The index/analytics pages genuinely
+render those fields, so instead of trimming the shared queries the pickers now
+use dedicated lean queries (frontend `queries/products/product_options.graphql`,
+`queries/roles/role_options.graphql`): `ProductOptions` fetches `id`/`nameEn`/
+`primaryDomain` (no `effort` aggregate), `RoleOptions` fetches only the label
+fields (no team organization / French title / occupation / rank). Both select
+existing fields, so `schema.graphql` is unchanged.
 
-Request only the fields the list view renders; defer expensive
-computed/nested fields to detail views.
+Remaining (folds into F1): the index pages themselves still fetch whole tables
+and filter/paginate client-side.
 
-### F3 — Parallelize independent round-trips in handlers
-Several handlers chain `await`s that have no data dependency — e.g.
-`assign_work_form` does `get_work_by_id` → `get_me` → `all_roles` →
-`skill_options` serially. Use `futures::try_join!` to run independent calls
-concurrently so latency is the slowest call, not the sum. `role.rs`, `work.rs`,
-and `person.rs` have the most call sites.
+### F3 — Parallelize independent round-trips in handlers ✅
+Handlers chained `await`s that had no data dependency. They now issue the
+independent calls concurrently with `futures::join!`, so latency is the slowest
+call rather than the sum. `assign_work_form` fires `get_work_by_id` +
+`skill_options` + `get_me` + `all_roles` together; `create_work_form`,
+`create_vacant_work_form`, `edit_work_form`, `vacancies`, `edit_task_form`,
+`create_product_task_form`, `create_team_task_form`, and their error paths join
+their two independent calls.
 
 ### F4 — Keep `schema.graphql` in lockstep with the API
 As filter/limit args are added (F1), update both the API schema and the
@@ -145,6 +152,9 @@ frontend's mirrored `schema.graphql` together, per the frontend `CLAUDE.md`.
 2. **B3 pool size + `.unwrap()` fix** — a few lines, removes a stability cliff. ✅
 3. **B2 DataLoaders** on the 5–6 hot edges — the real structural fix for N+1. ✅
 4. **B4 depth/complexity limits** — hardening against pathological queries. ✅
-5. **F2 / F1 trim + paginate** the list and dropdown queries — frontend-only,
-   cuts rows transferred and server fan-out.
-6. **F3 round-trip parallelism** — latency polish in the frontend handlers.
+5. **F2 lean dropdown queries** — pickers no longer pull the full list payload
+   (notably the product `effort` aggregate). ✅
+6. **F3 round-trip parallelism** — independent handler calls now run
+   concurrently. ✅
+7. **F1 server-side list filtering/pagination** — the remaining item; needs new
+   filter/limit args on the API + coordinated `schema.graphql` changes.

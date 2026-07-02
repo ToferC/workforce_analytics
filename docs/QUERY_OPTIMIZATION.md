@@ -104,17 +104,26 @@ so a genuinely larger query can be unblocked without a redeploy.
 
 ## Frontend recommendations
 
-### F1 — Stop fetching whole tables to filter/paginate client-side ⬜ (remaining)
-- `team_index` loads `all_teams`, then filters by query/retired and caps at
-  `INDEX_PAGE_CAP` **in Rust**.
-- `work_index` loads `all_work` and filters status/unassigned client-side;
-  `vacancies` loads `all_work` and keeps `role.is_none()`.
+### F1 — Stop fetching whole tables to filter/paginate client-side ✅
+The `team`, `work`, and `people` indexes used to load the entire table and
+filter/cap **in Rust**. Each list resolver now takes optional, backward-compatible
+filter + `limit`/`offset` arguments plus a companion count query, so the handlers
+fetch one page and a total instead:
 
-Each transfers and resolves every row (and every row's nested N+1) to show one
-page. The fix is server-side filter/limit/offset **arguments** on the list
-resolvers — which changes the API and its `schema.graphql` (mirrored in both
-repos), so it is deliberately held for a scoped, cross-repo pass. (The lean
-`{id, label}` picker queries this item also called for landed under F2.)
+- **Teams** — `allTeams(search, includeRetired, limit, offset)` + `teamsCount`.
+- **Work** — `allWork(status, unassignedOnly, limit, offset)` + `workCount`
+  (also drives the vacancy dashboard via `unassignedOnly: true`).
+- **People** — `allPeople(search, organizationId, roleStatus, includeRetired,
+  limit, offset)` + filtered `peopleCount`. The derived `roleStatus`
+  (`in_role`/`available`) filter is resolved server-side against the set of
+  people holding an open `role_assignment`, so pagination counts stay correct.
+
+Model helpers (`get_filtered` / `count_filtered`) build the queries with Diesel
+`into_boxed()`; all arguments are optional (no args = prior behaviour), so
+existing callers (analytics, etc.) are unaffected. The index templates render
+real Prev/Next controls, and `schema.graphqls` / the frontend `schema.graphql`
+were updated in lockstep (see F4). The lean `{id, label}` picker queries this
+item also called for landed earlier under F2.
 
 ### F2 — Trim over-fetched fields in the dropdown queries ✅
 The `<select>` helpers reused the heavy list queries just to build labels:
@@ -156,5 +165,10 @@ frontend's mirrored `schema.graphql` together, per the frontend `CLAUDE.md`.
    (notably the product `effort` aggregate). ✅
 6. **F3 round-trip parallelism** — independent handler calls now run
    concurrently. ✅
-7. **F1 server-side list filtering/pagination** — the remaining item; needs new
-   filter/limit args on the API + coordinated `schema.graphql` changes.
+7. **F1 server-side list filtering/pagination** — additive filter/limit/offset
+   args + count queries on the team, work, and people list resolvers, with
+   real page controls in the frontend. ✅
+
+**All items complete.** Remaining ideas for a future pass (not blocking): extend
+DataLoaders to the remaining single-id edges (B2 follow-up), and apply the same
+server-side pagination to any other large lists as they surface.

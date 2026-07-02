@@ -128,6 +128,46 @@ impl Work {
         Ok(persons)
     }
 
+    /// Server-side filtered + paginated work list. Optionally narrows to a
+    /// single `status` and/or to unassigned work (`role_id IS NULL`). Ordered
+    /// by `created_at DESC` so pagination is stable. A `None` limit returns
+    /// every matching row (preserving the old "fetch all" behaviour).
+    pub fn get_filtered(status: Option<WorkStatus>, unassigned_only: bool, limit: Option<i64>, offset: i64) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let mut query = works::table.into_boxed();
+        if let Some(s) = status {
+            query = query.filter(works::work_status.eq(s));
+        }
+        if unassigned_only {
+            query = query.filter(works::role_id.is_null());
+        }
+        query = query.order_by(works::created_at.desc());
+        if let Some(l) = limit {
+            query = query.limit(l).offset(offset);
+        }
+
+        let res = query.load::<Work>(&mut conn)?;
+        Ok(res)
+    }
+
+    /// Total number of work items matching the same filters as `get_filtered`,
+    /// ignoring limit/offset — for driving pagination controls.
+    pub fn count_filtered(status: Option<WorkStatus>, unassigned_only: bool) -> Result<i64> {
+        let mut conn = connection()?;
+
+        let mut query = works::table.into_boxed();
+        if let Some(s) = status {
+            query = query.filter(works::work_status.eq(s));
+        }
+        if unassigned_only {
+            query = query.filter(works::role_id.is_null());
+        }
+
+        let total = query.count().get_result(&mut conn)?;
+        Ok(total)
+    }
+
     pub fn get_count(count: i64) -> Result<Vec<Self>> {
         let mut conn = connection()?;
         let persons = works::table

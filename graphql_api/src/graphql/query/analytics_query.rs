@@ -15,6 +15,24 @@ use crate::models::{
 };
 use crate::common_utils::{RoleGuard, UserRole};
 
+/// GraphQL wire representation of a SkillDomain (SCREAMING_SNAKE_CASE), the
+/// same conversion async-graphql applies automatically when a field's type is
+/// `SkillDomain` itself. Needed anywhere a domain is folded into a plain
+/// `String` field (map keys, series labels): `format!("{:?}", domain)` alone
+/// yields Rust's PascalCase Debug output (e.g. "SoftwareEngineering"), which
+/// doesn't match the "SOFTWARE_ENGINEERING" the frontend looks up against.
+fn domain_graphql_key(domain: SkillDomain) -> String {
+    let debug = format!("{:?}", domain);
+    let mut key = String::with_capacity(debug.len() + 4);
+    for (i, ch) in debug.char_indices() {
+        if ch.is_ascii_uppercase() && i != 0 {
+            key.push('_');
+        }
+        key.push(ch.to_ascii_uppercase());
+    }
+    key
+}
+
 /// Convert a CapabilityLevel to its numeric value (0-400)
 fn level_value(level: CapabilityLevel) -> i64 {
     match level {
@@ -190,7 +208,7 @@ impl CapabilityGrowthQuery {
                 TimeSeriesPoint { period_start, bucket, value }
             }).collect();
 
-            result.push(LabeledSeries { key: format!("{:?}", d), points });
+            result.push(LabeledSeries { key: domain_graphql_key(d), points });
         }
 
         Ok(result)
@@ -323,7 +341,7 @@ impl SupplyDemandQuery {
                 points.push(SupplyDemandPoint { period_start, bucket, supply, demand });
             }
 
-            result.push(SupplyDemandSeries { domain: format!("{:?}", d), points });
+            result.push(SupplyDemandSeries { domain: domain_graphql_key(d), points });
         }
 
         Ok(result)
@@ -412,7 +430,7 @@ pub(crate) fn compute_team_capability_matrix(
             } else {
                 level_weight(self_identified_level)
             };
-            let entry = domain_map.entry(format!("{:?}", domain)).or_default();
+            let entry = domain_map.entry(domain_graphql_key(domain)).or_default();
             entry.0 += weight;
             entry.1.insert(person_id);
         }

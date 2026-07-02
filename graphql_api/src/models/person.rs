@@ -227,6 +227,106 @@ impl Person {
         Ok(res)
     }
 
+    /// Ids of people who currently hold a role (an open role_assignment).
+    /// Used by the `available` / `in_role` filter in `get_filtered`.
+    fn assigned_person_ids() -> Result<Vec<Uuid>> {
+        use crate::schema::role_assignments;
+        let mut conn = connection()?;
+        let ids = role_assignments::table
+            .filter(role_assignments::end_date.is_null())
+            .select(role_assignments::person_id)
+            .distinct()
+            .load::<Uuid>(&mut conn)?;
+        Ok(ids)
+    }
+
+    /// Server-side filtered + paginated people list. `search` matches the
+    /// given or family name (each whitespace-separated term must match one of
+    /// them, so "jane doe" finds Jane Doe); `organization_id` and `role_status`
+    /// ("in_role" / "available") narrow further. Retired people are excluded
+    /// unless `include_retired`. A `None` limit returns every matching row.
+    pub fn get_filtered(
+        search: Option<&str>,
+        organization_id: Option<Uuid>,
+        role_status: Option<&str>,
+        include_retired: bool,
+        limit: Option<i64>,
+        offset: i64,
+    ) -> Result<Vec<Person>> {
+        let mut conn = connection()?;
+
+        let mut query = persons::table.into_boxed();
+        if !include_retired {
+            query = query.filter(persons::retired_at.is_null());
+        }
+        if let Some(org) = organization_id {
+            query = query.filter(persons::organization_id.eq(org));
+        }
+        if let Some(s) = search {
+            for term in s.split_whitespace() {
+                let pattern = format!("%{}%", term);
+                query = query.filter(persons::given_name.ilike(pattern.clone()).or(persons::family_name.ilike(pattern)));
+            }
+        }
+        match role_status {
+            Some("in_role") => {
+                let ids = Self::assigned_person_ids()?;
+                query = query.filter(persons::id.eq_any(ids));
+            }
+            Some("available") => {
+                let ids = Self::assigned_person_ids()?;
+                query = query.filter(persons::id.ne_all(ids));
+            }
+            _ => {}
+        }
+        query = query.order_by((persons::family_name, persons::given_name));
+        if let Some(l) = limit {
+            query = query.limit(l).offset(offset);
+        }
+
+        let res = query.load::<Person>(&mut conn)?;
+        Ok(res)
+    }
+
+    /// Total people matching the same filters as `get_filtered`, ignoring
+    /// limit/offset — for driving pagination controls.
+    pub fn count_filtered(
+        search: Option<&str>,
+        organization_id: Option<Uuid>,
+        role_status: Option<&str>,
+        include_retired: bool,
+    ) -> Result<i64> {
+        let mut conn = connection()?;
+
+        let mut query = persons::table.into_boxed();
+        if !include_retired {
+            query = query.filter(persons::retired_at.is_null());
+        }
+        if let Some(org) = organization_id {
+            query = query.filter(persons::organization_id.eq(org));
+        }
+        if let Some(s) = search {
+            for term in s.split_whitespace() {
+                let pattern = format!("%{}%", term);
+                query = query.filter(persons::given_name.ilike(pattern.clone()).or(persons::family_name.ilike(pattern)));
+            }
+        }
+        match role_status {
+            Some("in_role") => {
+                let ids = Self::assigned_person_ids()?;
+                query = query.filter(persons::id.eq_any(ids));
+            }
+            Some("available") => {
+                let ids = Self::assigned_person_ids()?;
+                query = query.filter(persons::id.ne_all(ids));
+            }
+            _ => {}
+        }
+
+        let total = query.count().get_result(&mut conn)?;
+        Ok(total)
+    }
+
     pub fn get_count(count: i64) -> Result<Vec<Person>> {
         let mut conn = connection()?;
 

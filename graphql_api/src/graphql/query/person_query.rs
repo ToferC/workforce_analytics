@@ -13,14 +13,25 @@ impl PersonQuery {
 
     // People
     #[graphql(name = "allPeople", guard = "RoleGuard::new(UserRole::User)")]
-    /// Accepts argument of "count" and returns a vector of {count} persons ordered by
-    /// family name.D
+    /// Returns people, filtered and paginated server-side, ordered by family
+    /// then given name. All arguments are optional and backward compatible:
+    /// with none supplied this returns every non-retired person. `search`
+    /// matches given/family name (each term must match one); `organizationId`
+    /// and `roleStatus` ("in_role" / "available") narrow further. Pair with
+    /// `peopleCount` for the total under the same filters.
     pub async fn all_people(
         &self,
         _context: &Context<'_>,
+        search: Option<String>,
+        organization_id: Option<Uuid>,
+        role_status: Option<String>,
+        #[graphql(default = false)] include_retired: bool,
+        limit: Option<i64>,
+        #[graphql(default = 0)] offset: i64,
     ) -> Result<Vec<Person>> {
-
-        Person::get_all()
+        let search = search.filter(|s| !s.trim().is_empty());
+        let role_status = role_status.filter(|s| !s.trim().is_empty());
+        Person::get_filtered(search.as_deref(), organization_id, role_status.as_deref(), include_retired, limit, offset)
     }
 
     #[graphql(name = "People", guard = "RoleGuard::new(UserRole::User)")]
@@ -36,14 +47,20 @@ impl PersonQuery {
     }
 
     #[graphql(name = "peopleCount", guard = "RoleGuard::new(UserRole::User)")]
-    /// Accepts argument of "count" and returns a vector of {count} persons ordered by
-    /// family name
+    /// Total number of people matching the given filters (ignoring
+    /// pagination), for driving `allPeople` page controls. With no arguments
+    /// this counts every non-retired person.
     pub async fn people_count(
         &self,
         _context: &Context<'_>,
+        search: Option<String>,
+        organization_id: Option<Uuid>,
+        role_status: Option<String>,
+        #[graphql(default = false)] include_retired: bool,
     ) -> Result<i64> {
-
-        Person::count()
+        let search = search.filter(|s| !s.trim().is_empty());
+        let role_status = role_status.filter(|s| !s.trim().is_empty());
+        Person::count_filtered(search.as_deref(), organization_id, role_status.as_deref(), include_retired)
     }
 
 

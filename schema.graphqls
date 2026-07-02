@@ -1230,20 +1230,25 @@ type Query {
 	"""
 	skillByName(name: String!): [Skill!]!
 	"""
-	Accepts argument of "count" and returns a vector of {count} persons ordered by
-	family name.D
+	Returns people, filtered and paginated server-side, ordered by family
+	then given name. All arguments are optional and backward compatible:
+	with none supplied this returns every non-retired person. `search`
+	matches given/family name (each term must match one); `organizationId`
+	and `roleStatus` ("in_role" / "available") narrow further. Pair with
+	`peopleCount` for the total under the same filters.
 	"""
-	allPeople: [Person!]!
+	allPeople(search: String, organizationId: UUID, roleStatus: String, includeRetired: Boolean! = false, limit: Int, offset: Int! = 0): [Person!]!
 	"""
 	Accepts argument of "count" and returns a vector of {count} persons ordered by
 	family name
 	"""
 	People(count: Int!): [Person!]!
 	"""
-	Accepts argument of "count" and returns a vector of {count} persons ordered by
-	family name
+	Total number of people matching the given filters (ignoring pagination),
+	for driving `allPeople` page controls. With no arguments this counts
+	every non-retired person.
 	"""
-	peopleCount: Int!
+	peopleCount(search: String, organizationId: UUID, roleStatus: String, includeRetired: Boolean! = false): Int!
 	personById(id: UUID!): Person!
 	personByName(name: String!): [Person!]!
 	"""

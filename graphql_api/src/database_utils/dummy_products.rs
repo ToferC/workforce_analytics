@@ -84,6 +84,7 @@ pub fn generate_dummy_products(organization_id: &Uuid) -> Result<(), Error> {
                     rng.gen_range(1..=3),
                     WorkStatus::Planning,
                     rand::random::<Priority>(),
+                    None,
                 );
 
                 vacant_work.push(nw);

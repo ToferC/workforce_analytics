@@ -639,6 +639,7 @@ input NewWork {
 	effort: Int!
 	workStatus: WorkStatus!
 	priority: Priority!
+	dueDate: NaiveDateTime
 }
 
 """
@@ -2057,8 +2058,17 @@ type Work {
 	priority: Priority!
 	createdAt: NaiveDateTime!
 	updatedAt: NaiveDateTime!
+	dueDate: NaiveDateTime
+	startedAt: NaiveDateTime
+	completedAt: NaiveDateTime
+	blockedReason: String
+	blockedSince: NaiveDateTime
 	task: Task!
 	role: Role
+	"""
+	The role/position this work is waiting on while BLOCKED, if set.
+	"""
+	blockedOnRole: Role
 	"""
 	The specific skill this work requires
 	"""
@@ -2087,6 +2097,9 @@ input WorkData {
 	effort: Int
 	workStatus: WorkStatus
 	priority: Priority
+	dueDate: NaiveDateTime
+	blockedReason: String
+	blockedOnRoleId: UUID
 }
 
 enum WorkStatus {

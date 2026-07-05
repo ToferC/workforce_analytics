@@ -25,7 +25,12 @@ use crate::graphql::loaders::{TaskLoader, RoleLoader};
 /// (domain and capability_level) before a role is assigned
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, SimpleObject)]
 #[graphql(complex)]
-#[diesel(table_name = works)]
+// treat_none_as_null: `update()` always loads the full row first and only
+// overwrites the fields the caller changed, so a `None` here always means
+// "this column should be NULL" (e.g. clearing blocked context on unblock),
+// never "skip this column". Without this, Diesel's default AsChangeset skips
+// None fields and the clears would silently not persist.
+#[diesel(table_name = works, treat_none_as_null = true)]
 pub struct Work {
     pub id: Uuid,
     #[graphql(skip)]
@@ -43,6 +48,21 @@ pub struct Work {
     pub updated_at: NaiveDateTime,
     #[graphql(skip)]
     pub skill_id: Uuid,
+    /// Target completion date for this work item (Proposal 1). User-set.
+    pub due_date: Option<NaiveDateTime>,
+    /// Stamped server-side when the work first enters IN_PROGRESS.
+    pub started_at: Option<NaiveDateTime>,
+    /// Stamped server-side when the work is marked COMPLETED.
+    pub completed_at: Option<NaiveDateTime>,
+    /// Free-text reason the work is BLOCKED (Proposal 2).
+    pub blocked_reason: Option<String>,
+    /// Stamped server-side when the work enters BLOCKED, cleared when it
+    /// leaves BLOCKED. Drives "blocked for N days" ageing.
+    pub blocked_since: Option<NaiveDateTime>,
+    /// The role/position this work is waiting on, if any — a named, reachable
+    /// contact for escalation. Resolved via `blockedOnRole`.
+    #[graphql(skip)]
+    pub blocked_on_role_id: Option<Uuid>,
 }
 
 #[ComplexObject]
@@ -56,6 +76,16 @@ impl Work {
 
     pub async fn role(&self, ctx: &Context<'_>) -> Result<Option<Role>> {
         match self.role_id {
+            Some(id) => Ok(ctx.data_unchecked::<DataLoader<RoleLoader>>().load_one(id).await?),
+            None => Ok(None),
+        }
+    }
+
+    /// The role/position this work is waiting on while BLOCKED, if set. Gives
+    /// callers a named contact (and, through the role, a person to escalate to)
+    /// rather than an opaque blocker.
+    pub async fn blocked_on_role(&self, ctx: &Context<'_>) -> Result<Option<Role>> {
+        match self.blocked_on_role_id {
             Some(id) => Ok(ctx.data_unchecked::<DataLoader<RoleLoader>>().load_one(id).await?),
             None => Ok(None),
         }
@@ -345,8 +375,42 @@ impl Work {
         .filter(works::id.eq(&self.id))
         .set(self)
         .get_result(&mut conn)?;
-        
+
         Ok(res)
+    }
+
+    /// Maintain the server-managed lifecycle timestamps when the work's status
+    /// changes from `old_status` to its current `work_status`. Idempotent for
+    /// no-op transitions (call only guards on an actual change). See Proposals
+    /// 1 and 2:
+    ///  - first entry to IN_PROGRESS stamps `started_at`
+    ///  - entry to COMPLETED stamps `completed_at` (and backfills `started_at`)
+    ///  - entry to BLOCKED stamps `blocked_since`; leaving BLOCKED clears it
+    pub fn apply_status_transition(&mut self, old_status: WorkStatus) {
+        if self.work_status == old_status {
+            return;
+        }
+        let now = Utc::now().naive_utc();
+        match self.work_status {
+            WorkStatus::InProgress => {
+                if self.started_at.is_none() {
+                    self.started_at = Some(now);
+                }
+            }
+            WorkStatus::Completed => {
+                self.completed_at = Some(now);
+                if self.started_at.is_none() {
+                    self.started_at = Some(now);
+                }
+            }
+            WorkStatus::Blocked => {
+                self.blocked_since = Some(now);
+            }
+            _ => {}
+        }
+        if old_status == WorkStatus::Blocked && self.work_status != WorkStatus::Blocked {
+            self.blocked_since = None;
+        }
     }
 }
 
@@ -363,6 +427,8 @@ pub struct NewWork {
     pub effort: i32,
     pub work_status: WorkStatus,
     pub priority: Priority,
+    /// Optional target completion date set at creation time (Proposal 1).
+    pub due_date: Option<NaiveDateTime>,
 }
 
 impl NewWork {
@@ -378,6 +444,7 @@ impl NewWork {
         effort: i32,
         work_status: WorkStatus,
         priority: Priority,
+        due_date: Option<NaiveDateTime>,
     ) -> Self {
         NewWork {
             task_id,
@@ -390,6 +457,7 @@ impl NewWork {
             effort,
             work_status,
             priority,
+            due_date,
         }
     }
 }

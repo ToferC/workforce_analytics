@@ -619,6 +619,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
                     effort,
                     task_status,
                     rand::random::<Priority>(),
+                    None,
                 );
 
                 work.push(nw);

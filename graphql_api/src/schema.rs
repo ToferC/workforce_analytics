@@ -519,6 +519,13 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         skill_id -> Uuid,
+        due_date -> Nullable<Timestamp>,
+        started_at -> Nullable<Timestamp>,
+        completed_at -> Nullable<Timestamp>,
+        #[max_length = 1024]
+        blocked_reason -> Nullable<Varchar>,
+        blocked_since -> Nullable<Timestamp>,
+        blocked_on_role_id -> Nullable<Uuid>,
     }
 }
 

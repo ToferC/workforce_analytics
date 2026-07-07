@@ -105,6 +105,12 @@ impl Work {
 
         Capability::get_matches_by_skill_id_and_level(&self.skill_id, self.capability_level, count)
     }
+
+    /// Full status-transition history for this work, most recent first
+    /// (Proposal 4). Empty for work created before status history existed.
+    pub async fn status_history(&self) -> Result<Vec<WorkStatusChange>> {
+        WorkStatusChange::get_by_work_id(&self.id)
+    }
 }
 
 
@@ -460,6 +466,67 @@ impl NewWork {
             due_date,
         }
     }
+}
+
+/// A single recorded work_status transition (Proposal 4). `from_status` is
+/// None for the row logged when the work was created.
+#[derive(Debug, Clone, Deserialize, Serialize, Queryable, SimpleObject)]
+#[graphql(complex)]
+#[diesel(table_name = work_status_history)]
+pub struct WorkStatusChange {
+    pub id: Uuid,
+    #[graphql(skip)]
+    pub work_id: Uuid,
+    pub from_status: Option<WorkStatus>,
+    pub to_status: WorkStatus,
+    pub changed_at: NaiveDateTime,
+    #[graphql(skip)]
+    pub changed_by_user_id: Option<Uuid>,
+}
+
+#[ComplexObject]
+impl WorkStatusChange {
+    /// Display name of the user who made the change, if still known.
+    pub async fn changed_by_name(&self) -> Option<String> {
+        self.changed_by_user_id
+            .and_then(|id| crate::models::User::get_by_id(&id).ok().map(|u| u.name))
+    }
+}
+
+impl WorkStatusChange {
+    pub fn get_by_work_id(work_id: &Uuid) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+        let res = work_status_history::table
+            .filter(work_status_history::work_id.eq(work_id))
+            .order_by(work_status_history::changed_at.desc())
+            .load::<WorkStatusChange>(&mut conn)?;
+        Ok(res)
+    }
+
+    /// Append a transition record. Best-effort: status logging must never fail
+    /// the surrounding mutation, so errors are swallowed.
+    pub fn record(
+        work_id: Uuid,
+        from_status: Option<WorkStatus>,
+        to_status: WorkStatus,
+        changed_by_user_id: Option<Uuid>,
+    ) {
+        if let Ok(mut conn) = connection() {
+            let new = NewWorkStatusChange { work_id, from_status, to_status, changed_by_user_id };
+            let _ = diesel::insert_into(work_status_history::table)
+                .values(&new)
+                .execute(&mut conn);
+        }
+    }
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = work_status_history)]
+struct NewWorkStatusChange {
+    work_id: Uuid,
+    from_status: Option<WorkStatus>,
+    to_status: WorkStatus,
+    changed_by_user_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, DbEnum, Serialize, Deserialize, Enum)]

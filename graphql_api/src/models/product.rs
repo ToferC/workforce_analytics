@@ -84,6 +84,23 @@ impl Product {
     pub async fn skill_demand(&self) -> Result<Vec<ProductSkillDemand>> {
         Product::get_skill_demand(&self.id)
     }
+
+    /// Total number of priority "drops" beneath this product (Proposal 7c):
+    /// child tasks ranked below the product, plus work items ranked below
+    /// their own task. A non-zero count means lower tiers are not carrying
+    /// the priority the product implies.
+    pub async fn priority_mismatch_count(&self) -> Result<i32> {
+        let tasks = Task::get_by_product_id(&self.id)?;
+        let mut count = 0i32;
+        for t in &tasks {
+            if t.priority < self.priority {
+                count += 1;
+            }
+            let work = Work::get_by_task_id(&t.id)?;
+            count += work.iter().filter(|w| w.priority < t.priority).count() as i32;
+        }
+        Ok(count)
+    }
 }
 
 // Non Graphql

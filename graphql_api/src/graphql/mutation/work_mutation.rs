@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-use crate::models::{Work, NewWork, Priority, SkillDomain, CapabilityLevel, WorkStatus};
+use crate::models::{Work, NewWork, Priority, SkillDomain, CapabilityLevel, WorkStatus, WorkStatusChange};
 use crate::common_utils::{UserRole, is_operator, RoleGuard};
 use crate::graphql::authz;
 
@@ -25,6 +25,9 @@ impl WorkMutation {
     ) -> Result<Work> {
         authz::require_manage_task(context, &data.task_id)?;
         let work = Work::create(&data)?;
+        // Seed the status history with the item's initial status (Proposal 4).
+        let actor = context.data_opt::<uuid::Uuid>().copied();
+        WorkStatusChange::record(work.id, None, work.work_status, actor);
         Ok(work)
     }
 
@@ -111,7 +114,13 @@ impl WorkMutation {
             work.blocked_on_role_id = None;
         }
 
-        work.update()
+        let updated = work.update()?;
+        // Record the transition after a successful update (Proposal 4).
+        if updated.work_status != old_status {
+            let actor = context.data_opt::<uuid::Uuid>().copied();
+            WorkStatusChange::record(updated.id, Some(old_status), updated.work_status, actor);
+        }
+        Ok(updated)
     }
 }
 

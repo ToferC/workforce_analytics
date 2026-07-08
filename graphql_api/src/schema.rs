@@ -498,6 +498,20 @@ diesel::table! {
 
 diesel::table! {
     use diesel::sql_types::*;
+    use super::sql_types::WorkStatus;
+
+    work_status_history (id) {
+        id -> Uuid,
+        work_id -> Uuid,
+        from_status -> Nullable<WorkStatus>,
+        to_status -> WorkStatus,
+        changed_at -> Timestamp,
+        changed_by_user_id -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
     use super::sql_types::SkillDomain;
     use super::sql_types::CapabilityLevel;
     use super::sql_types::WorkStatus;
@@ -588,5 +602,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     users,
     valid_roles,
     validations,
+    work_status_history,
     works,
 );

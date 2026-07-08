@@ -2080,6 +2080,10 @@ type Work {
 	(default 10).
 	"""
 	capabilityMatches(count: Int): [Capability!]!
+	"""
+	Full status-transition history for this work, most recent first (Proposal 4).
+	"""
+	statusHistory: [WorkStatusChange!]!
 }
 
 """
@@ -2125,4 +2129,19 @@ directive @specifiedBy(url: String!) on SCALAR
 schema {
 	query: Query
 	mutation: Mutation
+}
+
+"""
+A single recorded work_status transition (Proposal 4). `fromStatus` is null
+for the row logged when the work was created.
+"""
+type WorkStatusChange {
+	id: UUID!
+	fromStatus: WorkStatus
+	toStatus: WorkStatus!
+	changedAt: NaiveDateTime!
+	"""
+	Display name of the user who made the change, if still known.
+	"""
+	changedByName: String
 }

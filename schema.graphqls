@@ -380,6 +380,9 @@ type Mutation {
 	resolveWorkUpdateFlag(updateId: UUID!): WorkUpdate!
 	createTask(data: NewTask!): Task!
 	updateTask(data: TaskData!): Task!
+	submitTaskForApproval(taskId: UUID!): Task!
+	approveTask(taskId: UUID!): Task!
+	rejectTask(taskId: UUID!, reason: String!): Task!
 	createProduct(data: NewProduct!): Product!
 	updateProduct(data: ProductData!): Product!
 	createRequirement(data: NewRequirement!): Requirement!
@@ -1373,6 +1376,10 @@ type Query {
 	taskById(id: UUID!): Task!
 	taskByName(name: String!): [Task!]!
 	"""
+	Approver queue (Proposal 7b): tasks awaiting approval the caller manages.
+	"""
+	pendingApprovals(limit: Int): [Task!]!
+	"""
 	Accepts an argument of "count" and returns a vector of {count} work
 	"""
 	work(count: Int!): [Work!]!
@@ -1801,6 +1808,16 @@ type Task {
 	The product this task contributes to, if any
 	"""
 	product: Product
+	"""
+	Approval workflow state (Proposal 7b). approvalTier stays the level required.
+	"""
+	approvalStatus: ApprovalStatus!
+	approvedAt: NaiveDateTime
+	rejectionReason: String
+	"""
+	Name of the user who approved or rejected the task, if any.
+	"""
+	approvedByName: String
 }
 
 """
@@ -2199,4 +2216,11 @@ type OpenWorkFlag {
 	body: String!
 	authorName: String
 	createdAt: NaiveDateTime!
+}
+
+enum ApprovalStatus {
+	DRAFT
+	PENDING_APPROVAL
+	APPROVED
+	REJECTED
 }

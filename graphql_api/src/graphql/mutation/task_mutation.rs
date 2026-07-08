@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-use crate::models::{Task, NewTask, Priority, SkillDomain, WorkStatus};
+use crate::models::{Task, NewTask, Priority, SkillDomain, WorkStatus, ApprovalStatus};
 use crate::common_utils::{UserRole, is_operator, RoleGuard};
 use crate::graphql::authz;
 
@@ -91,6 +91,73 @@ impl TaskMutation {
         };
 
         task.update()
+    }
+
+    // ── Approval workflow (Proposal 7b) ──────────────────────────────────
+
+    /// Submit a task for approval: DRAFT | REJECTED -> PENDING_APPROVAL.
+    /// Restricted to a manager of the task (operator+).
+    #[graphql(
+        name = "submitTaskForApproval",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    pub async fn submit_task_for_approval(
+        &self,
+        context: &Context<'_>,
+        task_id: Uuid,
+    ) -> Result<Task> {
+        let task = Task::get_by_id(&task_id)?;
+        authz::require_manage_role(context, &task.created_by_role_id)?;
+        if !matches!(task.approval_status, ApprovalStatus::Draft | ApprovalStatus::Rejected) {
+            return Err(Error::new("Only a draft or rejected task can be submitted for approval"));
+        }
+        Task::submit_for_approval(&task_id)
+    }
+
+    /// Approve a task awaiting approval: PENDING_APPROVAL -> APPROVED.
+    #[graphql(
+        name = "approveTask",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    pub async fn approve_task(
+        &self,
+        context: &Context<'_>,
+        task_id: Uuid,
+    ) -> Result<Task> {
+        let task = Task::get_by_id(&task_id)?;
+        authz::require_manage_role(context, &task.created_by_role_id)?;
+        if task.approval_status != ApprovalStatus::PendingApproval {
+            return Err(Error::new("Only a task pending approval can be approved"));
+        }
+        let approver = context.data_opt::<Uuid>().copied();
+        Task::approve(&task_id, approver)
+    }
+
+    /// Reject a task awaiting approval, with a reason: PENDING_APPROVAL -> REJECTED.
+    #[graphql(
+        name = "rejectTask",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    pub async fn reject_task(
+        &self,
+        context: &Context<'_>,
+        task_id: Uuid,
+        reason: String,
+    ) -> Result<Task> {
+        let task = Task::get_by_id(&task_id)?;
+        authz::require_manage_role(context, &task.created_by_role_id)?;
+        if task.approval_status != ApprovalStatus::PendingApproval {
+            return Err(Error::new("Only a task pending approval can be rejected"));
+        }
+        let reason = reason.trim().to_string();
+        if reason.is_empty() {
+            return Err(Error::new("A rejection reason is required"));
+        }
+        let approver = context.data_opt::<Uuid>().copied();
+        Task::reject(&task_id, approver, reason)
     }
 }
 

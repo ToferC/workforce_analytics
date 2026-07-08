@@ -52,6 +52,10 @@ pub mod sql_types {
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "work_update_kind"))]
     pub struct WorkUpdateKind;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "approval_status"))]
+    pub struct ApprovalStatus;
 }
 
 diesel::table! {
@@ -393,6 +397,7 @@ diesel::table! {
     use super::sql_types::SkillDomain;
     use super::sql_types::WorkStatus;
     use super::sql_types::Priority;
+    use super::sql_types::ApprovalStatus;
 
     tasks (id) {
         id -> Uuid,
@@ -415,6 +420,10 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         product_id -> Nullable<Uuid>,
+        approval_status -> ApprovalStatus,
+        approved_by_user_id -> Nullable<Uuid>,
+        approved_at -> Nullable<Timestamp>,
+        rejection_reason -> Nullable<Text>,
     }
 }
 

@@ -48,6 +48,10 @@ pub mod sql_types {
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "work_status"))]
     pub struct WorkStatus;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "work_update_kind"))]
+    pub struct WorkUpdateKind;
 }
 
 diesel::table! {
@@ -498,6 +502,22 @@ diesel::table! {
 
 diesel::table! {
     use diesel::sql_types::*;
+    use super::sql_types::WorkUpdateKind;
+
+    work_updates (id) {
+        id -> Uuid,
+        work_id -> Uuid,
+        author_user_id -> Nullable<Uuid>,
+        kind -> WorkUpdateKind,
+        body -> Text,
+        created_at -> Timestamp,
+        flag_resolved_at -> Nullable<Timestamp>,
+        resolved_by_user_id -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
     use super::sql_types::WorkStatus;
 
     work_status_history (id) {
@@ -603,5 +623,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     valid_roles,
     validations,
     work_status_history,
+    work_updates,
     works,
 );

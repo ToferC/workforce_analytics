@@ -370,6 +370,14 @@ type Mutation {
 	updatePublicationContributor(data: PublicationContributorData!): PublicationContributor!
 	createWork(data: NewWork!): Work!
 	updateWork(data: WorkData!): Work!
+	"""
+	Add a comment or raise a needs-attention flag on a work item (Proposal 3).
+	"""
+	addWorkUpdate(workId: UUID!, body: String!, kind: WorkUpdateKind): WorkUpdate!
+	"""
+	Resolve an open flag (Proposal 3). Operator+ over the owning task.
+	"""
+	resolveWorkUpdateFlag(updateId: UUID!): WorkUpdate!
 	createTask(data: NewTask!): Task!
 	updateTask(data: TaskData!): Task!
 	createProduct(data: NewProduct!): Product!
@@ -2084,6 +2092,14 @@ type Work {
 	Full status-transition history for this work, most recent first (Proposal 4).
 	"""
 	statusHistory: [WorkStatusChange!]!
+	"""
+	Comments and flags on this work, most recent first (Proposal 3).
+	"""
+	updates: [WorkUpdate!]!
+	"""
+	Number of unresolved FLAG updates — the "needs attention" count (Proposal 3).
+	"""
+	openFlagCount: Int!
 }
 
 """
@@ -2144,4 +2160,23 @@ type WorkStatusChange {
 	Display name of the user who made the change, if still known.
 	"""
 	changedByName: String
+}
+
+enum WorkUpdateKind {
+	COMMENT
+	FLAG
+}
+
+"""
+A comment or flag left on a work item (Proposal 3). Only FLAG rows use the
+resolve columns; a flag with flagResolvedAt = null is open.
+"""
+type WorkUpdate {
+	id: UUID!
+	kind: WorkUpdateKind!
+	body: String!
+	createdAt: NaiveDateTime!
+	flagResolvedAt: NaiveDateTime
+	authorName: String
+	resolvedByName: String
 }

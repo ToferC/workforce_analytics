@@ -111,6 +111,17 @@ impl Work {
     pub async fn status_history(&self) -> Result<Vec<WorkStatusChange>> {
         WorkStatusChange::get_by_work_id(&self.id)
     }
+
+    /// Comments and flags on this work, most recent first (Proposal 3).
+    pub async fn updates(&self) -> Result<Vec<WorkUpdate>> {
+        WorkUpdate::get_by_work_id(&self.id)
+    }
+
+    /// Number of unresolved FLAG updates — the "needs attention" count a
+    /// manager triages (Proposal 3).
+    pub async fn open_flag_count(&self) -> Result<i64> {
+        WorkUpdate::open_flag_count(&self.id)
+    }
 }
 
 
@@ -527,6 +538,112 @@ struct NewWorkStatusChange {
     from_status: Option<WorkStatus>,
     to_status: WorkStatus,
     changed_by_user_id: Option<Uuid>,
+}
+
+/// Kind of a work update (Proposal 3): a plain comment, or a flag raised for
+/// management attention.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, DbEnum, Serialize, Deserialize, Enum)]
+#[ExistingTypePath = "crate::schema::sql_types::WorkUpdateKind"]
+pub enum WorkUpdateKind {
+    Comment,
+    Flag,
+}
+
+/// A comment or flag left on a work item (Proposal 3). Only FLAG rows use the
+/// resolve columns; a flag with `flag_resolved_at = NULL` is open.
+#[derive(Debug, Clone, Deserialize, Serialize, Queryable, SimpleObject)]
+#[graphql(complex)]
+#[diesel(table_name = work_updates)]
+pub struct WorkUpdate {
+    pub id: Uuid,
+    #[graphql(skip)]
+    pub work_id: Uuid,
+    #[graphql(skip)]
+    pub author_user_id: Option<Uuid>,
+    pub kind: WorkUpdateKind,
+    pub body: String,
+    pub created_at: NaiveDateTime,
+    pub flag_resolved_at: Option<NaiveDateTime>,
+    #[graphql(skip)]
+    pub resolved_by_user_id: Option<Uuid>,
+}
+
+#[ComplexObject]
+impl WorkUpdate {
+    /// Display name of the author, if still known.
+    pub async fn author_name(&self) -> Option<String> {
+        self.author_user_id
+            .and_then(|id| crate::models::User::get_by_id(&id).ok().map(|u| u.name))
+    }
+
+    /// Display name of whoever resolved the flag, if any.
+    pub async fn resolved_by_name(&self) -> Option<String> {
+        self.resolved_by_user_id
+            .and_then(|id| crate::models::User::get_by_id(&id).ok().map(|u| u.name))
+    }
+}
+
+impl WorkUpdate {
+    pub fn get_by_id(id: &Uuid) -> Result<Self> {
+        let mut conn = connection()?;
+        Ok(work_updates::table.filter(work_updates::id.eq(id)).first(&mut conn)?)
+    }
+
+    pub fn get_by_work_id(work_id: &Uuid) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+        let res = work_updates::table
+            .filter(work_updates::work_id.eq(work_id))
+            .order_by(work_updates::created_at.desc())
+            .load::<WorkUpdate>(&mut conn)?;
+        Ok(res)
+    }
+
+    pub fn open_flag_count(work_id: &Uuid) -> Result<i64> {
+        let mut conn = connection()?;
+        let n = work_updates::table
+            .filter(work_updates::work_id.eq(work_id))
+            .filter(work_updates::kind.eq(WorkUpdateKind::Flag))
+            .filter(work_updates::flag_resolved_at.is_null())
+            .count()
+            .get_result(&mut conn)?;
+        Ok(n)
+    }
+
+    pub fn create(
+        work_id: Uuid,
+        author_user_id: Option<Uuid>,
+        kind: WorkUpdateKind,
+        body: String,
+    ) -> Result<Self> {
+        let mut conn = connection()?;
+        let new = NewWorkUpdate { work_id, author_user_id, kind, body };
+        let res = diesel::insert_into(work_updates::table)
+            .values(&new)
+            .get_result(&mut conn)?;
+        Ok(res)
+    }
+
+    /// Mark an open flag resolved. No-op fields for comments; safe to call on
+    /// an already-resolved flag (it just refreshes the resolver/time).
+    pub fn resolve_flag(id: &Uuid, resolved_by_user_id: Option<Uuid>) -> Result<Self> {
+        let mut conn = connection()?;
+        let res = diesel::update(work_updates::table.filter(work_updates::id.eq(id)))
+            .set((
+                work_updates::flag_resolved_at.eq(Some(Utc::now().naive_utc())),
+                work_updates::resolved_by_user_id.eq(resolved_by_user_id),
+            ))
+            .get_result(&mut conn)?;
+        Ok(res)
+    }
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = work_updates)]
+struct NewWorkUpdate {
+    work_id: Uuid,
+    author_user_id: Option<Uuid>,
+    kind: WorkUpdateKind,
+    body: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, DbEnum, Serialize, Deserialize, Enum)]

@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-use crate::models::{Work, NewWork, Priority, SkillDomain, CapabilityLevel, WorkStatus, WorkStatusChange, WorkUpdate, WorkUpdateKind};
+use crate::models::{Work, NewWork, Priority, SkillDomain, CapabilityLevel, WorkStatus, WorkStatusChange, WorkUpdate, WorkUpdateKind, WorkDependency};
 use crate::common_utils::{UserRole, is_operator, RoleGuard};
 use crate::graphql::authz;
 
@@ -165,6 +165,56 @@ impl WorkMutation {
         authz::require_manage_task(context, &work.task_id)?;
         let resolver = context.data_opt::<uuid::Uuid>().copied();
         WorkUpdate::resolve_flag(&update_id, resolver)
+    }
+
+    /// Add a dependency (Proposal 7a): `workId` becomes blocked by
+    /// `dependsOnWorkId`. Rejects self-links, duplicates, and any edge that
+    /// would create a cycle. Managed like the work itself (operator+ over the
+    /// owning task).
+    #[graphql(
+        name = "addWorkDependency",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    pub async fn add_work_dependency(
+        &self,
+        context: &Context<'_>,
+        work_id: Uuid,
+        depends_on_work_id: Uuid,
+    ) -> Result<Work> {
+        let work = Work::get_by_id(&work_id)?;
+        authz::require_manage_task(context, &work.task_id)?;
+        if work_id == depends_on_work_id {
+            return Err(Error::new("A work item cannot depend on itself"));
+        }
+        // Ensure the dependency target exists.
+        Work::get_by_id(&depends_on_work_id)?;
+        if WorkDependency::exists(&work_id, &depends_on_work_id)? {
+            return Err(Error::new("That dependency already exists"));
+        }
+        if WorkDependency::would_create_cycle(&work_id, &depends_on_work_id)? {
+            return Err(Error::new("That dependency would create a cycle"));
+        }
+        WorkDependency::add(&work_id, &depends_on_work_id)?;
+        Ok(work)
+    }
+
+    /// Remove a dependency edge (Proposal 7a).
+    #[graphql(
+        name = "removeWorkDependency",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    pub async fn remove_work_dependency(
+        &self,
+        context: &Context<'_>,
+        work_id: Uuid,
+        depends_on_work_id: Uuid,
+    ) -> Result<Work> {
+        let work = Work::get_by_id(&work_id)?;
+        authz::require_manage_task(context, &work.task_id)?;
+        WorkDependency::remove(&work_id, &depends_on_work_id)?;
+        Ok(work)
     }
 }
 

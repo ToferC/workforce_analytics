@@ -378,6 +378,8 @@ type Mutation {
 	Resolve an open flag (Proposal 3). Operator+ over the owning task.
 	"""
 	resolveWorkUpdateFlag(updateId: UUID!): WorkUpdate!
+	addWorkDependency(workId: UUID!, dependsOnWorkId: UUID!): Work!
+	removeWorkDependency(workId: UUID!, dependsOnWorkId: UUID!): Work!
 	createTask(data: NewTask!): Task!
 	updateTask(data: TaskData!): Task!
 	submitTaskForApproval(taskId: UUID!): Task!
@@ -2122,6 +2124,22 @@ type Work {
 	Number of unresolved FLAG updates — the "needs attention" count (Proposal 3).
 	"""
 	openFlagCount: Int!
+	"""
+	Work items this one is blocked by (Proposal 7a).
+	"""
+	dependsOn: [Work!]!
+	"""
+	Work items blocked by this one.
+	"""
+	blocks: [Work!]!
+	"""
+	Dependencies still open — the blockers preventing this work from starting.
+	"""
+	blockingDependencies: [Work!]!
+	"""
+	True when at least one dependency is still open.
+	"""
+	isBlocked: Boolean!
 }
 
 """

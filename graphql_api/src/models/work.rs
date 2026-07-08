@@ -122,6 +122,32 @@ impl Work {
     pub async fn open_flag_count(&self) -> Result<i64> {
         WorkUpdate::open_flag_count(&self.id)
     }
+
+    /// Work items this one is blocked by (Proposal 7a).
+    pub async fn depends_on(&self) -> Result<Vec<Work>> {
+        Work::get_by_ids(&WorkDependency::depends_on_ids(&self.id)?)
+    }
+
+    /// Work items blocked by this one (the reverse edge).
+    pub async fn blocks(&self) -> Result<Vec<Work>> {
+        Work::get_by_ids(&WorkDependency::blocks_ids(&self.id)?)
+    }
+
+    /// The dependencies still open (not completed/cancelled) — the actual
+    /// blockers preventing this work from starting.
+    pub async fn blocking_dependencies(&self) -> Result<Vec<Work>> {
+        let deps = Work::get_by_ids(&WorkDependency::depends_on_ids(&self.id)?)?;
+        Ok(deps.into_iter()
+            .filter(|w| !matches!(w.work_status, WorkStatus::Completed | WorkStatus::Cancelled))
+            .collect())
+    }
+
+    /// True when at least one dependency is still open, so this work cannot
+    /// start yet.
+    pub async fn is_blocked(&self) -> Result<bool> {
+        let deps = Work::get_by_ids(&WorkDependency::depends_on_ids(&self.id)?)?;
+        Ok(deps.iter().any(|w| !matches!(w.work_status, WorkStatus::Completed | WorkStatus::Cancelled)))
+    }
 }
 
 
@@ -240,6 +266,18 @@ impl Work {
             .filter(works::id.eq(id))
             .first(&mut conn)?;
         Ok(person)
+    }
+
+    /// Fetch many work items by id in one query (order not guaranteed).
+    pub fn get_by_ids(ids: &[Uuid]) -> Result<Vec<Self>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut conn = connection()?;
+        let res = works::table
+            .filter(works::id.eq_any(ids))
+            .load::<Work>(&mut conn)?;
+        Ok(res)
     }
 
     pub fn get_by_role_id(role_id: &Uuid) -> Result<Vec<Self>> {
@@ -658,6 +696,104 @@ struct NewWorkUpdate {
     author_user_id: Option<Uuid>,
     kind: WorkUpdateKind,
     body: String,
+}
+
+/// Dependency-graph operations for work items (Proposal 7a). An edge
+/// (`work_id` -> `depends_on_work_id`) means `work_id` is blocked by
+/// `depends_on_work_id`.
+pub struct WorkDependency;
+
+impl WorkDependency {
+    /// Ids of the work items `work_id` is blocked by.
+    pub fn depends_on_ids(work_id: &Uuid) -> Result<Vec<Uuid>> {
+        let mut conn = connection()?;
+        let res = work_dependencies::table
+            .filter(work_dependencies::work_id.eq(work_id))
+            .select(work_dependencies::depends_on_work_id)
+            .load::<Uuid>(&mut conn)?;
+        Ok(res)
+    }
+
+    /// Ids of the work items blocked by `work_id` (reverse edge).
+    pub fn blocks_ids(work_id: &Uuid) -> Result<Vec<Uuid>> {
+        let mut conn = connection()?;
+        let res = work_dependencies::table
+            .filter(work_dependencies::depends_on_work_id.eq(work_id))
+            .select(work_dependencies::work_id)
+            .load::<Uuid>(&mut conn)?;
+        Ok(res)
+    }
+
+    pub fn exists(work_id: &Uuid, depends_on: &Uuid) -> Result<bool> {
+        let mut conn = connection()?;
+        let n: i64 = work_dependencies::table
+            .filter(work_dependencies::work_id.eq(work_id))
+            .filter(work_dependencies::depends_on_work_id.eq(depends_on))
+            .count()
+            .get_result(&mut conn)?;
+        Ok(n > 0)
+    }
+
+    pub fn add(work_id: &Uuid, depends_on: &Uuid) -> Result<()> {
+        let mut conn = connection()?;
+        diesel::insert_into(work_dependencies::table)
+            .values((
+                work_dependencies::work_id.eq(work_id),
+                work_dependencies::depends_on_work_id.eq(depends_on),
+            ))
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
+    pub fn remove(work_id: &Uuid, depends_on: &Uuid) -> Result<usize> {
+        let mut conn = connection()?;
+        let n = diesel::delete(
+            work_dependencies::table
+                .filter(work_dependencies::work_id.eq(work_id))
+                .filter(work_dependencies::depends_on_work_id.eq(depends_on)),
+        )
+        .execute(&mut conn)?;
+        Ok(n)
+    }
+
+    /// Would adding the edge `work_id` -> `depends_on` create a cycle? True if
+    /// `depends_on` already (transitively) depends on `work_id`, or they are
+    /// the same item.
+    pub fn would_create_cycle(work_id: &Uuid, depends_on: &Uuid) -> Result<bool> {
+        use std::collections::{HashMap, HashSet, VecDeque};
+        if work_id == depends_on {
+            return Ok(true);
+        }
+        let mut conn = connection()?;
+        let edges: Vec<(Uuid, Uuid)> = work_dependencies::table
+            .select((work_dependencies::work_id, work_dependencies::depends_on_work_id))
+            .load::<(Uuid, Uuid)>(&mut conn)?;
+
+        let mut adj: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+        for (from, to) in edges {
+            adj.entry(from).or_default().push(to);
+        }
+
+        // Walk the dependency edges starting from `depends_on`; if we can reach
+        // `work_id`, the new edge would close a loop.
+        let mut seen: HashSet<Uuid> = HashSet::new();
+        let mut queue: VecDeque<Uuid> = VecDeque::new();
+        queue.push_back(*depends_on);
+        while let Some(cur) = queue.pop_front() {
+            if cur == *work_id {
+                return Ok(true);
+            }
+            if !seen.insert(cur) {
+                continue;
+            }
+            if let Some(nexts) = adj.get(&cur) {
+                for n in nexts {
+                    queue.push_back(*n);
+                }
+            }
+        }
+        Ok(false)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, DbEnum, Serialize, Deserialize, Enum)]

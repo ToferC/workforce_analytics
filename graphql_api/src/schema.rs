@@ -511,6 +511,17 @@ diesel::table! {
 
 diesel::table! {
     use diesel::sql_types::*;
+
+    work_dependencies (id) {
+        id -> Uuid,
+        work_id -> Uuid,
+        depends_on_work_id -> Uuid,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
     use super::sql_types::WorkUpdateKind;
 
     work_updates (id) {
@@ -631,6 +642,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     users,
     valid_roles,
     validations,
+    work_dependencies,
     work_status_history,
     work_updates,
     works,

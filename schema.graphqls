@@ -1009,6 +1009,13 @@ type Product {
 	at each combination. Excludes cancelled and completed work.
 	"""
 	skillDemand: [ProductSkillDemand!]!
+	"""
+	Total number of priority "drops" beneath this product (Proposal 7c):
+	child tasks ranked below the product, plus work items ranked below
+	their own task. A non-zero count means lower tiers are not carrying
+	the priority the product implies.
+	"""
+	priorityMismatchCount: Int!
 }
 
 """
@@ -1404,6 +1411,13 @@ type Query {
 	newest first. Operator sees their area; admin sees all.
 	"""
 	openWorkFlags(limit: Int): [OpenWorkFlag!]!
+	"""
+	Priority-consistency review (Proposal 7c): every task whose priority is
+	out of step with the tiers around it — either the task is ranked below
+	its product, or it holds work ranked below the task. Highest task
+	priority first.
+	"""
+	priorityMismatches: [PriorityMismatch!]!
 	"""
 	Accepts an argument of "count" and returns a vector of {count} products
 	"""
@@ -1820,6 +1834,17 @@ type Task {
 	Name of the user who approved or rejected the task, if any.
 	"""
 	approvedByName: String
+	"""
+	True when this task's priority is lower than its parent product's
+	priority — a planning inconsistency (Proposal 7c). False when the task
+	has no product.
+	"""
+	priorityBelowParent: Boolean!
+	"""
+	Number of work items under this task whose priority is lower than the
+	task's own priority (Proposal 7c).
+	"""
+	workPriorityMismatchCount: Int!
 }
 
 """
@@ -2140,6 +2165,11 @@ type Work {
 	True when at least one dependency is still open.
 	"""
 	isBlocked: Boolean!
+	"""
+	True when this work item's priority is lower than its parent task's
+	priority — a planning inconsistency (Proposal 7c).
+	"""
+	priorityBelowParent: Boolean!
 }
 
 """
@@ -2234,6 +2264,28 @@ type OpenWorkFlag {
 	body: String!
 	authorName: String
 	createdAt: NaiveDateTime!
+}
+
+"""
+One task whose priority is inconsistent with the tiers around it
+(Proposal 7c): either the task itself is ranked below its product, or it
+has work items ranked below the task.
+"""
+type PriorityMismatch {
+	taskId: UUID!
+	taskTitle: String!
+	taskPriority: Priority!
+	productId: UUID
+	productName: String
+	productPriority: Priority
+	"""
+	The task's priority is lower than its parent product's priority.
+	"""
+	taskBelowProduct: Boolean!
+	"""
+	Number of work items under this task ranked below the task's priority.
+	"""
+	belowWorkCount: Int!
 }
 
 enum ApprovalStatus {

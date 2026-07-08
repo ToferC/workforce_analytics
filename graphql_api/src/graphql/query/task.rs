@@ -1,9 +1,27 @@
 use async_graphql::*;
 
-use crate::models::{Task};
+use crate::models::{Task, Work, Product, Priority};
 use uuid::Uuid;
 
-use crate::common_utils::{RoleGuard, UserRole, is_operator};
+use crate::common_utils::{RoleGuard, UserRole, is_operator, is_analyst};
+
+/// One task whose priority is inconsistent with the tiers around it
+/// (Proposal 7c): either the task itself is ranked below its product, or it
+/// has work items ranked below the task. Carries just enough product context
+/// to triage the mismatch without loading the full graph per row.
+#[derive(SimpleObject)]
+pub struct PriorityMismatch {
+    pub task_id: Uuid,
+    pub task_title: String,
+    pub task_priority: Priority,
+    pub product_id: Option<Uuid>,
+    pub product_name: Option<String>,
+    pub product_priority: Option<Priority>,
+    /// The task's priority is lower than its parent product's priority.
+    pub task_below_product: bool,
+    /// Number of work items under this task ranked below the task's priority.
+    pub below_work_count: i32,
+}
 
 #[derive(Default)]
 pub struct TaskQuery;
@@ -72,6 +90,60 @@ impl TaskQuery {
                 out.push(t);
             }
         }
+        Ok(out)
+    }
+
+    /// Priority-consistency review (Proposal 7c): every task whose priority is
+    /// out of step with the tiers around it — either the task is ranked below
+    /// its product, or it holds work ranked below the task. Highest task
+    /// priority first, so the most urgent inconsistencies (e.g. a CRITICAL
+    /// product with LOW work) surface at the top.
+    #[graphql(name = "priorityMismatches", guard = "RoleGuard::new(UserRole::Analyst)", visible = "is_analyst")]
+    pub async fn priority_mismatches(
+        &self,
+        _context: &Context<'_>,
+    ) -> Result<Vec<PriorityMismatch>> {
+        use std::collections::HashMap;
+
+        let tasks = Task::get_all()?;
+
+        // Cache products so we look up each parent at most once.
+        let mut product_cache: HashMap<Uuid, Option<Product>> = HashMap::new();
+
+        let mut out = Vec::new();
+        for t in tasks {
+            let product = match t.product_id {
+                Some(pid) => product_cache
+                    .entry(pid)
+                    .or_insert_with(|| Product::get_by_id(&pid).ok())
+                    .clone(),
+                None => None,
+            };
+
+            let task_below_product = product
+                .as_ref()
+                .map(|p| t.priority < p.priority)
+                .unwrap_or(false);
+
+            let work = Work::get_by_task_id(&t.id)?;
+            let below_work_count = work.iter().filter(|w| w.priority < t.priority).count() as i32;
+
+            if task_below_product || below_work_count > 0 {
+                out.push(PriorityMismatch {
+                    task_id: t.id,
+                    task_title: t.title,
+                    task_priority: t.priority,
+                    product_id: product.as_ref().map(|p| p.id),
+                    product_name: product.as_ref().map(|p| p.name_en.clone()),
+                    product_priority: product.as_ref().map(|p| p.priority),
+                    task_below_product,
+                    below_work_count,
+                });
+            }
+        }
+
+        // Highest task priority first (Critical → Low).
+        out.sort_by(|a, b| b.task_priority.cmp(&a.task_priority));
         Ok(out)
     }
 }

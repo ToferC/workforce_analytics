@@ -81,6 +81,26 @@ impl Task {
         self.approved_by_user_id
             .and_then(|id| crate::models::User::get_by_id(&id).ok().map(|u| u.name))
     }
+
+    /// True when this task's priority is lower than its parent product's
+    /// priority — a planning inconsistency (Proposal 7c). False when the task
+    /// has no product.
+    pub async fn priority_below_parent(&self) -> Result<bool> {
+        match self.product_id {
+            Some(pid) => {
+                let product = Product::get_by_id(&pid)?;
+                Ok(self.priority < product.priority)
+            }
+            None => Ok(false),
+        }
+    }
+
+    /// Number of work items under this task whose priority is lower than the
+    /// task's own priority (Proposal 7c).
+    pub async fn work_priority_mismatch_count(&self) -> Result<i32> {
+        let work = Work::get_by_task_id(&self.id)?;
+        Ok(work.iter().filter(|w| w.priority < self.priority).count() as i32)
+    }
 }
 
 // Non Graphql

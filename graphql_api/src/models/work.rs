@@ -148,6 +148,13 @@ impl Work {
         let deps = Work::get_by_ids(&WorkDependency::depends_on_ids(&self.id)?)?;
         Ok(deps.iter().any(|w| !matches!(w.work_status, WorkStatus::Completed | WorkStatus::Cancelled)))
     }
+
+    /// True when this work item's priority is lower than its parent task's
+    /// priority — a planning inconsistency (Proposal 7c).
+    pub async fn priority_below_parent(&self) -> Result<bool> {
+        let task = Task::get_by_id(&self.task_id)?;
+        Ok(self.priority < task.priority)
+    }
 }
 
 

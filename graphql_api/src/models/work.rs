@@ -609,6 +609,20 @@ impl WorkUpdate {
         Ok(n)
     }
 
+    /// All unresolved flags across every work item, newest first (capped). The
+    /// caller is responsible for scoping these to what the principal manages —
+    /// this is the raw feed behind the manager flags queue.
+    pub fn open_flags(limit: i64) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+        let res = work_updates::table
+            .filter(work_updates::kind.eq(WorkUpdateKind::Flag))
+            .filter(work_updates::flag_resolved_at.is_null())
+            .order_by(work_updates::created_at.desc())
+            .limit(limit)
+            .load::<WorkUpdate>(&mut conn)?;
+        Ok(res)
+    }
+
     pub fn create(
         work_id: Uuid,
         author_user_id: Option<Uuid>,

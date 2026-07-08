@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 use crate::common_utils::UserRole;
 use crate::database::connection;
-use crate::models::{Person, Role, Task};
+use crate::models::{Person, Role, Task, Work};
 use crate::schema::{org_tier_ownerships, org_tiers, team_ownerships, teams};
 
 /// Whether hierarchy-scoped authorization is enforced. Enabled by default; set
@@ -211,4 +211,41 @@ pub fn require_manage_task(ctx: &Context<'_>, task_id: &Uuid) -> Result<()> {
     }
     let task = Task::get_by_id(task_id)?;
     require_manage_role(ctx, &task.created_by_role_id)
+}
+
+/// Whether the current principal currently occupies `role_id` (i.e. holds it as
+/// one of their active roles). Used for the assignee side of Proposal 3.
+fn occupies_role(ctx: &Context<'_>, role_id: &Uuid) -> bool {
+    let user_id = match current_user_id(ctx) {
+        Some(id) => id,
+        None => return false,
+    };
+    let person = match Person::get_by_user_id(&user_id) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+    Role::get_current_for_person(&person.id)
+        .map(|roles| roles.iter().any(|r| r.id == *role_id))
+        .unwrap_or(false)
+}
+
+/// Require that the caller may post a comment/flag on the given work
+/// (Proposal 3, option (a)): allowed if they **manage** the owning task, or if
+/// they currently **occupy the role the work is assigned to**. This is the one
+/// place a below-operator user may write, and only against their own work.
+pub fn require_comment_on_work(ctx: &Context<'_>, work_id: &Uuid) -> Result<()> {
+    let work = Work::get_by_id(work_id)?;
+
+    // Managers of the owning task may always comment.
+    if require_manage_task(ctx, &work.task_id).is_ok() {
+        return Ok(());
+    }
+
+    // Otherwise the caller must occupy the role this work is assigned to.
+    match work.role_id {
+        Some(role_id) if occupies_role(ctx, &role_id) => Ok(()),
+        _ => Err(Error::new(
+            "Access denied: you may only comment on work you manage or are assigned to",
+        )),
+    }
 }

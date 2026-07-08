@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-use crate::models::{Work, NewWork, Priority, SkillDomain, CapabilityLevel, WorkStatus, WorkStatusChange};
+use crate::models::{Work, NewWork, Priority, SkillDomain, CapabilityLevel, WorkStatus, WorkStatusChange, WorkUpdate, WorkUpdateKind};
 use crate::common_utils::{UserRole, is_operator, RoleGuard};
 use crate::graphql::authz;
 
@@ -121,6 +121,50 @@ impl WorkMutation {
             WorkStatusChange::record(updated.id, Some(old_status), updated.work_status, actor);
         }
         Ok(updated)
+    }
+
+    /// Add a comment or raise a "needs attention" flag on a work item
+    /// (Proposal 3). Guarded at the base user tier, but `require_comment_on_work`
+    /// (option (a)) still limits it to people who manage the owning task or who
+    /// currently occupy the role the work is assigned to.
+    #[graphql(
+        name = "addWorkUpdate",
+        guard = "RoleGuard::new(UserRole::User)",
+    )]
+    pub async fn add_work_update(
+        &self,
+        context: &Context<'_>,
+        work_id: Uuid,
+        body: String,
+        kind: Option<WorkUpdateKind>,
+    ) -> Result<WorkUpdate> {
+        authz::require_comment_on_work(context, &work_id)?;
+        let body = body.trim().to_string();
+        if body.is_empty() {
+            return Err(Error::new("Update body cannot be empty"));
+        }
+        let author = context.data_opt::<uuid::Uuid>().copied();
+        WorkUpdate::create(work_id, author, kind.unwrap_or(WorkUpdateKind::Comment), body)
+    }
+
+    /// Resolve an open flag (Proposal 3). Clearing a "needs attention" flag is
+    /// a management action, so it requires operator+ authority over the owning
+    /// task — not merely being the assignee.
+    #[graphql(
+        name = "resolveWorkUpdateFlag",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    pub async fn resolve_work_update_flag(
+        &self,
+        context: &Context<'_>,
+        update_id: Uuid,
+    ) -> Result<WorkUpdate> {
+        let update = WorkUpdate::get_by_id(&update_id)?;
+        let work = Work::get_by_id(&update.work_id)?;
+        authz::require_manage_task(context, &work.task_id)?;
+        let resolver = context.data_opt::<uuid::Uuid>().copied();
+        WorkUpdate::resolve_flag(&update_id, resolver)
     }
 }
 

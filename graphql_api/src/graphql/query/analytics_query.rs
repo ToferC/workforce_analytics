@@ -14,6 +14,7 @@ use crate::models::{
     SkillDomain, CapabilityLevel, WorkStatus,
 };
 use crate::common_utils::{RoleGuard, UserRole};
+use crate::models::authz::collect_descendant_tier_ids;
 
 /// GraphQL wire representation of a SkillDomain (SCREAMING_SNAKE_CASE), the
 /// same conversion async-graphql applies automatically when a field's type is
@@ -47,21 +48,6 @@ fn level_value(level: CapabilityLevel) -> i64 {
 /// Convert a CapabilityLevel to its weight as f64
 pub(crate) fn level_weight(level: CapabilityLevel) -> f64 {
     level_value(level) as f64 / 100.0
-}
-
-/// Collect all descendant org_tier IDs (including the given id) using a pre-loaded list of (id, parent_tier)
-pub(crate) fn collect_descendant_tier_ids(root: Uuid, all_tiers_raw: &[(Uuid, Option<Uuid>)]) -> Vec<Uuid> {
-    let mut tier_ids: Vec<Uuid> = Vec::new();
-    let mut queue = vec![root];
-    while let Some(current) = queue.pop() {
-        tier_ids.push(current);
-        for (tid, parent) in all_tiers_raw {
-            if *parent == Some(current) {
-                queue.push(*tid);
-            }
-        }
-    }
-    tier_ids
 }
 
 /// Get all person_ids that have active roles under the given org_tier (and descendants)

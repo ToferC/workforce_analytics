@@ -26,6 +26,7 @@ mod access_log;
 mod user;
 mod messages;
 mod auth;
+pub mod authz;
 
 pub use audit_event::*;
 pub use role_offer::*;

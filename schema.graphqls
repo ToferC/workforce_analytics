@@ -1391,6 +1391,11 @@ type Query {
 	workCount(status: WorkStatus, unassignedOnly: Boolean! = false): Int!
 	workById(id: UUID!): Work!
 	"""
+	Manager flags queue: every unresolved FLAG on work the caller manages,
+	newest first. Operator sees their area; admin sees all.
+	"""
+	openWorkFlags(limit: Int): [OpenWorkFlag!]!
+	"""
 	Accepts an argument of "count" and returns a vector of {count} products
 	"""
 	products(count: Int!): [Product!]!
@@ -2179,4 +2184,19 @@ type WorkUpdate {
 	flagResolvedAt: NaiveDateTime
 	authorName: String
 	resolvedByName: String
+}
+
+"""
+One open (unresolved) flag with just enough work/task context to triage it
+from the manager flags queue.
+"""
+type OpenWorkFlag {
+	updateId: UUID!
+	workId: UUID!
+	workDescription: String!
+	taskId: UUID!
+	taskTitle: String!
+	body: String!
+	authorName: String
+	createdAt: NaiveDateTime!
 }

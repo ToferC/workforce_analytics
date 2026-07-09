@@ -1449,6 +1449,10 @@ type Query {
 	"""
 	teamCapabilityMatrix(orgTierId: UUID): [TeamCapabilityRow!]!
 	"""
+	The capability heatmap rolled up to a chosen org-tier level (default tier 2). Teams are grouped under their nearest ancestor tier at or above the requested level; a person contributing to several teams under the same tier counts once toward that tier's depth.
+	"""
+	orgTierCapabilityMatrix(tierLevel: Int! = 2, orgTierId: UUID): [OrgTierCapabilityRow!]!
+	"""
 	Derived role transitions over a window, for mobility/promotion analysis.
 	"""
 	talentMovements(from: NaiveDateTime, to: NaiveDateTime, orgTierId: UUID): [TalentMovement!]!
@@ -1928,6 +1932,16 @@ A row in the team capability heatmap
 type TeamCapabilityRow {
 	teamId: UUID!
 	teamName: String!
+	cells: [TeamCapabilityCell!]!
+}
+
+"""
+A row in the org-tier capability heatmap: the team matrix rolled up to a chosen tier level (e.g. tier 2), for organizations where per-team rows are too granular to read.
+"""
+type OrgTierCapabilityRow {
+	orgTierId: UUID!
+	orgTierName: String!
+	tierLevel: Int!
 	cells: [TeamCapabilityCell!]!
 }
 

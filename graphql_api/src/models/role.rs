@@ -192,7 +192,12 @@ impl Role {
         #[graphql(default = 1)]   max_gap_per_req: i32,
         #[graphql(default = 20)]  limit: i32,
     ) -> Result<RoleMatchResult> {
-        find_fuzzy_matches(self.id, min_coverage, max_gap_per_req, limit as usize)
+        // Multi-query scoring pass; run off the async executor.
+        let role_id = self.id;
+        crate::graphql::loaders::off_executor(move || {
+            find_fuzzy_matches(role_id, min_coverage, max_gap_per_req, limit as usize)
+        })
+        .await
     }
 
     pub async fn start_datestamp(&self) -> Result<NaiveDateTime> {

@@ -9,11 +9,12 @@ use crate::schema::{capabilities, validations, roles, requirements, works, teams
 use crate::models::{
     TimeBucket, TimeSeriesPoint, LabeledSeries,
     SupplyDemandPoint, SupplyDemandSeries,
-    TeamCapabilityCell, TeamCapabilityRow,
+    TeamCapabilityCell, TeamCapabilityRow, OrgTierCapabilityRow,
     TalentMovement,
     SkillDomain, CapabilityLevel, WorkStatus,
 };
 use crate::common_utils::{RoleGuard, UserRole};
+use crate::graphql::loaders::off_executor;
 
 /// GraphQL wire representation of a SkillDomain (SCREAMING_SNAKE_CASE), the
 /// same conversion async-graphql applies automatically when a field's type is
@@ -182,6 +183,19 @@ impl CapabilityGrowthQuery {
         domain: Option<SkillDomain>,
         org_tier_id: Option<Uuid>,
     ) -> Result<Vec<LabeledSeries>> {
+        // Table-scan-heavy; run off the async executor.
+        off_executor(move || compute_capability_growth(bucket, from, to, domain, org_tier_id)).await
+    }
+}
+
+fn compute_capability_growth(
+    bucket: TimeBucket,
+    from: Option<NaiveDateTime>,
+    to: Option<NaiveDateTime>,
+    domain: Option<SkillDomain>,
+    org_tier_id: Option<Uuid>,
+) -> Result<Vec<LabeledSeries>> {
+    {
         let mut conn = connection()?;
         let (cap_rows, val_map) = load_supply_data(&mut conn, org_tier_id)?;
 
@@ -232,6 +246,19 @@ impl SupplyDemandQuery {
         domain: Option<SkillDomain>,
         org_tier_id: Option<Uuid>,
     ) -> Result<Vec<SupplyDemandSeries>> {
+        // Table-scan-heavy; run off the async executor.
+        off_executor(move || compute_capability_supply_demand(bucket, from, to, domain, org_tier_id)).await
+    }
+}
+
+fn compute_capability_supply_demand(
+    bucket: TimeBucket,
+    from: Option<NaiveDateTime>,
+    to: Option<NaiveDateTime>,
+    domain: Option<SkillDomain>,
+    org_tier_id: Option<Uuid>,
+) -> Result<Vec<SupplyDemandSeries>> {
+    {
         let mut conn = connection()?;
         let (cap_rows, val_map) = load_supply_data(&mut conn, org_tier_id)?;
 
@@ -361,8 +388,166 @@ impl TeamCapabilityMatrixQuery {
         &self,
         org_tier_id: Option<Uuid>,
     ) -> Result<Vec<TeamCapabilityRow>> {
-        compute_team_capability_matrix(org_tier_id, None)
+        off_executor(move || compute_team_capability_matrix(org_tier_id, None)).await
     }
+
+    /// The capability heatmap rolled up to a chosen org-tier level (default
+    /// tier 2). Teams are grouped under their nearest ancestor tier at or
+    /// above the requested level; a person contributing to several teams
+    /// under the same tier counts once toward that tier's depth.
+    #[graphql(guard = "RoleGuard::new(UserRole::User)")]
+    pub async fn org_tier_capability_matrix(
+        &self,
+        #[graphql(default = 2)] tier_level: i32,
+        org_tier_id: Option<Uuid>,
+    ) -> Result<Vec<OrgTierCapabilityRow>> {
+        off_executor(move || compute_org_tier_capability_matrix(tier_level, org_tier_id)).await
+    }
+}
+
+/// Walk up the tier tree from `tier_id` to the nearest ancestor whose
+/// tier_level is at or above (numerically ≤) `rollup_level`. A team attached
+/// below the rollup level lands on its level-N ancestor; a team already at or
+/// above it stays where it is. Cycles or dangling parents fall back to the
+/// last tier seen.
+pub(crate) fn rollup_ancestor(
+    tier_id: Uuid,
+    rollup_level: i32,
+    tiers: &HashMap<Uuid, (Option<Uuid>, i32)>,
+) -> Uuid {
+    let mut current = tier_id;
+    let mut seen = std::collections::HashSet::new();
+    while let Some((parent, level)) = tiers.get(&current) {
+        if *level <= rollup_level || !seen.insert(current) {
+            return current;
+        }
+        match parent {
+            Some(p) => current = *p,
+            None => return current,
+        }
+    }
+    current
+}
+
+/// The team capability matrix aggregated at a tier level: same two batched
+/// queries as the per-team version, then grouped by rollup ancestor with
+/// per-person dedup inside each tier.
+pub(crate) fn compute_org_tier_capability_matrix(
+    rollup_level: i32,
+    org_tier_id: Option<Uuid>,
+) -> Result<Vec<OrgTierCapabilityRow>> {
+    let mut conn = connection()?;
+
+    // Full tier tree: id -> (parent, level), plus display data.
+    let tier_rows: Vec<(Uuid, Option<Uuid>, String, i32)> = org_tiers::table
+        .select((org_tiers::id, org_tiers::parent_tier, org_tiers::name_en, org_tiers::tier_level))
+        .load(&mut conn)?;
+    let tier_tree: HashMap<Uuid, (Option<Uuid>, i32)> = tier_rows
+        .iter()
+        .map(|(id, parent, _, level)| (*id, (*parent, *level)))
+        .collect();
+    let tier_display: HashMap<Uuid, (String, i32)> = tier_rows
+        .iter()
+        .map(|(id, _, name, level)| (*id, (name.clone(), *level)))
+        .collect();
+
+    // Teams in scope (optionally restricted to a subtree, like the team matrix).
+    let mut team_query = teams::table
+        .select((teams::id, teams::org_tier_id))
+        .into_boxed();
+    if let Some(scope_tier) = org_tier_id {
+        let all_tiers_raw: Vec<(Uuid, Option<Uuid>)> =
+            tier_rows.iter().map(|(id, parent, _, _)| (*id, *parent)).collect();
+        let tier_ids = collect_descendant_tier_ids(scope_tier, &all_tiers_raw);
+        team_query = team_query.filter(teams::org_tier_id.eq_any(tier_ids));
+    }
+    let team_rows: Vec<(Uuid, Uuid)> = team_query.load(&mut conn)?;
+
+    // Active memberships for those teams, in one query.
+    let team_ids: Vec<Uuid> = team_rows.iter().map(|(id, _)| *id).collect();
+    let membership_rows: Vec<(Uuid, Option<Uuid>)> = roles::table
+        .filter(roles::team_id.eq_any(&team_ids))
+        .filter(roles::active.eq(true))
+        .filter(roles::person_id.is_not_null())
+        .select((roles::team_id, roles::person_id))
+        .load(&mut conn)?;
+
+    // Group people under each team's rollup tier; a person on several teams
+    // under the same tier counts once.
+    let team_tier: HashMap<Uuid, Uuid> = team_rows
+        .iter()
+        .map(|(team_id, tier_id)| (*team_id, rollup_ancestor(*tier_id, rollup_level, &tier_tree)))
+        .collect();
+
+    let mut members_by_tier: HashMap<Uuid, std::collections::HashSet<Uuid>> = HashMap::new();
+    let mut all_person_ids: std::collections::HashSet<Uuid> = std::collections::HashSet::new();
+    for (team_id, person_id) in membership_rows {
+        if let (Some(tier), Some(pid)) = (team_tier.get(&team_id), person_id) {
+            members_by_tier.entry(*tier).or_default().insert(pid);
+            all_person_ids.insert(pid);
+        }
+    }
+
+    // All active capabilities for the people involved, in one query.
+    type CapRow = (SkillDomain, Uuid, Option<CapabilityLevel>, CapabilityLevel);
+    let cap_rows: Vec<CapRow> = if all_person_ids.is_empty() {
+        Vec::new()
+    } else {
+        capabilities::table
+            .filter(capabilities::person_id.eq_any(&all_person_ids))
+            .filter(capabilities::retired_at.is_null())
+            .select((
+                capabilities::domain,
+                capabilities::person_id,
+                capabilities::validated_level,
+                capabilities::self_identified_level,
+            ))
+            .load::<CapRow>(&mut conn)?
+    };
+
+    let mut caps_by_person: HashMap<Uuid, Vec<(SkillDomain, f64)>> = HashMap::new();
+    for (domain, person_id, validated_level, self_identified_level) in cap_rows {
+        let weight = validated_level
+            .map(level_weight)
+            .unwrap_or_else(|| level_weight(self_identified_level));
+        caps_by_person.entry(person_id).or_default().push((domain, weight));
+    }
+
+    let mut result: Vec<OrgTierCapabilityRow> = Vec::new();
+    for (tier_id, person_ids) in members_by_tier {
+        let (org_tier_name, tier_level) = tier_display
+            .get(&tier_id)
+            .cloned()
+            .unwrap_or_else(|| ("Unknown tier".to_string(), rollup_level));
+
+        let mut domain_map: HashMap<String, (f64, std::collections::HashSet<Uuid>)> = HashMap::new();
+        for person_id in &person_ids {
+            if let Some(caps) = caps_by_person.get(person_id) {
+                for (domain, weight) in caps {
+                    let entry = domain_map.entry(domain_graphql_key(*domain)).or_default();
+                    entry.0 += weight;
+                    entry.1.insert(*person_id);
+                }
+            }
+        }
+
+        let cells: Vec<TeamCapabilityCell> = domain_map
+            .into_iter()
+            .filter(|(_, (depth, _))| *depth > 0.0)
+            .map(|(domain, (depth, people))| TeamCapabilityCell {
+                domain,
+                depth,
+                people_count: people.len() as i32,
+            })
+            .collect();
+
+        result.push(OrgTierCapabilityRow { org_tier_id: tier_id, org_tier_name, tier_level, cells });
+    }
+
+    // Stable, readable order for the heatmap rows.
+    result.sort_by(|a, b| a.org_tier_name.to_lowercase().cmp(&b.org_tier_name.to_lowercase()));
+
+    Ok(result)
 }
 
 /// Shared implementation for team capability matrix computation.
@@ -488,6 +673,17 @@ impl TalentMovementQuery {
         to: Option<NaiveDateTime>,
         org_tier_id: Option<Uuid>,
     ) -> Result<Vec<TalentMovement>> {
+        // Table-scan-heavy; run off the async executor.
+        off_executor(move || compute_talent_movements(from, to, org_tier_id)).await
+    }
+}
+
+fn compute_talent_movements(
+    from: Option<NaiveDateTime>,
+    to: Option<NaiveDateTime>,
+    org_tier_id: Option<Uuid>,
+) -> Result<Vec<TalentMovement>> {
+    {
         let mut conn = connection()?;
 
         type RoleRowNullable = (Uuid, Option<Uuid>, Uuid, NaiveDateTime, Option<crate::models::Rank>, Option<i32>);
@@ -634,3 +830,122 @@ pub struct AnalyticsQuery(
     TeamCapabilityMatrixQuery,
     TalentMovementQuery,
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dt(s: &str) -> NaiveDateTime {
+        NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S").unwrap()
+    }
+
+    #[test]
+    fn domain_graphql_key_matches_wire_format() {
+        assert_eq!(domain_graphql_key(SkillDomain::CyberSecurity), "CYBER_SECURITY");
+        assert_eq!(domain_graphql_key(SkillDomain::Strategy), "STRATEGY");
+        // The regression that motivated this helper: multi-word domains must
+        // not come out as PascalCase Debug output.
+        assert_ne!(domain_graphql_key(SkillDomain::SoftwareEngineering), "SoftwareEngineering");
+        assert_eq!(domain_graphql_key(SkillDomain::SoftwareEngineering), "SOFTWARE_ENGINEERING");
+    }
+
+    #[test]
+    fn level_values_step_by_hundred() {
+        assert_eq!(level_value(CapabilityLevel::Desired), 0);
+        assert_eq!(level_value(CapabilityLevel::Specialist), 400);
+        assert_eq!(level_weight(CapabilityLevel::Experienced), 2.0);
+    }
+
+    #[test]
+    fn descendant_tiers_include_root_and_transitive_children() {
+        let (root, child, grandchild, unrelated) =
+            (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let tiers = vec![
+            (root, None),
+            (child, Some(root)),
+            (grandchild, Some(child)),
+            (unrelated, None),
+        ];
+
+        let ids = collect_descendant_tier_ids(root, &tiers);
+        assert!(ids.contains(&root));
+        assert!(ids.contains(&child));
+        assert!(ids.contains(&grandchild));
+        assert!(!ids.contains(&unrelated));
+        assert_eq!(ids.len(), 3);
+    }
+
+    #[test]
+    fn supply_averages_validations_up_to_bucket_end() {
+        let cap_id = Uuid::new_v4();
+        let row = (cap_id, SkillDomain::CyberSecurity, Uuid::new_v4(), None, CapabilityLevel::Expert, Some(CapabilityLevel::Expert));
+        let caps = vec![&row];
+
+        let mut val_map: HashMap<Uuid, Vec<(NaiveDateTime, i64)>> = HashMap::new();
+        val_map.insert(cap_id, vec![
+            (dt("2025-01-15 00:00:00"), 200), // Experienced
+            (dt("2025-06-15 00:00:00"), 400), // Specialist
+        ]);
+
+        // Bucket ending before the second validation only sees the first.
+        let supply_early = compute_supply(&caps, &val_map, dt("2025-01-01 00:00:00"), dt("2025-03-31 00:00:00"));
+        assert!((supply_early - 2.0).abs() < 1e-9);
+
+        // Bucket ending after both averages them: (200 + 400) / 2 / 100 = 3.
+        let supply_late = compute_supply(&caps, &val_map, dt("2025-01-01 00:00:00"), dt("2025-12-31 00:00:00"));
+        assert!((supply_late - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn supply_skips_capabilities_retired_before_the_bucket() {
+        let cap_id = Uuid::new_v4();
+        let retired = Some(dt("2024-12-31 00:00:00"));
+        let row = (cap_id, SkillDomain::CyberSecurity, Uuid::new_v4(), retired, CapabilityLevel::Expert, None);
+        let caps = vec![&row];
+
+        let mut val_map: HashMap<Uuid, Vec<(NaiveDateTime, i64)>> = HashMap::new();
+        val_map.insert(cap_id, vec![(dt("2024-06-01 00:00:00"), 300)]);
+
+        let supply = compute_supply(&caps, &val_map, dt("2025-01-01 00:00:00"), dt("2025-03-31 00:00:00"));
+        assert_eq!(supply, 0.0);
+    }
+}
+
+#[cfg(test)]
+mod rollup_tests {
+    use super::*;
+
+    #[test]
+    fn rollup_walks_up_to_the_requested_level() {
+        let (t1, t2, t3, t4) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let mut tiers: HashMap<Uuid, (Option<Uuid>, i32)> = HashMap::new();
+        tiers.insert(t1, (None, 1));
+        tiers.insert(t2, (Some(t1), 2));
+        tiers.insert(t3, (Some(t2), 3));
+        tiers.insert(t4, (Some(t3), 4));
+
+        // A deep tier rolls up to its level-2 ancestor.
+        assert_eq!(rollup_ancestor(t4, 2, &tiers), t2);
+        assert_eq!(rollup_ancestor(t3, 2, &tiers), t2);
+        // A tier already at the level stays put.
+        assert_eq!(rollup_ancestor(t2, 2, &tiers), t2);
+        // A tier above the level stays where it is.
+        assert_eq!(rollup_ancestor(t1, 2, &tiers), t1);
+    }
+
+    #[test]
+    fn rollup_handles_unknown_and_cyclic_tiers() {
+        let orphan = Uuid::new_v4();
+        let tiers: HashMap<Uuid, (Option<Uuid>, i32)> = HashMap::new();
+        // Unknown tier id: fall back to itself rather than panicking.
+        assert_eq!(rollup_ancestor(orphan, 2, &tiers), orphan);
+
+        // A cycle below the rollup level terminates at the revisited node.
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        let mut cyclic: HashMap<Uuid, (Option<Uuid>, i32)> = HashMap::new();
+        cyclic.insert(a, (Some(b), 4));
+        cyclic.insert(b, (Some(a), 4));
+        let landed = rollup_ancestor(a, 2, &cyclic);
+        assert!(landed == a || landed == b);
+    }
+}

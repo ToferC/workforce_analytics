@@ -364,6 +364,20 @@ impl Capability {
         self.update()
     }
 
+    /// The person's active (unretired) capability for a skill, if they have
+    /// one. Used by self-service to update instead of duplicate.
+    pub fn get_by_person_and_skill(person_id: &Uuid, skill_id: &Uuid) -> Result<Self> {
+        let mut conn = database::connection()?;
+
+        let res = capabilities::table
+            .filter(capabilities::person_id.eq(person_id))
+            .filter(capabilities::skill_id.eq(skill_id))
+            .filter(capabilities::retired_at.is_null())
+            .first(&mut conn)?;
+
+        Ok(res)
+    }
+
     /// Updates a Capability based on changed data
     pub fn update(&self) -> Result<Self> {
 

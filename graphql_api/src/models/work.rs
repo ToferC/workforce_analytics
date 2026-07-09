@@ -328,6 +328,26 @@ impl Work {
         Ok(total_effort)
     }
 
+    /// Batched active-effort totals for the DataLoader: one grouped query for
+    /// many roles. Roles with no active work have no row (total 0).
+    pub fn sum_role_efforts(role_ids: &[Uuid]) -> Result<Vec<(Uuid, i32)>> {
+        use diesel::dsl::sum;
+
+        let mut conn = connection()?;
+
+        let rows: Vec<(Option<Uuid>, Option<i64>)> = works::table
+            .filter(works::role_id.eq_any(role_ids))
+            .filter(works::work_status.ne_all(vec![WorkStatus::Cancelled, WorkStatus::Completed]))
+            .group_by(works::role_id)
+            .select((works::role_id, sum(works::effort)))
+            .load(&mut conn)?;
+
+        Ok(rows
+            .into_iter()
+            .filter_map(|(role_id, total)| role_id.map(|id| (id, total.unwrap_or(0) as i32)))
+            .collect())
+    }
+
     /// Return the total effort of active work across a person's active roles.
     pub fn sum_person_active_effort(person_id: &Uuid) -> Result<i32> {
         let mut conn = connection()?;

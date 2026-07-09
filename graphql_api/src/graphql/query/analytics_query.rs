@@ -393,27 +393,35 @@ pub(crate) fn compute_team_capability_matrix(
             .load::<(Uuid, String)>(&mut conn)?
     };
 
-    let mut result: Vec<TeamCapabilityRow> = Vec::new();
+    // Two batched queries for the whole matrix (was two queries *per team*):
+    // all active team memberships, then all active capabilities for the
+    // people involved. Everything else is grouped in memory.
+    let team_ids: Vec<Uuid> = team_rows.iter().map(|(id, _)| *id).collect();
 
-    for (team_id, team_name) in team_rows {
-        let person_ids: Vec<Uuid> = roles::table
-            .filter(roles::team_id.eq(team_id))
-            .filter(roles::active.eq(true))
-            .filter(roles::person_id.is_not_null())
-            .select(roles::person_id)
-            .load::<Option<Uuid>>(&mut conn)?
-            .into_iter()
-            .flatten()
-            .collect();
+    let membership_rows: Vec<(Uuid, Option<Uuid>)> = roles::table
+        .filter(roles::team_id.eq_any(&team_ids))
+        .filter(roles::active.eq(true))
+        .filter(roles::person_id.is_not_null())
+        .select((roles::team_id, roles::person_id))
+        .load(&mut conn)?;
 
-        if person_ids.is_empty() {
-            result.push(TeamCapabilityRow { team_id, team_name, cells: vec![] });
-            continue;
+    // Sets, not Vecs: a person holding two active roles on the same team
+    // still counts once toward that team's capability depth.
+    let mut members_by_team: HashMap<Uuid, std::collections::HashSet<Uuid>> = HashMap::new();
+    let mut all_person_ids: std::collections::HashSet<Uuid> = std::collections::HashSet::new();
+    for (team_id, person_id) in membership_rows.into_iter() {
+        if let Some(pid) = person_id {
+            members_by_team.entry(team_id).or_default().insert(pid);
+            all_person_ids.insert(pid);
         }
+    }
 
-        type CapRow2 = (SkillDomain, Uuid, Option<CapabilityLevel>, CapabilityLevel);
-        let cap_rows: Vec<CapRow2> = capabilities::table
-            .filter(capabilities::person_id.eq_any(&person_ids))
+    type CapRow2 = (SkillDomain, Uuid, Option<CapabilityLevel>, CapabilityLevel);
+    let cap_rows: Vec<CapRow2> = if all_person_ids.is_empty() {
+        Vec::new()
+    } else {
+        capabilities::table
+            .filter(capabilities::person_id.eq_any(&all_person_ids))
             .filter(capabilities::retired_at.is_null())
             .select((
                 capabilities::domain,
@@ -421,18 +429,33 @@ pub(crate) fn compute_team_capability_matrix(
                 capabilities::validated_level,
                 capabilities::self_identified_level,
             ))
-            .load::<CapRow2>(&mut conn)?;
+            .load::<CapRow2>(&mut conn)?
+    };
 
+    let mut caps_by_person: HashMap<Uuid, Vec<(SkillDomain, f64)>> = HashMap::new();
+    for (domain, person_id, validated_level, self_identified_level) in cap_rows {
+        let weight = if let Some(vl) = validated_level {
+            level_weight(vl)
+        } else {
+            level_weight(self_identified_level)
+        };
+        caps_by_person.entry(person_id).or_default().push((domain, weight));
+    }
+
+    let mut result: Vec<TeamCapabilityRow> = Vec::new();
+
+    for (team_id, team_name) in team_rows {
         let mut domain_map: HashMap<String, (f64, std::collections::HashSet<Uuid>)> = HashMap::new();
-        for (domain, person_id, validated_level, self_identified_level) in cap_rows {
-            let weight = if let Some(vl) = validated_level {
-                level_weight(vl)
-            } else {
-                level_weight(self_identified_level)
-            };
-            let entry = domain_map.entry(domain_graphql_key(domain)).or_default();
-            entry.0 += weight;
-            entry.1.insert(person_id);
+        if let Some(person_ids) = members_by_team.get(&team_id) {
+            for person_id in person_ids {
+                if let Some(caps) = caps_by_person.get(person_id) {
+                    for (domain, weight) in caps {
+                        let entry = domain_map.entry(domain_graphql_key(*domain)).or_default();
+                        entry.0 += weight;
+                        entry.1.insert(*person_id);
+                    }
+                }
+            }
         }
 
         let cells: Vec<TeamCapabilityCell> = domain_map.into_iter()

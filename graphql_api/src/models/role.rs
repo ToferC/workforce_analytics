@@ -11,7 +11,7 @@ use async_graphql::*;
 use async_graphql::dataloader::DataLoader;
 
 use crate::config_variables::DATE_FORMAT;
-use crate::graphql::loaders::{PersonLoader, TeamLoader, WorkByRoleLoader};
+use crate::graphql::loaders::{EffortByRoleLoader, PersonLoader, RequirementsByRoleLoader, TeamLoader, WorkByRoleLoader};
 
 use crate::schema::*;
 use crate::database::{connection, DbConnection};
@@ -90,8 +90,14 @@ impl Role {
 
     /// Returns the sum effort of all active work underway
     /// Maximum work should be around 10
-    pub async fn effort(&self) -> Result<i32> {
-        Work::sum_role_effort(&self.id)
+    pub async fn effort(&self, ctx: &Context<'_>) -> Result<i32> {
+        // Batched via DataLoader into one grouped SUM per request; a role
+        // with no active work has no entry, i.e. zero effort.
+        Ok(ctx
+            .data_unchecked::<DataLoader<EffortByRoleLoader>>()
+            .load_one(self.id)
+            .await?
+            .unwrap_or(0))
     }
 
     /// Returns a vector of the work undertaken by this role
@@ -111,8 +117,12 @@ impl Role {
         }
     }
 
-    pub async fn requirements(&self) -> Result<Vec<Requirement>> {
-        Requirement::get_by_role_id(self.id)
+    pub async fn requirements(&self, ctx: &Context<'_>) -> Result<Vec<Requirement>> {
+        Ok(ctx
+            .data_unchecked::<DataLoader<RequirementsByRoleLoader>>()
+            .load_one(self.id)
+            .await?
+            .unwrap_or_default())
     }
 
     /// Full tenure history for this position: who has occupied it and when,

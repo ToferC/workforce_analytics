@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use async_graphql::dataloader::Loader;
 use uuid::Uuid;
 
-use crate::models::{Person, Product, Role, Task, Team, Work};
+use crate::models::{Person, Product, Requirement, Role, Task, Team, Work};
 
 /// `Loader::Error` must be `Send + Clone + 'static`. `async_graphql::Error`
 /// already satisfies that, and is what the model getters return, so it passes
@@ -57,6 +57,38 @@ id_loader!(
     /// Batches `Product::get_by_id` (e.g. `Task::product`).
     ProductLoader => Product, Product::get_by_ids
 );
+
+/// One-to-many loader: batches `Requirement::get_by_role_id`
+/// (e.g. `Role::requirements`), grouping the flat result per role.
+pub struct RequirementsByRoleLoader;
+
+impl Loader<Uuid> for RequirementsByRoleLoader {
+    type Value = Vec<Requirement>;
+    type Error = LoadError;
+
+    async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, Vec<Requirement>>, Self::Error> {
+        let rows = Requirement::get_by_role_ids(keys)?;
+        let mut grouped: HashMap<Uuid, Vec<Requirement>> = HashMap::new();
+        for requirement in rows {
+            grouped.entry(requirement.role_id).or_default().push(requirement);
+        }
+        Ok(grouped)
+    }
+}
+
+/// Aggregate loader: batches `Work::sum_role_effort` (`Role::effort`) into a
+/// single grouped SUM. A role with no active work has no row; the resolver
+/// treats a missing key as 0.
+pub struct EffortByRoleLoader;
+
+impl Loader<Uuid> for EffortByRoleLoader {
+    type Value = i32;
+    type Error = LoadError;
+
+    async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, i32>, Self::Error> {
+        Ok(Work::sum_role_efforts(keys)?.into_iter().collect())
+    }
+}
 
 /// One-to-many loader: batches `Work::get_by_role_id` (e.g. `Role::work`),
 /// grouping the flat result back into a list per role.

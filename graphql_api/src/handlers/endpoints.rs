@@ -10,7 +10,8 @@ use async_graphql::dataloader::DataLoader;
 use crate::models;
 use crate::graphql::{AppSchema};
 use crate::graphql::loaders::{
-    PersonLoader, TeamLoader, RoleLoader, TaskLoader, ProductLoader, WorkByRoleLoader,
+    PersonLoader, TeamLoader, RoleLoader, TaskLoader, ProductLoader,
+    WorkByRoleLoader, RequirementsByRoleLoader, EffortByRoleLoader,
 };
 
 
@@ -50,7 +51,9 @@ pub async fn graphql(
         .data(DataLoader::new(RoleLoader, actix_web::rt::spawn))
         .data(DataLoader::new(TaskLoader, actix_web::rt::spawn))
         .data(DataLoader::new(ProductLoader, actix_web::rt::spawn))
-        .data(DataLoader::new(WorkByRoleLoader, actix_web::rt::spawn));
+        .data(DataLoader::new(WorkByRoleLoader, actix_web::rt::spawn))
+        .data(DataLoader::new(RequirementsByRoleLoader, actix_web::rt::spawn))
+        .data(DataLoader::new(EffortByRoleLoader, actix_web::rt::spawn));
 
     schema.execute(query).await.into()
 }

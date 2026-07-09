@@ -81,14 +81,16 @@ pub struct RoleMatchResult {
 const GAP_PENALTY: f64 = 0.10;
 
 /// Scores a single person against all role requirements.
-/// `caps_by_skill` maps skill_id → all active capabilities for that skill
-/// (pre-built once per call to `find_fuzzy_matches`).
+/// `caps_by_skill` maps skill_id → all active capabilities for that skill,
+/// and `person` is their pre-fetched row (both loaded in one batch per call
+/// to `find_fuzzy_matches` — no per-candidate queries here).
 fn score_person(
-    person_id: Uuid,
+    person: Person,
     requirements: &[Requirement],
     caps_by_skill: &HashMap<Uuid, Vec<&Capability>>,
     managed_person_ids: &HashSet<Uuid>,
 ) -> PersonMatchScore {
+    let person_id = person.id;
     let mut gaps = Vec::with_capacity(requirements.len());
     let mut total_gap = 0i32;
     let mut met = 0i32;
@@ -134,7 +136,7 @@ fn score_person(
     let match_score = (coverage - (total_gap as f64 * GAP_PENALTY)).max(0.0);
 
     PersonMatchScore {
-        person: Person::get_by_id(&person_id).unwrap(),
+        person,
         match_score,
         requirements_met: met,
         requirements_total: n,
@@ -235,8 +237,16 @@ pub fn find_fuzzy_matches(
         caps_by_skill.entry(cap.skill_id).or_default().push(cap);
     }
 
-    // Unique person_ids seen across all returned capabilities.
-    let person_ids: HashSet<Uuid> = all_caps.iter().map(|c| c.person_id).collect();
+    // Unique person_ids seen across all returned capabilities, fetched as
+    // rows in one batch. A person deleted between the two queries simply
+    // drops out of the candidate pool instead of panicking the scorer.
+    let person_ids: Vec<Uuid> = all_caps
+        .iter()
+        .map(|c| c.person_id)
+        .collect::<HashSet<Uuid>>()
+        .into_iter()
+        .collect();
+    let candidates = Person::get_by_ids(&person_ids)?;
 
     // Separate candidates inside the managed area from those outside it. The
     // owner/admin can reassign managed candidates directly; external candidates
@@ -246,8 +256,8 @@ pub fn find_fuzzy_matches(
     let mut external_full: Vec<PersonMatchScore> = Vec::new();
     let mut external_partial: Vec<PersonMatchScore> = Vec::new();
 
-    for person_id in person_ids {
-        let score = score_person(person_id, &requirements, &caps_by_skill, &managed_person_ids);
+    for person in candidates {
+        let score = score_person(person, &requirements, &caps_by_skill, &managed_person_ids);
 
         // Drop anyone with a single skill gap exceeding the caller's threshold.
         if score.requirement_gaps.iter().any(|g| g.gap > max_gap_per_req) {

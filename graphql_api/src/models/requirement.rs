@@ -182,6 +182,18 @@ impl Requirement {
         Ok(res)
     }
 
+    /// Batched lookup for the DataLoader: requirements for many roles in one query.
+    pub fn get_by_role_ids(role_ids: &[Uuid]) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let res = requirements::table
+            .filter(requirements::role_id.eq_any(role_ids))
+            .order_by(requirements::role_id)
+            .load::<Requirement>(&mut conn)?;
+
+        Ok(res)
+    }
+
     pub fn get_level_counts_by_name(name: String) -> Result<Vec<RequirementCount>> {
         let mut conn = connection()?;
 

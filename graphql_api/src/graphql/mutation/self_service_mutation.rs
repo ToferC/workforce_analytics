@@ -2,7 +2,7 @@ use async_graphql::*;
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
-use crate::models::{Person, RecordFlag};
+use crate::models::{Capability, CapabilityLevel, NewCapability, Person, RecordFlag};
 use crate::common_utils::{UserRole, is_operator, RoleGuard};
 
 #[derive(Default)]
@@ -53,6 +53,42 @@ impl SelfServiceMutation {
         if let Some(s) = data.country { person.country = s; }
 
         person.update()
+    }
+
+    /// Self-declare a capability on the caller's own Person record. Authorized
+    /// by ownership like updateMyPerson: the capability is created with only a
+    /// self-identified level — validation remains an admin action, so the trust
+    /// model is unchanged.
+    #[graphql(name = "addMyCapability")]
+    pub async fn add_my_capability(
+        &self,
+        ctx: &Context<'_>,
+        skill_id: Uuid,
+        self_identified_level: CapabilityLevel,
+    ) -> Result<Capability> {
+        let uid = ctx
+            .data_opt::<Uuid>()
+            .copied()
+            .ok_or_else(|| Error::new("Not authenticated"))?;
+
+        let person = Person::get_by_user_id(&uid)
+            .map_err(|_| Error::new("No person record is linked to your account"))?;
+
+        // One capability per person per skill: re-declaring updates the
+        // self-identified level instead of duplicating the row.
+        if let Ok(mut existing) = Capability::get_by_person_and_skill(&person.id, &skill_id) {
+            existing.self_identified_level = self_identified_level;
+            return existing.update();
+        }
+
+        let new_capability = NewCapability::new(
+            person.id,
+            skill_id,
+            person.organization_id,
+            self_identified_level,
+        );
+
+        Capability::create(&new_capability)
     }
 
     /// Raise a correction flag against the caller's own record for operators to

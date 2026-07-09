@@ -416,6 +416,10 @@ type Mutation {
 	"""
 	flagRecordIssue(message: String!): RecordFlag!
 	"""
+	Self-declare a capability on the caller's own Person record. Authorized by ownership like updateMyPerson: the capability is created with only a self-identified level — validation remains an admin action, so the trust model is unchanged.
+	"""
+	addMyCapability(skillId: UUID!, selfIdentifiedLevel: CapabilityLevel!): Capability!
+	"""
 	Mark a record flag resolved. Operator/admin only.
 	"""
 	resolveRecordFlag(id: UUID!): RecordFlag!
@@ -1674,6 +1678,11 @@ and progression
 input RoleData {
 	id: UUID!
 	active: Boolean
+	"""
+	Correct the position's title (e.g. a typo). The position itself is durable — retitle, don't recreate, when the role is the same job.
+	"""
+	titleEn: String
+	titleFr: String
 	startDatestamp: NaiveDateTime
 	endDate: NaiveDateTime
 }

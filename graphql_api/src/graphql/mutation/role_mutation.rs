@@ -112,6 +112,14 @@ impl RoleMutation {
             role.active = id;
         };
 
+        if let Some(s) = role_data.title_en {
+            if !s.trim().is_empty() { role.title_en = s.trim().to_string(); }
+        };
+
+        if let Some(s) = role_data.title_fr {
+            if !s.trim().is_empty() { role.title_fr = s.trim().to_string(); }
+        };
+
         if let Some(s) = role_data.start_datestamp {
             role.start_datestamp = s;
         };
@@ -238,6 +246,11 @@ impl RoleMutation {
 pub struct RoleData {
     pub id: Uuid,
     pub active: Option<bool>,
+
+    /// Correct the position's title (e.g. a typo). The position itself is
+    /// durable — retitle, don't recreate, when the role is the same job.
+    pub title_en: Option<String>,
+    pub title_fr: Option<String>,
 
     pub start_datestamp: Option<NaiveDateTime>,
     pub end_date: Option<NaiveDateTime>,

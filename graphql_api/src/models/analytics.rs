@@ -156,6 +156,17 @@ pub struct TeamCapabilityRow {
     pub cells: Vec<TeamCapabilityCell>,
 }
 
+/// A row in the org-tier capability heatmap: the team matrix rolled up to a
+/// chosen tier level (e.g. tier 2), for organizations where per-team rows are
+/// too granular to read.
+#[derive(Debug, Clone, SimpleObject)]
+pub struct OrgTierCapabilityRow {
+    pub org_tier_id: Uuid,
+    pub org_tier_name: String,
+    pub tier_level: i32,
+    pub cells: Vec<TeamCapabilityCell>,
+}
+
 /// A detected talent movement event
 #[derive(Debug, Clone, SimpleObject)]
 pub struct TalentMovement {

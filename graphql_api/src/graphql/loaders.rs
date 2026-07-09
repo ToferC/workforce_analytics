@@ -19,6 +19,24 @@ use crate::models::{Person, Product, Requirement, Role, Task, Team, Work};
 /// straight through.
 type LoadError = async_graphql::Error;
 
+/// Run a synchronous Diesel closure on the runtime's blocking thread pool.
+///
+/// Diesel is sync: calling it directly from a resolver parks an async worker
+/// thread for the whole query, so a handful of slow queries can stall every
+/// request on the server. Routing the call through `spawn_blocking` keeps the
+/// executor free. Use this for any resolver doing table scans or multi-query
+/// work; the per-row getters funnel through the loaders below, which already
+/// use it.
+pub async fn off_executor<T, F>(f: F) -> async_graphql::Result<T>
+where
+    F: FnOnce() -> async_graphql::Result<T> + Send + 'static,
+    T: Send + 'static,
+{
+    actix_web::rt::task::spawn_blocking(f)
+        .await
+        .map_err(|e| async_graphql::Error::new(format!("Blocking task failed: {}", e)))?
+}
+
 /// Defines a loader keyed by primary id over a batched `get_by_ids` getter.
 macro_rules! id_loader {
     ($(#[$m:meta])* $name:ident => $value:ty, $getter:path) => {
@@ -30,7 +48,8 @@ macro_rules! id_loader {
             type Error = LoadError;
 
             async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, $value>, Self::Error> {
-                let rows = $getter(&keys.to_vec())?;
+                let keys = keys.to_vec();
+                let rows = off_executor(move || $getter(&keys)).await?;
                 Ok(rows.into_iter().map(|row| (row.id, row)).collect())
             }
         }
@@ -67,7 +86,8 @@ impl Loader<Uuid> for RequirementsByRoleLoader {
     type Error = LoadError;
 
     async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, Vec<Requirement>>, Self::Error> {
-        let rows = Requirement::get_by_role_ids(keys)?;
+        let keys = keys.to_vec();
+        let rows = off_executor(move || Requirement::get_by_role_ids(&keys)).await?;
         let mut grouped: HashMap<Uuid, Vec<Requirement>> = HashMap::new();
         for requirement in rows {
             grouped.entry(requirement.role_id).or_default().push(requirement);
@@ -86,7 +106,8 @@ impl Loader<Uuid> for EffortByRoleLoader {
     type Error = LoadError;
 
     async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, i32>, Self::Error> {
-        Ok(Work::sum_role_efforts(keys)?.into_iter().collect())
+        let keys = keys.to_vec();
+        Ok(off_executor(move || Work::sum_role_efforts(&keys)).await?.into_iter().collect())
     }
 }
 
@@ -99,7 +120,8 @@ impl Loader<Uuid> for WorkByRoleLoader {
     type Error = LoadError;
 
     async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, Vec<Work>>, Self::Error> {
-        let rows = Work::get_by_role_ids(keys)?;
+        let keys = keys.to_vec();
+        let rows = off_executor(move || Work::get_by_role_ids(&keys)).await?;
         let mut grouped: HashMap<Uuid, Vec<Work>> = HashMap::new();
         for work in rows {
             if let Some(role_id) = work.role_id {

@@ -80,17 +80,16 @@ pub struct RoleMatchResult {
 // 10 points out of 100 in the composite score.
 const GAP_PENALTY: f64 = 0.10;
 
-/// Scores a single person against all role requirements.
-/// `caps_by_skill` maps skill_id → all active capabilities for that skill,
-/// and `person` is their pre-fetched row (both loaded in one batch per call
-/// to `find_fuzzy_matches` — no per-candidate queries here).
-fn score_person(
-    person: Person,
+/// Pure scoring pass for one person: per-requirement gap breakdown from the
+/// pre-grouped capabilities (skill_id → all active capabilities for that
+/// skill). Returns (gaps, requirements_met, total_gap). Split from
+/// `score_person` so the scoring math is unit-testable without a database or
+/// a full `Person` row.
+fn score_requirements(
+    person_id: Uuid,
     requirements: &[Requirement],
     caps_by_skill: &HashMap<Uuid, Vec<&Capability>>,
-    managed_person_ids: &HashSet<Uuid>,
-) -> PersonMatchScore {
-    let person_id = person.id;
+) -> (Vec<RequirementMatch>, i32, i32) {
     let mut gaps = Vec::with_capacity(requirements.len());
     let mut total_gap = 0i32;
     let mut met = 0i32;
@@ -131,9 +130,26 @@ fn score_person(
         });
     }
 
-    let n = requirements.len() as i32;
-    let coverage = met as f64 / n as f64;
+    (gaps, met, total_gap)
+}
+
+/// Composite score in [0, 1]: coverage minus a penalty per missing level.
+fn composite_score(met: i32, total: i32, total_gap: i32) -> (f64, f64) {
+    let coverage = met as f64 / total as f64;
     let match_score = (coverage - (total_gap as f64 * GAP_PENALTY)).max(0.0);
+    (coverage, match_score)
+}
+
+fn score_person(
+    person: Person,
+    requirements: &[Requirement],
+    caps_by_skill: &HashMap<Uuid, Vec<&Capability>>,
+    managed_person_ids: &HashSet<Uuid>,
+) -> PersonMatchScore {
+    let person_id = person.id;
+    let (gaps, met, total_gap) = score_requirements(person_id, requirements, caps_by_skill);
+    let n = requirements.len() as i32;
+    let (coverage, match_score) = composite_score(met, n, total_gap);
 
     PersonMatchScore {
         person,
@@ -301,4 +317,140 @@ pub fn find_fuzzy_matches(
         external_full_matches: external_full,
         external_partial_matches: external_partial,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::NaiveDateTime;
+    use crate::models::SkillDomain;
+
+    fn now() -> NaiveDateTime {
+        NaiveDateTime::parse_from_str("2026-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap()
+    }
+
+    fn requirement(skill_id: Uuid, level: CapabilityLevel) -> Requirement {
+        Requirement {
+            id: Uuid::new_v4(),
+            name_en: "Threat Analysis".into(),
+            name_fr: "Analyse des menaces".into(),
+            domain: SkillDomain::CyberSecurity,
+            role_id: Uuid::new_v4(),
+            skill_id,
+            required_level: level,
+            created_at: now(),
+            updated_at: now(),
+            retired_at: None,
+        }
+    }
+
+    fn capability(
+        person_id: Uuid,
+        skill_id: Uuid,
+        self_level: CapabilityLevel,
+        validated: Option<CapabilityLevel>,
+    ) -> Capability {
+        Capability {
+            id: Uuid::new_v4(),
+            name_en: "Threat Analysis".into(),
+            name_fr: "Analyse des menaces".into(),
+            domain: SkillDomain::CyberSecurity,
+            person_id,
+            skill_id,
+            organization_id: Uuid::new_v4(),
+            self_identified_level: self_level,
+            validated_level: validated,
+            created_at: now(),
+            updated_at: now(),
+            retired_at: None,
+            validated_by_id: None,
+            validated_at: None,
+        }
+    }
+
+    fn group<'a>(caps: &'a [Capability]) -> HashMap<Uuid, Vec<&'a Capability>> {
+        let mut m: HashMap<Uuid, Vec<&Capability>> = HashMap::new();
+        for c in caps {
+            m.entry(c.skill_id).or_default().push(c);
+        }
+        m
+    }
+
+    #[test]
+    fn validated_level_meets_requirement_exactly() {
+        let (person, skill) = (Uuid::new_v4(), Uuid::new_v4());
+        let caps = vec![capability(person, skill, CapabilityLevel::Novice, Some(CapabilityLevel::Expert))];
+        let reqs = vec![requirement(skill, CapabilityLevel::Expert)];
+
+        let (gaps, met, total_gap) = score_requirements(person, &reqs, &group(&caps));
+        assert_eq!(met, 1);
+        assert_eq!(total_gap, 0);
+        assert!(gaps[0].met);
+        assert_eq!(gaps[0].gap, 0);
+        assert_eq!(gaps[0].actual_level, Some(CapabilityLevel::Expert));
+    }
+
+    #[test]
+    fn self_identified_level_used_when_unvalidated() {
+        let (person, skill) = (Uuid::new_v4(), Uuid::new_v4());
+        let caps = vec![capability(person, skill, CapabilityLevel::Experienced, None)];
+        let reqs = vec![requirement(skill, CapabilityLevel::Expert)];
+
+        let (gaps, met, total_gap) = score_requirements(person, &reqs, &group(&caps));
+        assert_eq!(met, 0);
+        assert_eq!(total_gap, 1); // Expert - Experienced = one level short
+        assert_eq!(gaps[0].actual_level, Some(CapabilityLevel::Experienced));
+    }
+
+    #[test]
+    fn missing_capability_counts_as_full_gap() {
+        let person = Uuid::new_v4();
+        let reqs = vec![requirement(Uuid::new_v4(), CapabilityLevel::Expert)];
+
+        let (gaps, met, total_gap) = score_requirements(person, &reqs, &HashMap::new());
+        assert_eq!(met, 0);
+        assert_eq!(total_gap, CapabilityLevel::Expert.as_int());
+        assert_eq!(gaps[0].actual_level, None);
+        assert!(!gaps[0].met);
+    }
+
+    #[test]
+    fn highest_capability_for_skill_wins() {
+        let (person, skill) = (Uuid::new_v4(), Uuid::new_v4());
+        // Two capabilities for the same skill; the stronger one should count.
+        let caps = vec![
+            capability(person, skill, CapabilityLevel::Novice, None),
+            capability(person, skill, CapabilityLevel::Novice, Some(CapabilityLevel::Specialist)),
+        ];
+        let reqs = vec![requirement(skill, CapabilityLevel::Expert)];
+
+        let (gaps, met, _) = score_requirements(person, &reqs, &group(&caps));
+        assert_eq!(met, 1);
+        assert_eq!(gaps[0].actual_level, Some(CapabilityLevel::Specialist));
+        assert!(gaps[0].gap < 0, "over-qualified gap should be negative");
+    }
+
+    #[test]
+    fn other_peoples_capabilities_are_ignored() {
+        let (person, other, skill) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let caps = vec![capability(other, skill, CapabilityLevel::Specialist, Some(CapabilityLevel::Specialist))];
+        let reqs = vec![requirement(skill, CapabilityLevel::Novice)];
+
+        let (_, met, total_gap) = score_requirements(person, &reqs, &group(&caps));
+        assert_eq!(met, 0);
+        assert_eq!(total_gap, CapabilityLevel::Novice.as_int());
+    }
+
+    #[test]
+    fn composite_score_penalizes_each_missing_level() {
+        // Full coverage, no gap: perfect score.
+        assert_eq!(composite_score(2, 2, 0), (1.0, 1.0));
+        // Half coverage, two levels short in total: 0.5 - 2*0.10 = 0.3.
+        let (coverage, score) = composite_score(1, 2, 2);
+        assert!((coverage - 0.5).abs() < 1e-9);
+        assert!((score - 0.3).abs() < 1e-9);
+        // Score floors at zero rather than going negative.
+        let (_, floored) = composite_score(0, 4, 12);
+        assert_eq!(floored, 0.0);
+    }
 }

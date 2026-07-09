@@ -14,6 +14,7 @@ use crate::models::{
     SkillDomain, CapabilityLevel, WorkStatus,
 };
 use crate::common_utils::{RoleGuard, UserRole};
+use crate::graphql::loaders::off_executor;
 
 /// GraphQL wire representation of a SkillDomain (SCREAMING_SNAKE_CASE), the
 /// same conversion async-graphql applies automatically when a field's type is
@@ -182,6 +183,19 @@ impl CapabilityGrowthQuery {
         domain: Option<SkillDomain>,
         org_tier_id: Option<Uuid>,
     ) -> Result<Vec<LabeledSeries>> {
+        // Table-scan-heavy; run off the async executor.
+        off_executor(move || compute_capability_growth(bucket, from, to, domain, org_tier_id)).await
+    }
+}
+
+fn compute_capability_growth(
+    bucket: TimeBucket,
+    from: Option<NaiveDateTime>,
+    to: Option<NaiveDateTime>,
+    domain: Option<SkillDomain>,
+    org_tier_id: Option<Uuid>,
+) -> Result<Vec<LabeledSeries>> {
+    {
         let mut conn = connection()?;
         let (cap_rows, val_map) = load_supply_data(&mut conn, org_tier_id)?;
 
@@ -232,6 +246,19 @@ impl SupplyDemandQuery {
         domain: Option<SkillDomain>,
         org_tier_id: Option<Uuid>,
     ) -> Result<Vec<SupplyDemandSeries>> {
+        // Table-scan-heavy; run off the async executor.
+        off_executor(move || compute_capability_supply_demand(bucket, from, to, domain, org_tier_id)).await
+    }
+}
+
+fn compute_capability_supply_demand(
+    bucket: TimeBucket,
+    from: Option<NaiveDateTime>,
+    to: Option<NaiveDateTime>,
+    domain: Option<SkillDomain>,
+    org_tier_id: Option<Uuid>,
+) -> Result<Vec<SupplyDemandSeries>> {
+    {
         let mut conn = connection()?;
         let (cap_rows, val_map) = load_supply_data(&mut conn, org_tier_id)?;
 
@@ -361,7 +388,7 @@ impl TeamCapabilityMatrixQuery {
         &self,
         org_tier_id: Option<Uuid>,
     ) -> Result<Vec<TeamCapabilityRow>> {
-        compute_team_capability_matrix(org_tier_id, None)
+        off_executor(move || compute_team_capability_matrix(org_tier_id, None)).await
     }
 }
 
@@ -488,6 +515,17 @@ impl TalentMovementQuery {
         to: Option<NaiveDateTime>,
         org_tier_id: Option<Uuid>,
     ) -> Result<Vec<TalentMovement>> {
+        // Table-scan-heavy; run off the async executor.
+        off_executor(move || compute_talent_movements(from, to, org_tier_id)).await
+    }
+}
+
+fn compute_talent_movements(
+    from: Option<NaiveDateTime>,
+    to: Option<NaiveDateTime>,
+    org_tier_id: Option<Uuid>,
+) -> Result<Vec<TalentMovement>> {
+    {
         let mut conn = connection()?;
 
         type RoleRowNullable = (Uuid, Option<Uuid>, Uuid, NaiveDateTime, Option<crate::models::Rank>, Option<i32>);
@@ -634,3 +672,83 @@ pub struct AnalyticsQuery(
     TeamCapabilityMatrixQuery,
     TalentMovementQuery,
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dt(s: &str) -> NaiveDateTime {
+        NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S").unwrap()
+    }
+
+    #[test]
+    fn domain_graphql_key_matches_wire_format() {
+        assert_eq!(domain_graphql_key(SkillDomain::CyberSecurity), "CYBER_SECURITY");
+        assert_eq!(domain_graphql_key(SkillDomain::Strategy), "STRATEGY");
+        // The regression that motivated this helper: multi-word domains must
+        // not come out as PascalCase Debug output.
+        assert_ne!(domain_graphql_key(SkillDomain::SoftwareEngineering), "SoftwareEngineering");
+        assert_eq!(domain_graphql_key(SkillDomain::SoftwareEngineering), "SOFTWARE_ENGINEERING");
+    }
+
+    #[test]
+    fn level_values_step_by_hundred() {
+        assert_eq!(level_value(CapabilityLevel::Desired), 0);
+        assert_eq!(level_value(CapabilityLevel::Specialist), 400);
+        assert_eq!(level_weight(CapabilityLevel::Experienced), 2.0);
+    }
+
+    #[test]
+    fn descendant_tiers_include_root_and_transitive_children() {
+        let (root, child, grandchild, unrelated) =
+            (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let tiers = vec![
+            (root, None),
+            (child, Some(root)),
+            (grandchild, Some(child)),
+            (unrelated, None),
+        ];
+
+        let ids = collect_descendant_tier_ids(root, &tiers);
+        assert!(ids.contains(&root));
+        assert!(ids.contains(&child));
+        assert!(ids.contains(&grandchild));
+        assert!(!ids.contains(&unrelated));
+        assert_eq!(ids.len(), 3);
+    }
+
+    #[test]
+    fn supply_averages_validations_up_to_bucket_end() {
+        let cap_id = Uuid::new_v4();
+        let row = (cap_id, SkillDomain::CyberSecurity, Uuid::new_v4(), None, CapabilityLevel::Expert, Some(CapabilityLevel::Expert));
+        let caps = vec![&row];
+
+        let mut val_map: HashMap<Uuid, Vec<(NaiveDateTime, i64)>> = HashMap::new();
+        val_map.insert(cap_id, vec![
+            (dt("2025-01-15 00:00:00"), 200), // Experienced
+            (dt("2025-06-15 00:00:00"), 400), // Specialist
+        ]);
+
+        // Bucket ending before the second validation only sees the first.
+        let supply_early = compute_supply(&caps, &val_map, dt("2025-01-01 00:00:00"), dt("2025-03-31 00:00:00"));
+        assert!((supply_early - 2.0).abs() < 1e-9);
+
+        // Bucket ending after both averages them: (200 + 400) / 2 / 100 = 3.
+        let supply_late = compute_supply(&caps, &val_map, dt("2025-01-01 00:00:00"), dt("2025-12-31 00:00:00"));
+        assert!((supply_late - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn supply_skips_capabilities_retired_before_the_bucket() {
+        let cap_id = Uuid::new_v4();
+        let retired = Some(dt("2024-12-31 00:00:00"));
+        let row = (cap_id, SkillDomain::CyberSecurity, Uuid::new_v4(), retired, CapabilityLevel::Expert, None);
+        let caps = vec![&row];
+
+        let mut val_map: HashMap<Uuid, Vec<(NaiveDateTime, i64)>> = HashMap::new();
+        val_map.insert(cap_id, vec![(dt("2024-06-01 00:00:00"), 300)]);
+
+        let supply = compute_supply(&caps, &val_map, dt("2025-01-01 00:00:00"), dt("2025-03-31 00:00:00"));
+        assert_eq!(supply, 0.0);
+    }
+}

@@ -31,7 +31,10 @@ impl PersonQuery {
     ) -> Result<Vec<Person>> {
         let search = search.filter(|s| !s.trim().is_empty());
         let role_status = role_status.filter(|s| !s.trim().is_empty());
-        Person::get_filtered(search.as_deref(), organization_id, role_status.as_deref(), include_retired, limit, offset)
+        crate::graphql::loaders::off_executor(move || {
+            Person::get_filtered(search.as_deref(), organization_id, role_status.as_deref(), include_retired, limit, offset)
+        })
+        .await
     }
 
     #[graphql(name = "People", guard = "RoleGuard::new(UserRole::User)")]

@@ -3,7 +3,7 @@ use std::{fmt::Debug, collections::HashMap};
 use chrono::{prelude::*};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
-use diesel::{self, Insertable, Queryable, ExpressionMethods, Connection};
+use diesel::{self, Insertable, Queryable, ExpressionMethods, BoolExpressionMethods, PgTextExpressionMethods, Connection};
 use rand::{distributions::{Distribution, Standard}, Rng};
 use diesel::{RunQueryDsl, QueryDsl};
 use uuid::Uuid;
@@ -11,7 +11,7 @@ use async_graphql::*;
 use async_graphql::dataloader::DataLoader;
 
 use crate::config_variables::DATE_FORMAT;
-use crate::graphql::loaders::{EffortByRoleLoader, PersonLoader, RequirementsByRoleLoader, TeamLoader, WorkByRoleLoader};
+use crate::graphql::loaders::{AssignmentsByRoleLoader, EffortByRoleLoader, PersonLoader, RequirementsByRoleLoader, TeamLoader, WorkByRoleLoader};
 
 use crate::schema::*;
 use crate::database::{connection, DbConnection};
@@ -128,8 +128,12 @@ impl Role {
     /// Full tenure history for this position: who has occupied it and when,
     /// most recent first. The open assignment (no end_date) is the current
     /// occupant.
-    pub async fn assignments(&self) -> Result<Vec<RoleAssignment>> {
-        RoleAssignment::get_by_role_id(&self.id)
+    pub async fn assignments(&self, ctx: &Context<'_>) -> Result<Vec<RoleAssignment>> {
+        Ok(ctx
+            .data_unchecked::<DataLoader<AssignmentsByRoleLoader>>()
+            .load_one(self.id)
+            .await?
+            .unwrap_or_default())
     }
 
     /// Returns the military occupation for a military role holder, if applicable
@@ -314,6 +318,102 @@ impl Role {
             }
         };
         Ok(role)
+    }
+
+    /// Person ids whose name matches every search term — feeds the role
+    /// index's incumbent-name search.
+    fn search_person_ids(search: &str) -> Result<Vec<Uuid>> {
+        use crate::schema::persons;
+        let mut conn = connection()?;
+        let mut query = persons::table.select(persons::id).into_boxed();
+        for term in search.split_whitespace() {
+            let pattern = format!("%{}%", term);
+            query = query.filter(
+                persons::given_name.ilike(pattern.clone()).or(persons::family_name.ilike(pattern)),
+            );
+        }
+        Ok(query.load::<Uuid>(&mut conn)?)
+    }
+
+    /// Team ids under an organization — feeds the role index's org filter.
+    fn org_team_ids(organization_id: Uuid) -> Result<Vec<Uuid>> {
+        use crate::schema::teams;
+        let mut conn = connection()?;
+        let res = teams::table
+            .filter(teams::organization_id.eq(organization_id))
+            .select(teams::id)
+            .load::<Uuid>(&mut conn)?;
+        Ok(res)
+    }
+
+    /// Active roles matching the index filters, ordered by English title.
+    /// `status`: "filled" | "vacant" | anything else = all.
+    pub fn get_filtered(
+        search: Option<&str>,
+        organization_id: Option<Uuid>,
+        status: Option<&str>,
+        limit: Option<i64>,
+        offset: i64,
+    ) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let mut query = roles::table.filter(roles::active.eq(true)).into_boxed();
+        if let Some(org) = organization_id {
+            query = query.filter(roles::team_id.eq_any(Self::org_team_ids(org)?));
+        }
+        if let Some(s) = search {
+            let pattern = format!("%{}%", s.trim());
+            let person_ids: Vec<Option<Uuid>> =
+                Self::search_person_ids(s)?.into_iter().map(Some).collect();
+            query = query.filter(
+                roles::title_en.ilike(pattern.clone())
+                    .or(roles::title_fr.ilike(pattern))
+                    .or(roles::person_id.eq_any(person_ids)),
+            );
+        }
+        match status {
+            Some("filled") => query = query.filter(roles::person_id.is_not_null()),
+            Some("vacant") => query = query.filter(roles::person_id.is_null()),
+            _ => {}
+        }
+        query = query.order_by(roles::title_en);
+        if let Some(l) = limit {
+            query = query.limit(l).offset(offset);
+        }
+
+        Ok(query.load::<Role>(&mut conn)?)
+    }
+
+    /// Total active roles matching the same filters as `get_filtered`,
+    /// ignoring limit/offset — for driving pagination controls.
+    pub fn count_filtered(
+        search: Option<&str>,
+        organization_id: Option<Uuid>,
+        status: Option<&str>,
+    ) -> Result<i64> {
+        let mut conn = connection()?;
+
+        let mut query = roles::table.filter(roles::active.eq(true)).into_boxed();
+        if let Some(org) = organization_id {
+            query = query.filter(roles::team_id.eq_any(Self::org_team_ids(org)?));
+        }
+        if let Some(s) = search {
+            let pattern = format!("%{}%", s.trim());
+            let person_ids: Vec<Option<Uuid>> =
+                Self::search_person_ids(s)?.into_iter().map(Some).collect();
+            query = query.filter(
+                roles::title_en.ilike(pattern.clone())
+                    .or(roles::title_fr.ilike(pattern))
+                    .or(roles::person_id.eq_any(person_ids)),
+            );
+        }
+        match status {
+            Some("filled") => query = query.filter(roles::person_id.is_not_null()),
+            Some("vacant") => query = query.filter(roles::person_id.is_null()),
+            _ => {}
+        }
+
+        Ok(query.count().get_result(&mut conn)?)
     }
 
     pub fn get_all_active() -> Result<Vec<Self>> {
@@ -881,6 +981,17 @@ impl RoleAssignment {
             .order(role_assignments::start_date.desc())
             .load::<Self>(&mut conn)?;
 
+        Ok(res)
+    }
+
+    /// Batched lookup for the DataLoader: tenures for many roles in one query,
+    /// most recent first within each role.
+    pub fn get_by_role_ids(role_ids: &[Uuid]) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+        let res = role_assignments::table
+            .filter(role_assignments::role_id.eq_any(role_ids))
+            .order((role_assignments::role_id, role_assignments::start_date.desc()))
+            .load::<Self>(&mut conn)?;
         Ok(res)
     }
 

@@ -881,7 +881,7 @@ type Person {
 	"""
 	capabilities: [Capability!]!
 	"""
-	Returns a vector of the validations made by the person. Only available to analyst level access and above.
+	Returns a vector of the validations made by the person
 	"""
 	validations: [Validation!]!
 	publications: [Publication!]!
@@ -1352,9 +1352,13 @@ type Query {
 	"""
 	vacantRoles(count: Int!): [Role!]!
 	"""
-	Returns a vector of all persons ordered by family name
+	Active roles, optionally filtered by a search string (titles or incumbent name), organization, and filled/vacant status, with limit/offset pagination. No arguments = all active roles, as before.
 	"""
-	allRoles: [Role!]!
+	allRoles(search: String, organizationId: UUID, status: String, limit: Int, offset: Int! = 0): [Role!]!
+	"""
+	Total active roles matching the same filters as allRoles (ignoring pagination), for driving page controls.
+	"""
+	rolesCount(search: String, organizationId: UUID, status: String): Int!
 	roleById(id: UUID!): Role!
 	"""
 	returns a count of the total roles in the system

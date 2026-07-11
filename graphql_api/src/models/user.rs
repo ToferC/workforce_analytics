@@ -36,25 +36,13 @@ pub struct UserInstance {
 
 #[derive(Debug, Clone, Deserialize, Serialize, SimpleObject, Queryable, AsChangeset)]
 pub struct User {
-    #[graphql(
-        guard = "RoleGuard::new(UserRole::Admin)",
-        visible = "is_admin",
-    )]
     pub id: Uuid,
     #[graphql(skip)]
     pub hash: String,
 
-    #[graphql(
-        guard = "RoleGuard::new(UserRole::Admin)",
-        visible = "is_admin",
-    )]
     pub email: String,
     pub role: String,
 
-    #[graphql(
-        guard = "RoleGuard::new(UserRole::Admin)",
-        visible = "is_admin",
-    )]
     pub name: String,
     pub access_level: String, // AccessLevelEnum
     pub created_at: NaiveDateTime,

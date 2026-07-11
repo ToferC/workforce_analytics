@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use async_graphql::dataloader::Loader;
 use uuid::Uuid;
 
-use crate::models::{Person, Product, Requirement, Role, Task, Team, Work};
+use crate::models::{Person, Product, Requirement, Role, RoleAssignment, Task, Team, Work};
 
 /// `Loader::Error` must be `Send + Clone + 'static`. `async_graphql::Error`
 /// already satisfies that, and is what the model getters return, so it passes
@@ -108,6 +108,25 @@ impl Loader<Uuid> for EffortByRoleLoader {
     async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, i32>, Self::Error> {
         let keys = keys.to_vec();
         Ok(off_executor(move || Work::sum_role_efforts(&keys)).await?.into_iter().collect())
+    }
+}
+
+/// One-to-many loader: batches `RoleAssignment::get_by_role_id`
+/// (`Role::assignments`), grouping the flat result per role.
+pub struct AssignmentsByRoleLoader;
+
+impl Loader<Uuid> for AssignmentsByRoleLoader {
+    type Value = Vec<RoleAssignment>;
+    type Error = LoadError;
+
+    async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, Vec<RoleAssignment>>, Self::Error> {
+        let keys = keys.to_vec();
+        let rows = off_executor(move || RoleAssignment::get_by_role_ids(&keys)).await?;
+        let mut grouped: HashMap<Uuid, Vec<RoleAssignment>> = HashMap::new();
+        for assignment in rows {
+            grouped.entry(assignment.role_id).or_default().push(assignment);
+        }
+        Ok(grouped)
     }
 }
 

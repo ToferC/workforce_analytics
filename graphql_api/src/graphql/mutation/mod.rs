@@ -20,6 +20,7 @@ mod requirement_mutation;
 mod validation_mutation;
 mod language_mutation;
 mod self_service_mutation;
+mod finance_mutation;
 
 pub use self::mutation::*;
 pub use self::person_mutation::*;
@@ -43,3 +44,4 @@ pub use self::requirement_mutation::*;
 pub use self::validation_mutation::*;
 pub use self::language_mutation::*;
 pub use self::self_service_mutation::*;
+pub use self::finance_mutation::*;

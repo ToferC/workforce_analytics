@@ -17,6 +17,8 @@ use crate::schema::*;
 use crate::database::{connection, DbConnection};
 
 use super::{Person, Team, TeamOwnership, OrgTier, Work, Requirement, Capability, Product, RoleMatchResult, find_fuzzy_matches};
+use super::{FinancialSummary, PayRate, salary_summary};
+use crate::graphql::loaders::off_executor;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset)]
 #[diesel(table_name = roles)]
@@ -50,6 +52,10 @@ pub struct Role {
     /// "reports to my team's owner role" (see `manager`), so this is only set
     /// when a position needs a manager other than the default team owner.
     pub reports_to: Option<Uuid>,
+
+    /// Salary override in cents for positions priced off-scale. NULL means
+    /// "derive from the pay_rates table via this role's classification".
+    pub annual_salary_cents: Option<i64>,
 }
 
 #[Object]
@@ -134,6 +140,36 @@ impl Role {
             .load_one(self.id)
             .await?
             .unwrap_or_default())
+    }
+
+    /// The annual salary pricing this role in cents: the per-role override if
+    /// set, otherwise the pay-rate in force for the role's classification.
+    /// Null when the role has neither an override nor a priced classification.
+    pub async fn annual_salary(&self) -> Result<Option<i64>> {
+        self.effective_annual_rate().await
+    }
+
+    /// Fiscal-year salary cost picture for this role: budget for every day
+    /// the position exists this FY, spend accrued over occupied days (from
+    /// the assignment ledger), the projection to March 31, and the vacancy
+    /// lapse. Null when the role cannot be priced.
+    pub async fn finances(&self, ctx: &Context<'_>) -> Result<Option<FinancialSummary>> {
+        let rate = match self.effective_annual_rate().await? {
+            Some(r) => r,
+            None => return Ok(None),
+        };
+        let assignments = self.assignments(ctx).await?;
+        let periods: Vec<(NaiveDate, Option<NaiveDate>)> = assignments
+            .iter()
+            .map(|a| (a.start_date.date(), a.end_date.map(|e| e.date())))
+            .collect();
+        let window = (self.start_datestamp.date(), self.end_date.map(|e| e.date()));
+        Ok(Some(salary_summary(
+            rate,
+            window,
+            &periods,
+            Utc::now().date_naive(),
+        )))
     }
 
     /// Returns the military occupation for a military role holder, if applicable
@@ -274,6 +310,20 @@ impl Role {
 
 // Non Graphql
 impl Role {
+    /// The annual rate pricing this role in cents: the per-role override if
+    /// set, otherwise the pay-rate in force for the role's classification.
+    pub async fn effective_annual_rate(&self) -> Result<Option<i64>> {
+        if self.annual_salary_cents.is_some() {
+            return Ok(self.annual_salary_cents);
+        }
+        let (group, level, rank) = (self.occupational_group, self.occupational_level, self.rank);
+        off_executor(move || {
+            let rates = PayRate::get_effective(Utc::now().naive_utc())?;
+            Ok(PayRate::rate_from(&rates, group, level, rank))
+        })
+        .await
+    }
+
     pub fn create(role: &NewRole) -> Result<Role> {
         let mut conn = connection()?;
 

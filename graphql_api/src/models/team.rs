@@ -15,7 +15,8 @@ use crate::schema::*;
 use crate::database::connection;
 use crate::graphql::loaders::RoleLoader;
 
-use super::{Role, TeamOwnership, SkillDomain};
+use super::{Role, RoleAssignment, TeamOwnership, SkillDomain};
+use super::{Contract, FinancialSummary, PayRate, contracts_summary, salary_summary};
 
 
 #[derive(Debug, Clone, Deserialize, Serialize, Identifiable, Queryable, Insertable, AsChangeset)]
@@ -267,6 +268,50 @@ impl Team {
 
     pub async fn roles(&self) -> Result<Vec<Role>> {
         Role::get_by_team_id(self.id)
+    }
+
+    /// Fiscal-year cost picture for the whole team: salary budget, projection
+    /// and vacancy lapse across every role (priced by override or pay rate),
+    /// plus the FY share of contracts under tasks created by the team's roles.
+    pub async fn finances(&self) -> Result<FinancialSummary> {
+        let team_id = self.id;
+        crate::graphql::loaders::off_executor(move || {
+            let today = Utc::now().date_naive();
+            let roles = Role::get_by_team_id(team_id)?;
+            let rates = PayRate::get_effective(Utc::now().naive_utc())?;
+
+            let role_ids: Vec<Uuid> = roles.iter().map(|r| r.id).collect();
+            let mut by_role: std::collections::HashMap<Uuid, Vec<(NaiveDate, Option<NaiveDate>)>> =
+                std::collections::HashMap::new();
+            for a in RoleAssignment::get_by_role_ids(&role_ids)? {
+                by_role
+                    .entry(a.role_id)
+                    .or_default()
+                    .push((a.start_date.date(), a.end_date.map(|e| e.date())));
+            }
+
+            let mut total = FinancialSummary {
+                fiscal_year: super::fiscal_year_label(today),
+                ..Default::default()
+            };
+            for role in &roles {
+                let rate = role.annual_salary_cents.or_else(|| {
+                    PayRate::rate_from(&rates, role.occupational_group, role.occupational_level, role.rank)
+                });
+                if let Some(rate) = rate {
+                    let window = (role.start_datestamp.date(), role.end_date.map(|e| e.date()));
+                    let empty = Vec::new();
+                    let periods = by_role.get(&role.id).unwrap_or(&empty);
+                    total.add(&salary_summary(rate, window, periods, today));
+                }
+            }
+
+            let contracts = Contract::get_by_team_id(&team_id)?;
+            total.add(&contracts_summary(&contracts, today));
+
+            Ok(total)
+        })
+        .await
     }
 
     /// The role that owns (manages) this team. Ownership is tied to the

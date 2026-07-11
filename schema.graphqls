@@ -423,6 +423,25 @@ type Mutation {
 	Mark a record flag resolved. Operator/admin only.
 	"""
 	resolveRecordFlag(id: UUID!): RecordFlag!
+	"""
+	Add a pay rate for a classification. Superseding an existing rate is
+	done by inserting a row with a later effective date, preserving
+	history; rates are never edited in place.
+	"""
+	createPayRate(payRateData: NewPayRate!): PayRate!
+	"""
+	Record a contract under a task.
+	"""
+	createContract(contractData: NewContract!): Contract!
+	"""
+	Update a contract (period, value, status, reference details). Only the
+	provided fields change.
+	"""
+	updateContract(contractData: ContractUpdate!): Contract!
+	"""
+	Remove a contract recorded in error.
+	"""
+	deleteContract(id: UUID!): Boolean!
 }
 
 """
@@ -449,6 +468,106 @@ ISO 8601 combined date and time without timezone.
 * `2015-07-01T08:59:60.123`,
 """
 scalar NaiveDateTime
+
+"""
+Fiscal-year cost picture for a role, task, or team. All values are cents.
+"""
+type FinancialSummary {
+	"""
+	Fiscal year the numbers cover, e.g. "2026-27".
+	"""
+	fiscalYear: String!
+	"""
+	Full-year cost if everything runs as planned: salary for every day the
+	role exists in the FY (occupied or not), plus contract shares.
+	"""
+	budgetedCents: Int!
+	"""
+	Expected actual spend to March 31: salary accrued over occupied days so
+	far plus, if occupied today, the remainder of the year; plus contract
+	shares (contracts are committed spend, so they project in full).
+	"""
+	projectedCents: Int!
+	"""
+	Budget not expected to be spent — for roles this is exactly the salary
+	lapse caused by vacancy.
+	"""
+	lapseCents: Int!
+}
+
+"""
+Annual salary for a classification: civilian (occupational group + level)
+or military (rank) — exactly one, mirroring the duality on Role. Rates are
+superseded by inserting a row with a later effective date, never edited in
+place, so history is preserved.
+"""
+type PayRate {
+	id: UUID!
+	occupationalGroup: OccupationalGroup
+	occupationalLevel: Int
+	rank: Rank
+	annualRateCents: Int!
+	effectiveDate: NaiveDateTime!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+}
+
+input NewPayRate {
+	occupationalGroup: OccupationalGroup
+	occupationalLevel: Int
+	rank: Rank
+	annualRateCents: Int!
+	effectiveDate: NaiveDateTime!
+}
+
+enum ContractStatus {
+	PLANNED
+	ACTIVE
+	CLOSED
+}
+
+"""
+Procurement spend recorded under a Task. The value is recognized linearly
+across [start_date, end_date]; a fiscal year's share is its day-overlap
+with that period. Amendments are additional contracts (same reference
+number with a suffix, by convention).
+"""
+type Contract {
+	id: UUID!
+	taskId: UUID!
+	referenceNumber: String!
+	vendor: String!
+	description: String!
+	startDate: NaiveDateTime!
+	endDate: NaiveDateTime!
+	totalValueCents: Int!
+	status: ContractStatus!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+}
+
+input NewContract {
+	taskId: UUID!
+	referenceNumber: String!
+	vendor: String!
+	description: String!
+	startDate: NaiveDateTime!
+	endDate: NaiveDateTime!
+	totalValueCents: Int!
+	status: ContractStatus!
+}
+
+input ContractUpdate {
+	id: UUID!
+	referenceNumber: String
+	vendor: String
+	description: String
+	startDate: NaiveDateTime
+	endDate: NaiveDateTime
+	totalValueCents: Int
+	status: ContractStatus
+}
+
 
 input NewAffiliation {
 	personId: UUID!
@@ -1473,6 +1592,16 @@ type Query {
 	queue. Operator/admin only.
 	"""
 	recordFlags: [RecordFlag!]!
+	"""
+	The full pay-rate table, every effective date included. The rate in
+	force for a classification is the row with the latest effective date
+	that has passed.
+	"""
+	payRates: [PayRate!]!
+	"""
+	A single contract by id.
+	"""
+	contractById(id: UUID!): Contract!
 }
 
 """
@@ -1651,6 +1780,19 @@ type Role {
 	tiers are equal. Null when the tier is unknown.
 	"""
 	seniorityScore: Int
+	"""
+	The annual salary pricing this role in cents: the per-role override if
+	set, otherwise the pay-rate in force for the role's classification.
+	Null when the role has neither an override nor a priced classification.
+	"""
+	annualSalary: Int
+	"""
+	Fiscal-year salary cost picture for this role: budget for every day
+	the position exists this FY, spend accrued over occupied days (from
+	the assignment ledger), the projection to March 31, and the vacancy
+	lapse. Null when the role cannot be priced.
+	"""
+	finances: FinancialSummary
 }
 
 type RoleAssignment {
@@ -1862,6 +2004,15 @@ type Task {
 	task's own priority (Proposal 7c).
 	"""
 	workPriorityMismatchCount: Int!
+	"""
+	Contracts recorded under this task, earliest start first.
+	"""
+	contracts: [Contract!]!
+	"""
+	Fiscal-year procurement picture for this task: the current FY's share
+	of every contract under it (committed spend, so budgeted = projected).
+	"""
+	finances: FinancialSummary!
 }
 
 """
@@ -1922,6 +2073,12 @@ type Team {
 	Sum of active effort across this team's roles.
 	"""
 	totalEffort: Int!
+	"""
+	Fiscal-year cost picture for the whole team: salary budget, projection
+	and vacancy lapse across every role (priced by override or pay rate),
+	plus the FY share of contracts under tasks created by the team's roles.
+	"""
+	finances: FinancialSummary!
 }
 
 """

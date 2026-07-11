@@ -19,6 +19,7 @@ mod publication;
 mod publication_contributor;
 mod record_flag;
 mod requirement;
+mod finance;
 mod matching;
 
 mod analytics;
@@ -48,6 +49,7 @@ pub use publication::*;
 pub use publication_contributor::*;
 pub use record_flag::*;
 pub use requirement::*;
+pub use finance::*;
 pub use matching::*;
 
 pub use analytics::*;

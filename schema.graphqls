@@ -881,7 +881,7 @@ type Person {
 	"""
 	capabilities: [Capability!]!
 	"""
-	Returns a vector of the validations made by the person. Only available to analyst level access and above.
+	Returns a vector of the validations made by the person
 	"""
 	validations: [Validation!]!
 	publications: [Publication!]!

@@ -52,11 +52,7 @@ pub struct Person {
     pub postal_code: String,
     pub country: String,
 
-    pub organization_id: Uuid, // Organization 
-    #[graphql(
-        guard = "RoleGuard::new(UserRole::Admin)",
-        visible = "is_admin",
-    )]
+    pub organization_id: Uuid, // Organization
     pub peoplesoft_id: String,
     pub orcid_id: String,
 
@@ -393,19 +389,11 @@ impl Person {
         Ok(self.peoplesoft_id.to_owned())
     }
 
-    #[graphql(
-        guard = "RoleGuard::new(UserRole::Analyst)",
-        visible = "is_analyst",
-    )]
     /// Returns the person's family or second name
     pub async fn family_name(&self) -> Result<String> {
         Ok(self.family_name.to_owned())
     }
 
-    #[graphql(
-        guard = "RoleGuard::new(UserRole::Analyst)",
-        visible = "is_analyst",
-    )]
     /// Returns the persons given or first name
     pub async fn given_name(&self) -> Result<String> {
         Ok(self.given_name.to_owned())
@@ -417,10 +405,6 @@ impl Person {
         Organization::get_by_id(&self.organization_id)
     }
 
-    #[graphql(
-        guard = "RoleGuard::new(UserRole::Analyst)",
-        visible = "is_analyst",
-    )]
     /// Positions this person used to occupy, derived from their closed tenures.
     /// This is the person's career progression and survives the position being
     /// reassigned to someone else.
@@ -477,22 +461,12 @@ impl Person {
         OrgTier::get_by_ids(&org_tier_ids)
     }
 
-    /*
-    #[graphql(
-        guard = "RoleGuard::new(UserRole::Analyst)",
-        visible = "is_analyst",
-    )]
-     */
     /// Returns the persons capabilities
     pub async fn capabilities(&self) -> Result<Vec<Capability>> {
         Capability::get_by_person_id(self.id)
     }
 
-    #[graphql(
-        guard = "RoleGuard::new(UserRole::Analyst)",
-        visible = "is_analyst",
-    )]
-    /// Returns a vector of the validations made by the person. Only available to analyst level access and above.
+    /// Returns a vector of the validations made by the person
     pub async fn validations(&self) -> Result<Vec<Validation>> {
         Validation::get_by_validator_id(&self.id)
     }
@@ -501,10 +475,6 @@ impl Person {
         Publication::get_by_contributor_id(&self.id)
     }
 
-    #[graphql(
-        guard = "RoleGuard::new(UserRole::Analyst)",
-        visible = "is_analyst",
-    )]
     /// Returns a vector of the language results for the person
     pub async fn language_data(&self) -> Result<Vec<LanguageData>> {
         LanguageData::get_by_person_id(self.id)

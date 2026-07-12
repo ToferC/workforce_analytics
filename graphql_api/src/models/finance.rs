@@ -398,6 +398,63 @@ impl Contract {
     }
 }
 
+/// Starting year of the fiscal year containing `date` (2026 = FY 2026-27).
+pub fn current_fiscal_year(date: NaiveDate) -> i32 {
+    fiscal_year_start(date).year()
+}
+
+// ---------------------------------------------------------------------------
+// BudgetAllocation
+// ---------------------------------------------------------------------------
+
+/// A dollar envelope granted to an org tier for one fiscal year. Set at L1
+/// and distributed ("rolled down") to L2/L3 children as their own rows. One
+/// row per tier per fiscal year; setting again replaces the amount.
+#[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, SimpleObject)]
+#[diesel(table_name = budget_allocations)]
+pub struct BudgetAllocation {
+    pub id: Uuid,
+    pub org_tier_id: Uuid,
+    /// Starting year of the fiscal year (2026 = FY 2026-27).
+    pub fiscal_year: i32,
+    pub amount_cents: i64,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+impl BudgetAllocation {
+    /// Insert or replace the allocation for (tier, fiscal year).
+    pub fn set(org_tier_id: &Uuid, fiscal_year: i32, amount_cents: i64) -> Result<BudgetAllocation> {
+        if amount_cents < 0 {
+            return Err(Error::new("Allocation cannot be negative"));
+        }
+        let mut conn = connection()?;
+        let now = chrono::Utc::now().naive_utc();
+        let res = diesel::insert_into(budget_allocations::table)
+            .values((
+                budget_allocations::org_tier_id.eq(org_tier_id),
+                budget_allocations::fiscal_year.eq(fiscal_year),
+                budget_allocations::amount_cents.eq(amount_cents),
+            ))
+            .on_conflict((budget_allocations::org_tier_id, budget_allocations::fiscal_year))
+            .do_update()
+            .set((
+                budget_allocations::amount_cents.eq(amount_cents),
+                budget_allocations::updated_at.eq(now),
+            ))
+            .get_result(&mut conn)?;
+        Ok(res)
+    }
+
+    pub fn get_for_fiscal_year(fiscal_year: i32) -> Result<Vec<BudgetAllocation>> {
+        let mut conn = connection()?;
+        let res = budget_allocations::table
+            .filter(budget_allocations::fiscal_year.eq(fiscal_year))
+            .load::<BudgetAllocation>(&mut conn)?;
+        Ok(res)
+    }
+}
+
 /// Fiscal-year summary over a set of contracts. Contract value is committed
 /// spend, so budgeted and projected are the same number and nothing lapses.
 pub fn contracts_summary(contracts: &[Contract], today: NaiveDate) -> FinancialSummary {
@@ -408,6 +465,35 @@ pub fn contracts_summary(contracts: &[Contract], today: NaiveDate) -> FinancialS
         projected_cents: share,
         lapse_cents: 0,
     }
+}
+
+/// One org tier's fiscal-year financial picture, for the analytics rollup.
+/// Salary and contract amounts cover the tier's whole subtree (teams attached
+/// to it or any descendant); allocation fields expose the budget envelope and
+/// how much of it has been rolled down to direct children.
+#[derive(Debug, Clone, Serialize, Deserialize, SimpleObject)]
+pub struct OrgTierFinancialRow {
+    pub org_tier_id: Uuid,
+    pub name_en: String,
+    pub name_fr: String,
+    pub tier_level: i32,
+    pub parent_id: Option<Uuid>,
+    /// Fiscal year the numbers cover, e.g. "2026-27".
+    pub fiscal_year: String,
+    /// This tier's own budget allocation for the fiscal year, if one is set.
+    pub allocation_cents: Option<i64>,
+    /// Sum of the allocations set on this tier's direct children — how much
+    /// of the envelope has been rolled down.
+    pub child_allocated_cents: i64,
+    /// Subtree salary budget plus contract share.
+    pub budgeted_cents: i64,
+    /// Subtree projected spend to March 31 (salary accrual + projection,
+    /// plus committed contract share).
+    pub projected_cents: i64,
+    /// Subtree vacancy lapse.
+    pub lapse_cents: i64,
+    /// Contract portion of the subtree numbers.
+    pub contract_cents: i64,
 }
 
 #[cfg(test)]
@@ -430,6 +516,13 @@ mod tests {
         // Boundary days.
         assert_eq!(fiscal_year_start(d(2026, 4, 1)), d(2026, 4, 1));
         assert_eq!(fiscal_year_start(d(2026, 3, 31)), d(2025, 4, 1));
+    }
+
+    #[test]
+    fn current_fiscal_year_is_start_year() {
+        assert_eq!(current_fiscal_year(d(2026, 7, 11)), 2026);
+        assert_eq!(current_fiscal_year(d(2026, 3, 31)), 2025);
+        assert_eq!(current_fiscal_year(d(2026, 4, 1)), 2026);
     }
 
     #[test]

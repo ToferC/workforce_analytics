@@ -442,6 +442,12 @@ type Mutation {
 	Remove a contract recorded in error.
 	"""
 	deleteContract(id: UUID!): Boolean!
+	"""
+	Set (or replace) an org tier's budget allocation for a fiscal year.
+	The fiscal year is its starting year: 2026 means FY 2026-27. Roll an
+	L1 envelope down by setting allocations on its L2/L3 children.
+	"""
+	setBudgetAllocation(orgTierId: UUID!, fiscalYear: Int!, amountCents: Int!): BudgetAllocation!
 }
 
 """
@@ -567,6 +573,68 @@ input ContractUpdate {
 	totalValueCents: Int
 	status: ContractStatus
 }
+
+"""
+A dollar envelope granted to an org tier for one fiscal year. Set at L1
+and distributed ("rolled down") to L2/L3 children as their own rows. One
+row per tier per fiscal year; setting again replaces the amount.
+"""
+type BudgetAllocation {
+	id: UUID!
+	orgTierId: UUID!
+	"""
+	Starting year of the fiscal year (2026 = FY 2026-27).
+	"""
+	fiscalYear: Int!
+	amountCents: Int!
+	createdAt: NaiveDateTime!
+	updatedAt: NaiveDateTime!
+}
+
+"""
+One org tier's fiscal-year financial picture, for the analytics rollup.
+Salary and contract amounts cover the tier's whole subtree (teams attached
+to it or any descendant); allocation fields expose the budget envelope and
+how much of it has been rolled down to direct children.
+"""
+type OrgTierFinancialRow {
+	orgTierId: UUID!
+	nameEn: String!
+	nameFr: String!
+	tierLevel: Int!
+	parentId: UUID
+	"""
+	Fiscal year the numbers cover, e.g. "2026-27".
+	"""
+	fiscalYear: String!
+	"""
+	This tier's own budget allocation for the fiscal year, if one is set.
+	"""
+	allocationCents: Int
+	"""
+	Sum of the allocations set on this tier's direct children — how much
+	of the envelope has been rolled down.
+	"""
+	childAllocatedCents: Int!
+	"""
+	Subtree salary budget plus contract share.
+	"""
+	budgetedCents: Int!
+	"""
+	Subtree projected spend to March 31 (salary accrual + projection,
+	plus committed contract share).
+	"""
+	projectedCents: Int!
+	"""
+	Subtree vacancy lapse.
+	"""
+	lapseCents: Int!
+	"""
+	Contract portion of the subtree numbers.
+	"""
+	contractCents: Int!
+}
+
 
 
 input NewAffiliation {
@@ -1602,6 +1670,19 @@ type Query {
 	A single contract by id.
 	"""
 	contractById(id: UUID!): Contract!
+	"""
+	Budget allocations for a fiscal year (its starting year; defaults to
+	the current one).
+	"""
+	budgetAllocations(fiscalYear: Int): [BudgetAllocation!]!
+	"""
+	Fiscal-year financials rolled up the org-tier tree: every tier at or
+	above maxLevel (default 3) reports its subtree salary budget,
+	projection to March 31, vacancy lapse and contract share, alongside
+	its budget allocation and how much has been rolled down to children.
+	Scope to one subtree with orgTierId.
+	"""
+	orgTierFinancials(maxLevel: Int! = 3, orgTierId: UUID): [OrgTierFinancialRow!]!
 }
 
 """

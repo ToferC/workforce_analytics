@@ -1,7 +1,7 @@
 use async_graphql::*;
 use uuid::Uuid;
 
-use crate::models::{Contract, ContractUpdate, NewContract, NewPayRate, PayRate};
+use crate::models::{BudgetAllocation, Contract, ContractUpdate, NewContract, NewPayRate, PayRate};
 use crate::common_utils::{RoleGuard, UserRole, is_admin, is_operator};
 use crate::graphql::loaders::off_executor;
 
@@ -53,6 +53,24 @@ impl FinanceMutation {
         contract_data: ContractUpdate,
     ) -> Result<Contract> {
         off_executor(move || Contract::update(&contract_data)).await
+    }
+
+    /// Set (or replace) an org tier's budget allocation for a fiscal year.
+    /// The fiscal year is its starting year: 2026 means FY 2026-27. Roll an
+    /// L1 envelope down by setting allocations on its L2/L3 children.
+    #[graphql(
+        name = "setBudgetAllocation",
+        guard = "RoleGuard::new(UserRole::Operator)",
+        visible = "is_operator",
+    )]
+    pub async fn set_budget_allocation(
+        &self,
+        _context: &Context<'_>,
+        org_tier_id: Uuid,
+        fiscal_year: i32,
+        amount_cents: i64,
+    ) -> Result<BudgetAllocation> {
+        off_executor(move || BudgetAllocation::set(&org_tier_id, fiscal_year, amount_cents)).await
     }
 
     /// Remove a contract recorded in error.

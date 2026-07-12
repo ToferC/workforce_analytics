@@ -405,6 +405,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    budget_allocations (id) {
+        id -> Uuid,
+        org_tier_id -> Uuid,
+        fiscal_year -> Int4,
+        amount_cents -> Int8,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     role_assignments (id) {
         id -> Uuid,
         role_id -> Uuid,
@@ -661,10 +672,12 @@ diesel::joinable!(works -> roles (role_id));
 diesel::joinable!(works -> skills (skill_id));
 diesel::joinable!(works -> tasks (task_id));
 diesel::joinable!(contracts -> tasks (task_id));
+diesel::joinable!(budget_allocations -> org_tiers (org_tier_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     affiliations,
     audit_events,
+    budget_allocations,
     capabilities,
     contracts,
     language_datas,

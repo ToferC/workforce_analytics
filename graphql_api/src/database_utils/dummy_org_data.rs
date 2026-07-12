@@ -13,6 +13,7 @@ use crate::models::{Person, Organization, NewPerson, NewOrganization,
     TeamOwnership, NewTeamOwnership, MilitaryOccupation, OccupationalGroup, PersonnelType, Rank, SkillDomain, Skill, NewWork, CapabilityLevel, Priority, WorkStatus, Work,
     NewRequirement, Requirement, User, InsertableUser,
     NewPayRate, PayRate, NewContract, Contract, ContractStatus, Task,
+    BudgetAllocation, current_fiscal_year,
 };
 
 use super::{create_fake_capabilities, generate_dummy_products, generate_dummy_publications_and_contributors, generate_tasks};
@@ -663,8 +664,31 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
     println!("Pre-populating contracts");
     let _res = generate_dummy_contracts().expect("Unable to create contracts");
 
+    // Grant budget envelopes to L1/L2 tiers based on their computed costs.
+    println!("Pre-populating budget allocations");
+    let _res = pre_populate_budget_allocations().expect("Unable to create budget allocations");
+
     Ok(())
 
+}
+
+/// Give every level-1 and level-2 tier a fiscal-year allocation of roughly
+/// 105% of its computed subtree budget, rounded up to the nearest $100k —
+/// enough headroom to look deliberate. L3 tiers are left unallocated so the
+/// roll-down workflow has somewhere to go.
+pub fn pre_populate_budget_allocations() -> Result<(), Error> {
+    let rows = crate::graphql::query::compute_org_tier_financials(2, None)
+        .map_err(|e| Error::new(format!("financials: {:?}", e.message)))?;
+    let fy = current_fiscal_year(chrono::Utc::now().date_naive());
+
+    for row in rows.iter().filter(|r| r.budgeted_cents > 0) {
+        let padded = (row.budgeted_cents as f64) * 1.05;
+        let amount = ((padded / 10_000_000.0).ceil() as i64) * 10_000_000;
+        BudgetAllocation::set(&row.org_tier_id, fy, amount)
+            .map_err(|e| Error::new(format!("allocation: {:?}", e.message)))?;
+    }
+
+    Ok(())
 }
 
 /// Seed a plausible annual rate for every classification: each occupational

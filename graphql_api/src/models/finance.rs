@@ -419,6 +419,21 @@ pub fn current_fiscal_year(date: NaiveDate) -> i32 {
     fiscal_year_start(date).year()
 }
 
+/// Evaluation date for costing a fiscal year: today when it is the current
+/// FY; April 1 of the year for a future FY (nothing accrued yet — a pure
+/// plan, where currently-open assignments project forward); March 31 ending
+/// a past FY (everything accrued — actuals for that year).
+pub fn fiscal_year_reference_date(fiscal_year: i32, today: NaiveDate) -> NaiveDate {
+    let current = current_fiscal_year(today);
+    if fiscal_year == current {
+        today
+    } else if fiscal_year > current {
+        NaiveDate::from_ymd_opt(fiscal_year, 4, 1).expect("valid fiscal year start")
+    } else {
+        NaiveDate::from_ymd_opt(fiscal_year + 1, 3, 31).expect("valid fiscal year end")
+    }
+}
+
 // ---------------------------------------------------------------------------
 // BudgetAllocation
 // ---------------------------------------------------------------------------
@@ -539,6 +554,16 @@ mod tests {
         assert_eq!(current_fiscal_year(d(2026, 7, 11)), 2026);
         assert_eq!(current_fiscal_year(d(2026, 3, 31)), 2025);
         assert_eq!(current_fiscal_year(d(2026, 4, 1)), 2026);
+    }
+
+    #[test]
+    fn reference_date_by_fiscal_year() {
+        let today = d(2026, 7, 11); // inside FY 2026-27
+        assert_eq!(fiscal_year_reference_date(2026, today), today);
+        // Future FY evaluates from its April 1 (pure plan, nothing accrued).
+        assert_eq!(fiscal_year_reference_date(2027, today), d(2027, 4, 1));
+        // Past FY evaluates at its March 31 (all actuals).
+        assert_eq!(fiscal_year_reference_date(2025, today), d(2026, 3, 31));
     }
 
     #[test]

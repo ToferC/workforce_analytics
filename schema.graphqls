@@ -444,10 +444,12 @@ type Mutation {
 	deleteContract(id: UUID!): Boolean!
 	"""
 	Set (or replace) an org tier's budget allocation for a fiscal year.
-	The fiscal year is its starting year: 2026 means FY 2026-27. Roll an
-	L1 envelope down by setting allocations on its L2/L3 children.
+	The fiscal year is its starting year (2026 means FY 2026-27) and
+	defaults to the current one, so the April-1 rule lives only in the
+	API. Roll an L1 envelope down by setting allocations on its L2/L3
+	children.
 	"""
-	setBudgetAllocation(orgTierId: UUID!, fiscalYear: Int!, amountCents: Int!): BudgetAllocation!
+	setBudgetAllocation(orgTierId: UUID!, fiscalYear: Int, amountCents: Int!): BudgetAllocation!
 }
 
 """
@@ -1682,7 +1684,7 @@ type Query {
 	its budget allocation and how much has been rolled down to children.
 	Scope to one subtree with orgTierId.
 	"""
-	orgTierFinancials(maxLevel: Int! = 3, orgTierId: UUID): [OrgTierFinancialRow!]!
+	orgTierFinancials(maxLevel: Int! = 3, orgTierId: UUID, fiscalYear: Int): [OrgTierFinancialRow!]!
 }
 
 """

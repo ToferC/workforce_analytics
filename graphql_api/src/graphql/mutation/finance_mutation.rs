@@ -56,8 +56,10 @@ impl FinanceMutation {
     }
 
     /// Set (or replace) an org tier's budget allocation for a fiscal year.
-    /// The fiscal year is its starting year: 2026 means FY 2026-27. Roll an
-    /// L1 envelope down by setting allocations on its L2/L3 children.
+    /// The fiscal year is its starting year (2026 means FY 2026-27) and
+    /// defaults to the current one, so the April-1 rule lives only in the
+    /// API. Roll an L1 envelope down by setting allocations on its L2/L3
+    /// children.
     #[graphql(
         name = "setBudgetAllocation",
         guard = "RoleGuard::new(UserRole::Operator)",
@@ -67,10 +69,15 @@ impl FinanceMutation {
         &self,
         _context: &Context<'_>,
         org_tier_id: Uuid,
-        fiscal_year: i32,
+        fiscal_year: Option<i32>,
         amount_cents: i64,
     ) -> Result<BudgetAllocation> {
-        off_executor(move || BudgetAllocation::set(&org_tier_id, fiscal_year, amount_cents)).await
+        off_executor(move || {
+            let fy = fiscal_year
+                .unwrap_or_else(|| crate::models::current_fiscal_year(chrono::Utc::now().date_naive()));
+            BudgetAllocation::set(&org_tier_id, fy, amount_cents)
+        })
+        .await
     }
 
     /// Remove a contract recorded in error.

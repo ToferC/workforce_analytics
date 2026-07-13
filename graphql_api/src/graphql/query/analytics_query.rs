@@ -13,7 +13,8 @@ use crate::models::{
     TalentMovement,
     SkillDomain, CapabilityLevel, WorkStatus,
     BudgetAllocation, Contract, OrgTierFinancialRow, PayRate,
-    current_fiscal_year, fiscal_year_end, fiscal_year_label, fiscal_year_start, salary_summary,
+    current_fiscal_year, fiscal_year_end, fiscal_year_label, fiscal_year_reference_date,
+    fiscal_year_start, salary_summary,
 };
 use crate::common_utils::{RoleGuard, UserRole};
 use crate::graphql::loaders::off_executor;
@@ -412,12 +413,16 @@ impl TeamCapabilityMatrixQuery {
     /// its budget allocation and how much has been rolled down to children.
     /// Scope to one subtree with `orgTierId`.
     #[graphql(guard = "RoleGuard::new(UserRole::User)")]
+    /// `fiscalYear` selects the year to cost (its starting year, e.g. 2027
+    /// for FY 2027-28) and defaults to the current one; a future year is a
+    /// pure plan (nothing accrued), a past year is actuals.
     pub async fn org_tier_financials(
         &self,
         #[graphql(default = 3)] max_level: i32,
         org_tier_id: Option<Uuid>,
+        fiscal_year: Option<i32>,
     ) -> Result<Vec<OrgTierFinancialRow>> {
-        off_executor(move || compute_org_tier_financials(max_level, org_tier_id)).await
+        off_executor(move || compute_org_tier_financials(max_level, org_tier_id, fiscal_year)).await
     }
 }
 
@@ -859,19 +864,28 @@ pub struct AnalyticsQuery(
 pub(crate) fn compute_org_tier_financials(
     max_level: i32,
     scope_tier_id: Option<Uuid>,
+    fiscal_year: Option<i32>,
 ) -> Result<Vec<OrgTierFinancialRow>> {
     let mut conn = connection()?;
-    let today = Utc::now().date_naive();
 
-    // Tier tree with display data.
-    let tier_rows: Vec<(Uuid, Option<Uuid>, String, String, i32)> = org_tiers::table
-        .filter(org_tiers::retired_at.is_null())
+    // All costing math evaluates as of one reference date inside the
+    // requested fiscal year: today for the current FY, April 1 for a future
+    // FY (a pure plan), March 31 for a past FY (actuals).
+    let today = Utc::now().date_naive();
+    let fy = fiscal_year.unwrap_or_else(|| current_fiscal_year(today));
+    let reference = fiscal_year_reference_date(fy, today);
+
+    // Tier tree with display data. Retired tiers stay IN the tree so the
+    // costs of teams still attached at or below them roll up to their live
+    // ancestors; they are only excluded from the emitted rows.
+    let tier_rows: Vec<(Uuid, Option<Uuid>, String, String, i32, Option<NaiveDateTime>)> = org_tiers::table
         .select((
             org_tiers::id,
             org_tiers::parent_tier,
             org_tiers::name_en,
             org_tiers::name_fr,
             org_tiers::tier_level,
+            org_tiers::retired_at,
         ))
         .load(&mut conn)?;
     let parents: HashMap<Uuid, Option<Uuid>> =
@@ -931,8 +945,8 @@ pub(crate) fn compute_org_tier_financials(
         role_query.load(&mut conn)?
     };
 
-    let fy_start_ts = fiscal_year_start(today).and_hms_opt(0, 0, 0).expect("midnight");
-    let fy_end_ts = fiscal_year_end(today).and_hms_opt(23, 59, 59).expect("end of day");
+    let fy_start_ts = fiscal_year_start(reference).and_hms_opt(0, 0, 0).expect("midnight");
+    let fy_end_ts = fiscal_year_end(reference).and_hms_opt(23, 59, 59).expect("end of day");
     let assignment_rows: Vec<(Uuid, NaiveDateTime, Option<NaiveDateTime>)> = {
         let mut assignment_query = role_assignments::table
             .select((
@@ -972,7 +986,7 @@ pub(crate) fn compute_org_tier_financials(
         let rate = override_cents.or_else(|| PayRate::rate_from(&rates, *group, *level, *rank));
         let Some(rate) = rate else { continue };
         let periods = assignments_by_role.get(role_id).unwrap_or(&empty);
-        let summary = salary_summary(rate, (start.date(), end.map(|e| e.date())), periods, today);
+        let summary = salary_summary(rate, (start.date(), end.map(|e| e.date())), periods, reference);
         let slot = direct.entry(*tier_id).or_default();
         slot.0 += summary.budgeted_cents;
         slot.1 += summary.projected_cents;
@@ -997,7 +1011,7 @@ pub(crate) fn compute_org_tier_financials(
     };
     for (contract, team_id) in contract_rows {
         let Some(tier_id) = team_tier.get(&team_id) else { continue };
-        let share = contract.fiscal_year_share_cents(today);
+        let share = contract.fiscal_year_share_cents(reference);
         let slot = direct.entry(*tier_id).or_default();
         slot.0 += share;
         slot.1 += share;
@@ -1023,8 +1037,7 @@ pub(crate) fn compute_org_tier_financials(
         }
     }
 
-    // Allocations for the current fiscal year, plus per-parent roll-down sums.
-    let fy = current_fiscal_year(today);
+    // Allocations for the requested fiscal year, plus per-parent roll-down sums.
     let allocations = BudgetAllocation::get_for_fiscal_year(fy)?;
     let allocation_by_tier: HashMap<Uuid, i64> = allocations
         .iter()
@@ -1037,11 +1050,13 @@ pub(crate) fn compute_org_tier_financials(
         }
     }
 
-    let fy_label = fiscal_year_label(today);
+    let fy_label = fiscal_year_label(reference);
     let mut out: Vec<OrgTierFinancialRow> = tier_rows
         .iter()
-        .filter(|(id, _, _, _, level)| *level <= max_level && tier_in_scope(id))
-        .map(|(id, parent, name_en, name_fr, level)| {
+        .filter(|(id, _, _, _, level, retired_at)| {
+            *level <= max_level && retired_at.is_none() && tier_in_scope(id)
+        })
+        .map(|(id, parent, name_en, name_fr, level, _)| {
             let amounts = subtree.get(id).copied().unwrap_or_default();
             OrgTierFinancialRow {
                 org_tier_id: *id,

@@ -677,7 +677,7 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
 /// enough headroom to look deliberate. L3 tiers are left unallocated so the
 /// roll-down workflow has somewhere to go.
 pub fn pre_populate_budget_allocations() -> Result<(), Error> {
-    let rows = crate::graphql::query::compute_org_tier_financials(2, None)
+    let rows = crate::graphql::query::compute_org_tier_financials(2, None, None)
         .map_err(|e| Error::new(format!("financials: {:?}", e.message)))?;
     let fy = current_fiscal_year(chrono::Utc::now().date_naive());
 

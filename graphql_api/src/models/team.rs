@@ -273,12 +273,18 @@ impl Team {
     /// Fiscal-year cost picture for the whole team: salary budget, projection
     /// and vacancy lapse across every role (priced by override or pay rate),
     /// plus the FY share of contracts under tasks created by the team's roles.
-    pub async fn finances(&self) -> Result<FinancialSummary> {
+    pub async fn finances(&self, ctx: &Context<'_>) -> Result<FinancialSummary> {
         let team_id = self.id;
+        // Per-request rate table via the loader: a team list requesting
+        // finances loads the rates once, not once per team.
+        let rates = ctx
+            .data_unchecked::<DataLoader<crate::graphql::loaders::PayRatesLoader>>()
+            .load_one(())
+            .await?
+            .unwrap_or_default();
         crate::graphql::loaders::off_executor(move || {
             let today = Utc::now().date_naive();
             let roles = Role::get_by_team_id(team_id)?;
-            let rates = PayRate::get_effective(Utc::now().naive_utc())?;
 
             let role_ids: Vec<Uuid> = roles.iter().map(|r| r.id).collect();
             let mut by_role: std::collections::HashMap<Uuid, Vec<(NaiveDate, Option<NaiveDate>)>> =

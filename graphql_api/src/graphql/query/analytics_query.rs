@@ -13,7 +13,7 @@ use crate::models::{
     TalentMovement,
     SkillDomain, CapabilityLevel, WorkStatus,
     BudgetAllocation, Contract, OrgTierFinancialRow, PayRate,
-    current_fiscal_year, fiscal_year_label, salary_summary,
+    current_fiscal_year, fiscal_year_end, fiscal_year_label, fiscal_year_start, salary_summary,
 };
 use crate::common_utils::{RoleGuard, UserRole};
 use crate::graphql::loaders::off_executor;
@@ -886,11 +886,21 @@ pub(crate) fn compute_org_tier_financials(
     let tier_in_scope =
         |id: &Uuid| in_scope.as_ref().map_or(true, |scope| scope.contains(id));
 
-    // Teams and their tier attachment.
-    let team_rows: Vec<(Uuid, Uuid)> = teams::table
+    // Teams and their tier attachment. A subtree scope restricts everything
+    // downstream (roles, assignments, contracts) in SQL, so a scoped call
+    // prices its subtree instead of the whole organization.
+    let mut team_query = teams::table
         .select((teams::id, teams::org_tier_id))
-        .load(&mut conn)?;
-    let team_tier: HashMap<Uuid, Uuid> = team_rows.into_iter().collect();
+        .into_boxed();
+    if let Some(scope) = &in_scope {
+        let scope_ids: Vec<Uuid> = scope.iter().copied().collect();
+        team_query = team_query.filter(teams::org_tier_id.eq_any(scope_ids));
+    }
+    let team_rows: Vec<(Uuid, Uuid)> = team_query.load(&mut conn)?;
+    let team_tier: HashMap<Uuid, Uuid> = team_rows.iter().copied().collect();
+    let scoped_team_ids: Option<Vec<Uuid>> = in_scope
+        .as_ref()
+        .map(|_| team_rows.iter().map(|(id, _)| *id).collect());
 
     // Every role priced and costed, in three bulk loads.
     let role_rows: Vec<(
@@ -902,26 +912,48 @@ pub(crate) fn compute_org_tier_financials(
         Option<i64>,
         NaiveDateTime,
         Option<NaiveDateTime>,
-    )> = roles::table
-        .select((
-            roles::id,
-            roles::team_id,
-            roles::occupational_group,
-            roles::occupational_level,
-            roles::rank,
-            roles::annual_salary_cents,
-            roles::start_datestamp,
-            roles::end_date,
-        ))
-        .load(&mut conn)?;
+    )> = {
+        let mut role_query = roles::table
+            .select((
+                roles::id,
+                roles::team_id,
+                roles::occupational_group,
+                roles::occupational_level,
+                roles::rank,
+                roles::annual_salary_cents,
+                roles::start_datestamp,
+                roles::end_date,
+            ))
+            .into_boxed();
+        if let Some(team_ids) = &scoped_team_ids {
+            role_query = role_query.filter(roles::team_id.eq_any(team_ids));
+        }
+        role_query.load(&mut conn)?
+    };
 
-    let assignment_rows: Vec<(Uuid, NaiveDateTime, Option<NaiveDateTime>)> = role_assignments::table
-        .select((
-            role_assignments::role_id,
-            role_assignments::start_date,
-            role_assignments::end_date,
-        ))
-        .load(&mut conn)?;
+    let fy_start_ts = fiscal_year_start(today).and_hms_opt(0, 0, 0).expect("midnight");
+    let fy_end_ts = fiscal_year_end(today).and_hms_opt(23, 59, 59).expect("end of day");
+    let assignment_rows: Vec<(Uuid, NaiveDateTime, Option<NaiveDateTime>)> = {
+        let mut assignment_query = role_assignments::table
+            .select((
+                role_assignments::role_id,
+                role_assignments::start_date,
+                role_assignments::end_date,
+            ))
+            // Assignments that ended before this fiscal year contribute zero
+            // occupied days, so skip loading them.
+            .filter(
+                role_assignments::end_date
+                    .is_null()
+                    .or(role_assignments::end_date.ge(fy_start_ts)),
+            )
+            .into_boxed();
+        if scoped_team_ids.is_some() {
+            let role_ids: Vec<Uuid> = role_rows.iter().map(|r| r.0).collect();
+            assignment_query = assignment_query.filter(role_assignments::role_id.eq_any(role_ids));
+        }
+        assignment_query.load(&mut conn)?
+    };
     let mut assignments_by_role: HashMap<Uuid, Vec<(NaiveDate, Option<NaiveDate>)>> = HashMap::new();
     for (role_id, start, end) in assignment_rows {
         assignments_by_role
@@ -948,11 +980,21 @@ pub(crate) fn compute_org_tier_financials(
     }
 
     // Contract FY shares, attached via task -> creating role -> team -> tier.
-    let contract_rows: Vec<(Contract, Uuid)> = contracts::table
-        .inner_join(tasks::table.on(tasks::id.eq(contracts::task_id)))
-        .inner_join(roles::table.on(roles::id.eq(tasks::created_by_role_id)))
-        .select((contracts::all_columns, roles::team_id))
-        .load(&mut conn)?;
+    let contract_rows: Vec<(Contract, Uuid)> = {
+        let mut contract_query = contracts::table
+            .inner_join(tasks::table.on(tasks::id.eq(contracts::task_id)))
+            .inner_join(roles::table.on(roles::id.eq(tasks::created_by_role_id)))
+            .select((contracts::all_columns, roles::team_id))
+            // Only contracts whose period touches this fiscal year can have
+            // a non-zero share.
+            .filter(contracts::end_date.ge(fy_start_ts))
+            .filter(contracts::start_date.le(fy_end_ts))
+            .into_boxed();
+        if let Some(team_ids) = &scoped_team_ids {
+            contract_query = contract_query.filter(roles::team_id.eq_any(team_ids));
+        }
+        contract_query.load(&mut conn)?
+    };
     for (contract, team_id) in contract_rows {
         let Some(tier_id) = team_tier.get(&team_id) else { continue };
         let share = contract.fiscal_year_share_cents(today);

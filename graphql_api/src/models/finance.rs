@@ -343,12 +343,28 @@ impl Contract {
 
     pub fn update(update: &ContractUpdate) -> Result<Contract> {
         let mut conn = connection()?;
-        let res: Contract = diesel::update(contracts::table.filter(contracts::id.eq(update.id)))
-            .set(update)
-            .get_result(&mut conn)?;
-        if res.end_date < res.start_date {
+
+        // Validate the EFFECTIVE row (current values merged with the update)
+        // before touching the database, so an invalid edit is rejected with a
+        // clean message and nothing is written.
+        let current: Contract = contracts::table
+            .filter(contracts::id.eq(update.id))
+            .first(&mut conn)?;
+        let start = update.start_date.unwrap_or(current.start_date);
+        let end = update.end_date.unwrap_or(current.end_date);
+        if end < start {
             return Err(Error::new("Contract end date cannot precede its start date"));
         }
+        if update.total_value_cents.is_some_and(|v| v < 0) {
+            return Err(Error::new("Contract value cannot be negative"));
+        }
+        if update.reference_number.as_deref().is_some_and(|r| r.trim().is_empty()) {
+            return Err(Error::new("Contract reference number is required"));
+        }
+
+        let res = diesel::update(contracts::table.filter(contracts::id.eq(update.id)))
+            .set(update)
+            .get_result(&mut conn)?;
         Ok(res)
     }
 

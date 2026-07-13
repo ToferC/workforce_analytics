@@ -11,7 +11,7 @@ use async_graphql::*;
 use async_graphql::dataloader::DataLoader;
 
 use crate::config_variables::DATE_FORMAT;
-use crate::graphql::loaders::{AssignmentsByRoleLoader, EffortByRoleLoader, PersonLoader, RequirementsByRoleLoader, TeamLoader, WorkByRoleLoader};
+use crate::graphql::loaders::{AssignmentsByRoleLoader, EffortByRoleLoader, PayRatesLoader, PersonLoader, RequirementsByRoleLoader, TeamLoader, WorkByRoleLoader};
 
 use crate::schema::*;
 use crate::database::{connection, DbConnection};
@@ -145,8 +145,8 @@ impl Role {
     /// The annual salary pricing this role in cents: the per-role override if
     /// set, otherwise the pay-rate in force for the role's classification.
     /// Null when the role has neither an override nor a priced classification.
-    pub async fn annual_salary(&self) -> Result<Option<i64>> {
-        self.effective_annual_rate().await
+    pub async fn annual_salary(&self, ctx: &Context<'_>) -> Result<Option<i64>> {
+        self.effective_annual_rate(ctx).await
     }
 
     /// Fiscal-year salary cost picture for this role: budget for every day
@@ -154,7 +154,7 @@ impl Role {
     /// the assignment ledger), the projection to March 31, and the vacancy
     /// lapse. Null when the role cannot be priced.
     pub async fn finances(&self, ctx: &Context<'_>) -> Result<Option<FinancialSummary>> {
-        let rate = match self.effective_annual_rate().await? {
+        let rate = match self.effective_annual_rate(ctx).await? {
             Some(r) => r,
             None => return Ok(None),
         };
@@ -312,16 +312,18 @@ impl Role {
 impl Role {
     /// The annual rate pricing this role in cents: the per-role override if
     /// set, otherwise the pay-rate in force for the role's classification.
-    pub async fn effective_annual_rate(&self) -> Result<Option<i64>> {
+    /// Rates come from the per-request `PayRatesLoader`, so pricing N roles
+    /// in one query loads the table once, not N times.
+    pub async fn effective_annual_rate(&self, ctx: &Context<'_>) -> Result<Option<i64>> {
         if self.annual_salary_cents.is_some() {
             return Ok(self.annual_salary_cents);
         }
-        let (group, level, rank) = (self.occupational_group, self.occupational_level, self.rank);
-        off_executor(move || {
-            let rates = PayRate::get_effective(Utc::now().naive_utc())?;
-            Ok(PayRate::rate_from(&rates, group, level, rank))
-        })
-        .await
+        let rates = ctx
+            .data_unchecked::<DataLoader<PayRatesLoader>>()
+            .load_one(())
+            .await?
+            .unwrap_or_default();
+        Ok(PayRate::rate_from(&rates, self.occupational_group, self.occupational_level, self.rank))
     }
 
     pub fn create(role: &NewRole) -> Result<Role> {

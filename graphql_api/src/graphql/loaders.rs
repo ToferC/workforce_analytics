@@ -12,7 +12,9 @@ use std::collections::HashMap;
 use async_graphql::dataloader::Loader;
 use uuid::Uuid;
 
-use crate::models::{Person, Product, Requirement, Role, RoleAssignment, Task, Team, Work};
+use std::sync::Arc;
+
+use crate::models::{PayRate, Person, Product, Requirement, Role, RoleAssignment, Task, Team, Work};
 
 /// `Loader::Error` must be `Send + Clone + 'static`. `async_graphql::Error`
 /// already satisfies that, and is what the model getters return, so it passes
@@ -127,6 +129,25 @@ impl Loader<Uuid> for AssignmentsByRoleLoader {
             grouped.entry(assignment.role_id).or_default().push(assignment);
         }
         Ok(grouped)
+    }
+}
+
+/// Per-request memo of the effective pay-rate table. The table is tiny but
+/// pricing is per-role, so without this a roles list requesting salaries
+/// reloads the same rows once per role. Keyed by unit (`()`): every caller
+/// asks for the same key, so the DataLoader's request-scoped cache makes the
+/// table load exactly once per request.
+pub struct PayRatesLoader;
+
+impl Loader<()> for PayRatesLoader {
+    type Value = Arc<Vec<PayRate>>;
+    type Error = LoadError;
+
+    async fn load(&self, keys: &[()]) -> Result<HashMap<(), Arc<Vec<PayRate>>>, Self::Error> {
+        let rates = Arc::new(
+            off_executor(|| PayRate::get_effective(chrono::Utc::now().naive_utc())).await?,
+        );
+        Ok(keys.iter().map(|_| ((), rates.clone())).collect())
     }
 }
 

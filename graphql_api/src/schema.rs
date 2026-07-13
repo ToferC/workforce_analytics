@@ -6,6 +6,10 @@ pub mod sql_types {
     pub struct CapabilityLevel;
 
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "contract_status"))]
+    pub struct ContractStatus;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "language_level"))]
     pub struct LanguageLevel;
 
@@ -358,6 +362,56 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         reports_to -> Nullable<Uuid>,
+        annual_salary_cents -> Nullable<Int8>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::Rank;
+    use super::sql_types::OccupationalGroup;
+
+    pay_rates (id) {
+        id -> Uuid,
+        occupational_group -> Nullable<OccupationalGroup>,
+        occupational_level -> Nullable<Int4>,
+        rank -> Nullable<Rank>,
+        annual_rate_cents -> Int8,
+        effective_date -> Timestamp,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::ContractStatus;
+
+    contracts (id) {
+        id -> Uuid,
+        task_id -> Uuid,
+        #[max_length = 64]
+        reference_number -> Varchar,
+        #[max_length = 256]
+        vendor -> Varchar,
+        description -> Text,
+        start_date -> Timestamp,
+        end_date -> Timestamp,
+        total_value_cents -> Int8,
+        status -> ContractStatus,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    budget_allocations (id) {
+        id -> Uuid,
+        org_tier_id -> Uuid,
+        fiscal_year -> Int4,
+        amount_cents -> Int8,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -617,15 +671,20 @@ diesel::joinable!(validations -> users (validator_id));
 diesel::joinable!(works -> roles (role_id));
 diesel::joinable!(works -> skills (skill_id));
 diesel::joinable!(works -> tasks (task_id));
+diesel::joinable!(contracts -> tasks (task_id));
+diesel::joinable!(budget_allocations -> org_tiers (org_tier_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     affiliations,
     audit_events,
+    budget_allocations,
     capabilities,
+    contracts,
     language_datas,
     org_tier_ownerships,
     org_tiers,
     organizations,
+    pay_rates,
     persons,
     products,
     publication_contributors,

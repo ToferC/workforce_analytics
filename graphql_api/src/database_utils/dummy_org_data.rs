@@ -12,6 +12,8 @@ use crate::models::{Person, Organization, NewPerson, NewOrganization,
     Role, NewRole, RoleAssignment, Team, NewTeam, OrgTier, NewOrgTier, OrgOwnership, NewOrgOwnership,
     TeamOwnership, NewTeamOwnership, MilitaryOccupation, OccupationalGroup, PersonnelType, Rank, SkillDomain, Skill, NewWork, CapabilityLevel, Priority, WorkStatus, Work,
     NewRequirement, Requirement, User, InsertableUser,
+    NewPayRate, PayRate, NewContract, Contract, ContractStatus, Task,
+    BudgetAllocation, current_fiscal_year,
 };
 
 use super::{create_fake_capabilities, generate_dummy_products, generate_dummy_publications_and_contributors, generate_tasks};
@@ -654,8 +656,156 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
 
     let _res = Requirement::batch_create(&requirements_vec)?;
 
+    // Price every classification so the financial module has data.
+    println!("Pre-populating pay rates");
+    let _res = pre_populate_pay_rates().expect("Unable to create pay rates");
+
+    // Record contracts under a sample of tasks.
+    println!("Pre-populating contracts");
+    let _res = generate_dummy_contracts().expect("Unable to create contracts");
+
+    // Grant budget envelopes to L1/L2 tiers based on their computed costs.
+    println!("Pre-populating budget allocations");
+    let _res = pre_populate_budget_allocations().expect("Unable to create budget allocations");
+
     Ok(())
 
+}
+
+/// Give every level-1 and level-2 tier a fiscal-year allocation of roughly
+/// 105% of its computed subtree budget, rounded up to the nearest $100k —
+/// enough headroom to look deliberate. L3 tiers are left unallocated so the
+/// roll-down workflow has somewhere to go.
+pub fn pre_populate_budget_allocations() -> Result<(), Error> {
+    let rows = crate::graphql::query::compute_org_tier_financials(2, None, None)
+        .map_err(|e| Error::new(format!("financials: {:?}", e.message)))?;
+    let fy = current_fiscal_year(chrono::Utc::now().date_naive());
+
+    for row in rows.iter().filter(|r| r.budgeted_cents > 0) {
+        let padded = (row.budgeted_cents as f64) * 1.05;
+        let amount = ((padded / 10_000_000.0).ceil() as i64) * 10_000_000;
+        BudgetAllocation::set(&row.org_tier_id, fy, amount)
+            .map_err(|e| Error::new(format!("allocation: {:?}", e.message)))?;
+    }
+
+    Ok(())
+}
+
+/// Seed a plausible annual rate for every classification: each occupational
+/// group at levels 1-7 and every military rank. Values are synthetic but
+/// ordered sensibly (seniority pays more); real deployments replace them via
+/// the createPayRate mutation.
+pub fn pre_populate_pay_rates() -> Result<(), Error> {
+    let effective = chrono::Utc::now().naive_utc() - chrono::Duration::days(365);
+
+    let groups = [
+        OccupationalGroup::AdministrativeServices,
+        OccupationalGroup::ComputerSystems,
+        OccupationalGroup::EconomicsAndSocialScience,
+        OccupationalGroup::Engineering,
+        OccupationalGroup::Executive,
+        OccupationalGroup::FinancialManagement,
+        OccupationalGroup::HumanResources,
+        OccupationalGroup::InformationServices,
+        OccupationalGroup::ProgramAdministration,
+        OccupationalGroup::Research,
+        OccupationalGroup::TechnicalServices,
+        OccupationalGroup::Other,
+    ];
+
+    for group in groups {
+        for level in 1..=7 {
+            // Executives start higher and climb faster.
+            let annual_cents = if group == OccupationalGroup::Executive {
+                (125_000 + 18_000 * level as i64) * 100
+            } else {
+                (58_000 + 9_500 * level as i64) * 100
+            };
+            PayRate::create(&NewPayRate {
+                occupational_group: Some(group),
+                occupational_level: Some(level),
+                rank: None,
+                annual_rate_cents: annual_cents,
+                effective_date: effective,
+            })
+            .map_err(|e| Error::new(format!("pay rate: {:?}", e.message)))?;
+        }
+    }
+
+    let ranks = [
+        Rank::Private,
+        Rank::Corporal,
+        Rank::MasterCorporal,
+        Rank::Sergeant,
+        Rank::WarrantOfficer,
+        Rank::MasterWarrantOfficer,
+        Rank::ChiefWarrantOfficer,
+        Rank::SecondLieutenant,
+        Rank::Lieutenant,
+        Rank::Captain,
+        Rank::Major,
+        Rank::LieutenantColonel,
+        Rank::Colonel,
+        Rank::BrigadierGeneral,
+        Rank::MajorGeneral,
+        Rank::LieutenantGeneral,
+        Rank::General,
+    ];
+
+    for (idx, rank) in ranks.iter().enumerate() {
+        let annual_cents = (54_000 + 11_500 * idx as i64) * 100;
+        PayRate::create(&NewPayRate {
+            occupational_group: None,
+            occupational_level: None,
+            rank: Some(*rank),
+            annual_rate_cents: annual_cents,
+            effective_date: effective,
+        })
+        .map_err(|e| Error::new(format!("pay rate: {:?}", e.message)))?;
+    }
+
+    Ok(())
+}
+
+/// Attach one or two contracts to roughly a fifth of tasks, with periods
+/// straddling the current fiscal year so projections have something to show.
+pub fn generate_dummy_contracts() -> Result<(), Error> {
+    let mut rng = rand::thread_rng();
+    let today = chrono::Utc::now().naive_utc();
+
+    let vendors = [
+        "Adga Group", "CGI Information Systems", "Calian Group", "Deloitte",
+        "IBM Canada", "MDA Space", "Thales Canada", "Valcom Consulting",
+    ];
+
+    let tasks = Task::get_all().map_err(|e| Error::new(format!("tasks: {:?}", e.message)))?;
+    let mut seq = 1000;
+    for task in tasks.iter() {
+        if !rng.gen_bool(0.2) {
+            continue;
+        }
+        for _ in 0..rng.gen_range(1..=2) {
+            seq += 1;
+            let start_offset = rng.gen_range(-180..90);
+            let duration = rng.gen_range(90..540);
+            let start = today + chrono::Duration::days(start_offset);
+            let end = start + chrono::Duration::days(duration);
+            let value_cents = rng.gen_range(25_000..2_000_000i64) * 100;
+            Contract::create(&NewContract {
+                task_id: task.id,
+                reference_number: format!("PSPC-{}-{}", chrono::Datelike::year(&start.date()), seq),
+                vendor: vendors.choose(&mut rng).unwrap().to_string(),
+                description: format!("Professional services in support of: {}", task.title),
+                start_date: start,
+                end_date: end,
+                total_value_cents: value_cents,
+                status: if start > today { ContractStatus::Planned } else { ContractStatus::Active },
+            })
+            .map_err(|e| Error::new(format!("contract: {:?}", e.message)))?;
+        }
+    }
+
+    Ok(())
 }
 
 

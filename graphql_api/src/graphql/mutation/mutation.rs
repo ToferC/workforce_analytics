@@ -9,7 +9,7 @@ use crate::graphql::mutation::{
     TeamMutation, TeamOwnershipMutation, AffiliationMutation,
     PublicationMutation, PublicationContributorMutation,
     WorkMutation, TaskMutation, ProductMutation, RequirementMutation,
-    ValidationMutation, LanguageMutation, SelfServiceMutation,
+    ValidationMutation, LanguageMutation, SelfServiceMutation, FinanceMutation,
 };
 
 // async-graphql expands a MergedObject into a single `resolve_field` async
@@ -57,4 +57,5 @@ pub struct WorkMutations(
     ProductMutation,
     RequirementMutation,
     SelfServiceMutation,
+    FinanceMutation,
 );

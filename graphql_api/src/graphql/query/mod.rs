@@ -14,6 +14,7 @@ mod product;
 mod self_service_query;
 mod audit_query;
 mod role_offer_query;
+mod finance_query;
 
 pub use self::query::*;
 pub use self::analytics_query::*;
@@ -31,4 +32,5 @@ pub use self::product::*;
 pub use self::self_service_query::*;
 pub use self::audit_query::*;
 pub use self::role_offer_query::*;
+pub use self::finance_query::*;
 

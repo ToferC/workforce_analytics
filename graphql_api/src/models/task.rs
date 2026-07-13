@@ -15,7 +15,7 @@ use crate::graphql::loaders::ProductLoader;
 
 use crate::models::{Priority, SkillDomain, WorkStatus};
 
-use super::{Work, Role, Product};
+use super::{Work, Role, Product, Contract, FinancialSummary, contracts_summary};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, SimpleObject)]
 #[graphql(complex)]
@@ -97,6 +97,23 @@ impl Task {
 
     /// Number of work items under this task whose priority is lower than the
     /// task's own priority (Proposal 7c).
+    /// Contracts recorded under this task, earliest start first.
+    pub async fn contracts(&self) -> Result<Vec<Contract>> {
+        let id = self.id;
+        crate::graphql::loaders::off_executor(move || Contract::get_by_task_id(&id)).await
+    }
+
+    /// Fiscal-year procurement picture for this task: the current FY's share
+    /// of every contract under it (committed spend, so budgeted = projected).
+    pub async fn finances(&self) -> Result<FinancialSummary> {
+        let id = self.id;
+        crate::graphql::loaders::off_executor(move || {
+            let contracts = Contract::get_by_task_id(&id)?;
+            Ok(contracts_summary(&contracts, chrono::Utc::now().date_naive()))
+        })
+        .await
+    }
+
     pub async fn work_priority_mismatch_count(&self) -> Result<i32> {
         let work = Work::get_by_task_id(&self.id)?;
         Ok(work.iter().filter(|w| w.priority < self.priority).count() as i32)

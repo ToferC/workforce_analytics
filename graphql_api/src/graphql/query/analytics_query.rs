@@ -5,13 +5,16 @@ use uuid::Uuid;
 use diesel::prelude::*;
 
 use crate::database::connection;
-use crate::schema::{capabilities, validations, roles, requirements, works, teams, org_tiers};
+use crate::schema::{capabilities, validations, roles, requirements, works, teams, org_tiers, role_assignments, contracts, tasks};
 use crate::models::{
     TimeBucket, TimeSeriesPoint, LabeledSeries,
     SupplyDemandPoint, SupplyDemandSeries,
     TeamCapabilityCell, TeamCapabilityRow, OrgTierCapabilityRow,
     TalentMovement,
     SkillDomain, CapabilityLevel, WorkStatus,
+    BudgetAllocation, Contract, OrgTierFinancialRow, PayRate,
+    current_fiscal_year, fiscal_year_end, fiscal_year_label, fiscal_year_reference_date,
+    fiscal_year_start, salary_summary,
 };
 use crate::common_utils::{RoleGuard, UserRole};
 use crate::graphql::loaders::off_executor;
@@ -402,6 +405,24 @@ impl TeamCapabilityMatrixQuery {
         org_tier_id: Option<Uuid>,
     ) -> Result<Vec<OrgTierCapabilityRow>> {
         off_executor(move || compute_org_tier_capability_matrix(tier_level, org_tier_id)).await
+    }
+
+    /// Fiscal-year financials rolled up the org-tier tree: every tier at or
+    /// above `maxLevel` (default 3) reports its subtree salary budget,
+    /// projection to March 31, vacancy lapse and contract share, alongside
+    /// its budget allocation and how much has been rolled down to children.
+    /// Scope to one subtree with `orgTierId`.
+    #[graphql(guard = "RoleGuard::new(UserRole::User)")]
+    /// `fiscalYear` selects the year to cost (its starting year, e.g. 2027
+    /// for FY 2027-28) and defaults to the current one; a future year is a
+    /// pure plan (nothing accrued), a past year is actuals.
+    pub async fn org_tier_financials(
+        &self,
+        #[graphql(default = 3)] max_level: i32,
+        org_tier_id: Option<Uuid>,
+        fiscal_year: Option<i32>,
+    ) -> Result<Vec<OrgTierFinancialRow>> {
+        off_executor(move || compute_org_tier_financials(max_level, org_tier_id, fiscal_year)).await
     }
 }
 
@@ -830,6 +851,233 @@ pub struct AnalyticsQuery(
     TeamCapabilityMatrixQuery,
     TalentMovementQuery,
 );
+
+/// Fiscal-year financials for every org tier at or above `max_level`.
+///
+/// One pass over the whole model: price every role (override or pay rate),
+/// cost it against its assignment ledger, attach it to its team's tier, do
+/// the same for contract FY shares (via task -> creating role -> team), then
+/// accumulate each direct amount into the tier itself and every ancestor so
+/// each row covers its full subtree. Allocations for the current fiscal year
+/// ride along, with each tier also reporting the sum of its direct
+/// children's allocations (how much of the envelope is rolled down).
+pub(crate) fn compute_org_tier_financials(
+    max_level: i32,
+    scope_tier_id: Option<Uuid>,
+    fiscal_year: Option<i32>,
+) -> Result<Vec<OrgTierFinancialRow>> {
+    let mut conn = connection()?;
+
+    // All costing math evaluates as of one reference date inside the
+    // requested fiscal year: today for the current FY, April 1 for a future
+    // FY (a pure plan), March 31 for a past FY (actuals).
+    let today = Utc::now().date_naive();
+    let fy = fiscal_year.unwrap_or_else(|| current_fiscal_year(today));
+    let reference = fiscal_year_reference_date(fy, today);
+
+    // Tier tree with display data. Retired tiers stay IN the tree so the
+    // costs of teams still attached at or below them roll up to their live
+    // ancestors; they are only excluded from the emitted rows.
+    let tier_rows: Vec<(Uuid, Option<Uuid>, String, String, i32, Option<NaiveDateTime>)> = org_tiers::table
+        .select((
+            org_tiers::id,
+            org_tiers::parent_tier,
+            org_tiers::name_en,
+            org_tiers::name_fr,
+            org_tiers::tier_level,
+            org_tiers::retired_at,
+        ))
+        .load(&mut conn)?;
+    let parents: HashMap<Uuid, Option<Uuid>> =
+        tier_rows.iter().map(|(id, parent, ..)| (*id, *parent)).collect();
+
+    // Optional subtree scope.
+    let in_scope: Option<std::collections::HashSet<Uuid>> = scope_tier_id.map(|root| {
+        let raw: Vec<(Uuid, Option<Uuid>)> =
+            tier_rows.iter().map(|(id, parent, ..)| (*id, *parent)).collect();
+        collect_descendant_tier_ids(root, &raw).into_iter().collect()
+    });
+    let tier_in_scope =
+        |id: &Uuid| in_scope.as_ref().map_or(true, |scope| scope.contains(id));
+
+    // Teams and their tier attachment. A subtree scope restricts everything
+    // downstream (roles, assignments, contracts) in SQL, so a scoped call
+    // prices its subtree instead of the whole organization.
+    let mut team_query = teams::table
+        .select((teams::id, teams::org_tier_id))
+        .into_boxed();
+    if let Some(scope) = &in_scope {
+        let scope_ids: Vec<Uuid> = scope.iter().copied().collect();
+        team_query = team_query.filter(teams::org_tier_id.eq_any(scope_ids));
+    }
+    let team_rows: Vec<(Uuid, Uuid)> = team_query.load(&mut conn)?;
+    let team_tier: HashMap<Uuid, Uuid> = team_rows.iter().copied().collect();
+    let scoped_team_ids: Option<Vec<Uuid>> = in_scope
+        .as_ref()
+        .map(|_| team_rows.iter().map(|(id, _)| *id).collect());
+
+    // Every role priced and costed, in three bulk loads.
+    let role_rows: Vec<(
+        Uuid,
+        Uuid,
+        Option<crate::models::OccupationalGroup>,
+        Option<i32>,
+        Option<crate::models::Rank>,
+        Option<i64>,
+        NaiveDateTime,
+        Option<NaiveDateTime>,
+    )> = {
+        let mut role_query = roles::table
+            .select((
+                roles::id,
+                roles::team_id,
+                roles::occupational_group,
+                roles::occupational_level,
+                roles::rank,
+                roles::annual_salary_cents,
+                roles::start_datestamp,
+                roles::end_date,
+            ))
+            .into_boxed();
+        if let Some(team_ids) = &scoped_team_ids {
+            role_query = role_query.filter(roles::team_id.eq_any(team_ids));
+        }
+        role_query.load(&mut conn)?
+    };
+
+    let fy_start_ts = fiscal_year_start(reference).and_hms_opt(0, 0, 0).expect("midnight");
+    let fy_end_ts = fiscal_year_end(reference).and_hms_opt(23, 59, 59).expect("end of day");
+    let assignment_rows: Vec<(Uuid, NaiveDateTime, Option<NaiveDateTime>)> = {
+        let mut assignment_query = role_assignments::table
+            .select((
+                role_assignments::role_id,
+                role_assignments::start_date,
+                role_assignments::end_date,
+            ))
+            // Assignments that ended before this fiscal year contribute zero
+            // occupied days, so skip loading them.
+            .filter(
+                role_assignments::end_date
+                    .is_null()
+                    .or(role_assignments::end_date.ge(fy_start_ts)),
+            )
+            .into_boxed();
+        if scoped_team_ids.is_some() {
+            let role_ids: Vec<Uuid> = role_rows.iter().map(|r| r.0).collect();
+            assignment_query = assignment_query.filter(role_assignments::role_id.eq_any(role_ids));
+        }
+        assignment_query.load(&mut conn)?
+    };
+    let mut assignments_by_role: HashMap<Uuid, Vec<(NaiveDate, Option<NaiveDate>)>> = HashMap::new();
+    for (role_id, start, end) in assignment_rows {
+        assignments_by_role
+            .entry(role_id)
+            .or_default()
+            .push((start.date(), end.map(|e| e.date())));
+    }
+
+    let rates = PayRate::get_effective(Utc::now().naive_utc())?;
+
+    // Direct (own-teams-only) amounts per tier: (budget, projected, lapse, contract).
+    let mut direct: HashMap<Uuid, (i64, i64, i64, i64)> = HashMap::new();
+    let empty: Vec<(NaiveDate, Option<NaiveDate>)> = Vec::new();
+    for (role_id, team_id, group, level, rank, override_cents, start, end) in &role_rows {
+        let Some(tier_id) = team_tier.get(team_id) else { continue };
+        let rate = override_cents.or_else(|| PayRate::rate_from(&rates, *group, *level, *rank));
+        let Some(rate) = rate else { continue };
+        let periods = assignments_by_role.get(role_id).unwrap_or(&empty);
+        let summary = salary_summary(rate, (start.date(), end.map(|e| e.date())), periods, reference);
+        let slot = direct.entry(*tier_id).or_default();
+        slot.0 += summary.budgeted_cents;
+        slot.1 += summary.projected_cents;
+        slot.2 += summary.lapse_cents;
+    }
+
+    // Contract FY shares, attached via task -> creating role -> team -> tier.
+    let contract_rows: Vec<(Contract, Uuid)> = {
+        let mut contract_query = contracts::table
+            .inner_join(tasks::table.on(tasks::id.eq(contracts::task_id)))
+            .inner_join(roles::table.on(roles::id.eq(tasks::created_by_role_id)))
+            .select((contracts::all_columns, roles::team_id))
+            // Only contracts whose period touches this fiscal year can have
+            // a non-zero share.
+            .filter(contracts::end_date.ge(fy_start_ts))
+            .filter(contracts::start_date.le(fy_end_ts))
+            .into_boxed();
+        if let Some(team_ids) = &scoped_team_ids {
+            contract_query = contract_query.filter(roles::team_id.eq_any(team_ids));
+        }
+        contract_query.load(&mut conn)?
+    };
+    for (contract, team_id) in contract_rows {
+        let Some(tier_id) = team_tier.get(&team_id) else { continue };
+        let share = contract.fiscal_year_share_cents(reference);
+        let slot = direct.entry(*tier_id).or_default();
+        slot.0 += share;
+        slot.1 += share;
+        slot.3 += share;
+    }
+
+    // Accumulate each direct amount into the tier itself and every ancestor,
+    // so each tier's numbers cover its whole subtree.
+    let mut subtree: HashMap<Uuid, (i64, i64, i64, i64)> = HashMap::new();
+    for (tier_id, amounts) in &direct {
+        let mut current = Some(*tier_id);
+        let mut seen = std::collections::HashSet::new();
+        while let Some(id) = current {
+            if !seen.insert(id) {
+                break; // cycle guard
+            }
+            let slot = subtree.entry(id).or_default();
+            slot.0 += amounts.0;
+            slot.1 += amounts.1;
+            slot.2 += amounts.2;
+            slot.3 += amounts.3;
+            current = parents.get(&id).copied().flatten();
+        }
+    }
+
+    // Allocations for the requested fiscal year, plus per-parent roll-down sums.
+    let allocations = BudgetAllocation::get_for_fiscal_year(fy)?;
+    let allocation_by_tier: HashMap<Uuid, i64> = allocations
+        .iter()
+        .map(|a| (a.org_tier_id, a.amount_cents))
+        .collect();
+    let mut child_allocated: HashMap<Uuid, i64> = HashMap::new();
+    for allocation in &allocations {
+        if let Some(Some(parent)) = parents.get(&allocation.org_tier_id) {
+            *child_allocated.entry(*parent).or_default() += allocation.amount_cents;
+        }
+    }
+
+    let fy_label = fiscal_year_label(reference);
+    let mut out: Vec<OrgTierFinancialRow> = tier_rows
+        .iter()
+        .filter(|(id, _, _, _, level, retired_at)| {
+            *level <= max_level && retired_at.is_none() && tier_in_scope(id)
+        })
+        .map(|(id, parent, name_en, name_fr, level, _)| {
+            let amounts = subtree.get(id).copied().unwrap_or_default();
+            OrgTierFinancialRow {
+                org_tier_id: *id,
+                name_en: name_en.clone(),
+                name_fr: name_fr.clone(),
+                tier_level: *level,
+                parent_id: *parent,
+                fiscal_year: fy_label.clone(),
+                allocation_cents: allocation_by_tier.get(id).copied(),
+                child_allocated_cents: child_allocated.get(id).copied().unwrap_or(0),
+                budgeted_cents: amounts.0,
+                projected_cents: amounts.1,
+                lapse_cents: amounts.2,
+                contract_cents: amounts.3,
+            }
+        })
+        .collect();
+    out.sort_by(|a, b| a.tier_level.cmp(&b.tier_level).then(a.name_en.cmp(&b.name_en)));
+
+    Ok(out)
+}
 
 #[cfg(test)]
 mod tests {

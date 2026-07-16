@@ -8,12 +8,13 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 
 use crate::database_utils::pre_populate_db_schema;
 use crate::database_utils::pre_populate_skills;
+use crate::database_utils::{pre_populate_pay_rates, pre_populate_budget_allocations};
 use errors::CustomError;
 
 pub type PostgresPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type DbConnection = r2d2::PooledConnection<ConnectionManager<PgConnection>>;
 
-use crate::models::{User, UserData, InsertableUser, Organization};
+use crate::models::{User, UserData, InsertableUser, Organization, PayRate, current_fiscal_year, BudgetAllocation};
 
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
@@ -113,6 +114,7 @@ pub fn seed() {
                  Reset the database first if you want to re-seed.",
                 orgs.len()
             );
+            backfill_financial_reference_data();
             return;
         }
         _ => {}
@@ -125,6 +127,37 @@ pub fn seed() {
         .expect("Unable to pre-populate database");
 
     println!("Seeding complete.");
+}
+
+/// Databases seeded before the financial module existed have organizations
+/// (so `seed()` bails out early) but an empty pay_rates table, leaving every
+/// role without a salary and the cost rollups at zero. When the demo seed is
+/// skipped, top up just the financial reference data instead:
+///
+/// - pay rates, only when the table is completely empty, so rates an admin
+///   has entered are never touched;
+/// - budget allocations, only when rates were just backfilled AND no
+///   allocation exists for the current fiscal year, so envelopes set
+///   deliberately are never overwritten.
+fn backfill_financial_reference_data() {
+    match PayRate::get_all() {
+        Ok(rates) if rates.is_empty() => {
+            println!("No pay rates found - backfilling classification pay rates");
+            pre_populate_pay_rates().expect("Unable to backfill pay rates");
+
+            let fy = current_fiscal_year(chrono::Utc::now().date_naive());
+            match BudgetAllocation::get_for_fiscal_year(fy) {
+                Ok(allocations) if allocations.is_empty() => {
+                    println!("No FY{} budget allocations found - backfilling from computed budgets", fy);
+                    pre_populate_budget_allocations().expect("Unable to backfill budget allocations");
+                }
+                Ok(_) => println!("Budget allocations already set - leaving them alone"),
+                Err(e) => println!("Skipping budget allocation backfill: {:?}", e.message),
+            }
+        }
+        Ok(_) => println!("Pay rates already present - nothing to backfill"),
+        Err(e) => println!("Skipping pay rate backfill: {:?}", e.message),
+    }
 }
 
 pub fn connection() -> Result<DbConnection, CustomError> {

@@ -407,11 +407,13 @@ impl TeamCapabilityMatrixQuery {
         off_executor(move || compute_org_tier_capability_matrix(tier_level, org_tier_id)).await
     }
 
-    /// Fiscal-year financials rolled up the org-tier tree: every tier at or
-    /// above `maxLevel` (default 3) reports its subtree salary budget,
-    /// projection to March 31, vacancy lapse and contract share, alongside
-    /// its budget allocation and how much has been rolled down to children.
-    /// Scope to one subtree with `orgTierId`.
+    /// Fiscal-year financials rolled up the org-tier tree: each tier within
+    /// `maxLevel` generations of the org's top (default 3, so the top three
+    /// levels) reports its subtree salary budget, projection to March 31,
+    /// vacancy lapse and contract share, alongside its budget allocation and
+    /// how much has been rolled down to children. Depth is measured from the
+    /// tree root, so this does not assume the top tier is stored at
+    /// tier_level 1. Scope to one subtree with `orgTierId`.
     #[graphql(guard = "RoleGuard::new(UserRole::User)")]
     /// `fiscalYear` selects the year to cost (its starting year, e.g. 2027
     /// for FY 2027-28) and defaults to the current one; a future year is a
@@ -1050,11 +1052,30 @@ pub(crate) fn compute_org_tier_financials(
         }
     }
 
+    // Depth from the tree root (0 for roots). The rollup is hierarchy-relative
+    // — `max_level` counts generations below the top — so it doesn't assume the
+    // apex is stored at tier_level 1. Real org data (and the seed) roots at
+    // tier_level 0, and a plain `tier_level <= max_level` filter would drop the
+    // top-of-org rows entirely.
+    let depth_of = |start: Uuid| -> i32 {
+        let mut depth = 0;
+        let mut current = start;
+        let mut seen = std::collections::HashSet::new();
+        while let Some(Some(parent)) = parents.get(&current) {
+            if !seen.insert(current) {
+                break; // cycle guard
+            }
+            current = *parent;
+            depth += 1;
+        }
+        depth
+    };
+
     let fy_label = fiscal_year_label(reference);
     let mut out: Vec<OrgTierFinancialRow> = tier_rows
         .iter()
-        .filter(|(id, _, _, _, level, retired_at)| {
-            *level <= max_level && retired_at.is_none() && tier_in_scope(id)
+        .filter(|(id, _, _, _, _level, retired_at)| {
+            depth_of(*id) < max_level && retired_at.is_none() && tier_in_scope(id)
         })
         .map(|(id, parent, name_en, name_fr, level, _)| {
             let amounts = subtree.get(id).copied().unwrap_or_default();

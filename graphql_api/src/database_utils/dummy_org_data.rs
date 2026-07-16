@@ -672,10 +672,12 @@ pub fn pre_populate_db_schema() -> Result<(), Error> {
 
 }
 
-/// Give every level-1 and level-2 tier a fiscal-year allocation of roughly
-/// 105% of its computed subtree budget, rounded up to the nearest $100k —
-/// enough headroom to look deliberate. L3 tiers are left unallocated so the
-/// roll-down workflow has somewhere to go.
+/// Give the top two tier levels (the org roots and their direct children) a
+/// fiscal-year allocation of roughly 105% of their computed subtree budget,
+/// rounded up to the nearest $100k — enough headroom to look deliberate.
+/// Deeper tiers are left unallocated so the roll-down workflow has somewhere
+/// to go. `maxLevel` counts generations from the root, so this holds whatever
+/// tier_level the roots are stored at.
 pub fn pre_populate_budget_allocations() -> Result<(), Error> {
     let rows = crate::graphql::query::compute_org_tier_financials(2, None, None)
         .map_err(|e| Error::new(format!("financials: {:?}", e.message)))?;

@@ -20,6 +20,13 @@ fn main() {
     dotenv::dotenv().ok();
     env_logger::init();
 
+    // Seeding is strictly sequential, so a couple of connections is plenty.
+    // The web process may already be holding most of the role's connection
+    // allowance; claiming the default web-sized pool here can push past the
+    // plan's per-role limit and abort the run before it starts. An explicit
+    // DB_POOL_MAX_SIZE still wins.
+    database::set_default_pool_max_size(2);
+
     println!("Running one-off database seed");
     let now = Instant::now();
     database::seed();

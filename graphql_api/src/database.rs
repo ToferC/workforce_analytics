@@ -19,6 +19,17 @@ use crate::models::{User, UserData, InsertableUser, Organization, PayRate, curre
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
+/// Process-wide default for the pool's max_size, consulted only when
+/// DB_POOL_MAX_SIZE is not set. One-off binaries whose work is sequential
+/// (the seed command) lower it so they don't claim a web-sized share of the
+/// database's per-role connection allowance. Must be called before the pool
+/// is first touched; later calls are ignored.
+static DEFAULT_POOL_MAX_SIZE: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+
+pub fn set_default_pool_max_size(size: u32) {
+    let _ = DEFAULT_POOL_MAX_SIZE.set(size);
+}
+
 lazy_static! {
     pub static ref POOL: PostgresPool = {
         let db_url = env::var("DATABASE_URL").expect("Database url not set");
@@ -31,9 +42,21 @@ lazy_static! {
         let max_size = env::var("DB_POOL_MAX_SIZE")
             .ok()
             .and_then(|v| v.parse::<u32>().ok())
-            .unwrap_or(20);
+            .unwrap_or_else(|| *DEFAULT_POOL_MAX_SIZE.get().unwrap_or(&20));
+        // r2d2's min_idle defaults to max_size, which makes build() open every
+        // connection up front and keep them forever. On plans with a low
+        // per-role connection limit (Heroku Essential allows 20) an idle web
+        // dyno then hogs the entire allowance, and any one-off process (like
+        // the seed binary) dies at boot with "too many connections for role".
+        // Keep a couple warm and open the rest on demand instead.
+        let min_idle = env::var("DB_POOL_MIN_IDLE")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(2)
+            .min(max_size);
         PostgresPool::builder()
             .max_size(max_size)
+            .min_idle(Some(min_idle))
             .build(manager)
             .expect("Failed to create DB Pool")
     };

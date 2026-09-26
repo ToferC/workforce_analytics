@@ -398,73 +398,70 @@ impl Role {
         Ok(res)
     }
 
-    /// Active roles matching the index filters, ordered by English title.
-    /// `status`: "filled" | "vacant" | anything else = all.
+    /// Boxed query for the role index filters. Ended roles (`active =
+    /// false`) are excluded unless `include_ended`. `status`: "filled" |
+    /// "vacant" | anything else = all.
+    fn filtered(
+        search: Option<&str>,
+        organization_id: Option<Uuid>,
+        status: Option<&str>,
+        include_ended: bool,
+    ) -> Result<roles::BoxedQuery<'static, diesel::pg::Pg>> {
+        let mut query = roles::table.into_boxed();
+        if !include_ended {
+            query = query.filter(roles::active.eq(true));
+        }
+        if let Some(org) = organization_id {
+            query = query.filter(roles::team_id.eq_any(Self::org_team_ids(org)?));
+        }
+        if let Some(s) = search {
+            let pattern = format!("%{}%", s.trim());
+            let person_ids: Vec<Option<Uuid>> =
+                Self::search_person_ids(s)?.into_iter().map(Some).collect();
+            query = query.filter(
+                roles::title_en.ilike(pattern.clone())
+                    .or(roles::title_fr.ilike(pattern))
+                    .or(roles::person_id.eq_any(person_ids)),
+            );
+        }
+        match status {
+            Some("filled") => query = query.filter(roles::person_id.is_not_null()),
+            Some("vacant") => query = query.filter(roles::person_id.is_null()),
+            _ => {}
+        }
+        Ok(query)
+    }
+
+    /// Roles matching the index filters (see `filtered`), ordered by English
+    /// title.
     pub fn get_filtered(
         search: Option<&str>,
         organization_id: Option<Uuid>,
         status: Option<&str>,
+        include_ended: bool,
         limit: Option<i64>,
         offset: i64,
     ) -> Result<Vec<Self>> {
-        let mut conn = connection()?;
-
-        let mut query = roles::table.filter(roles::active.eq(true)).into_boxed();
-        if let Some(org) = organization_id {
-            query = query.filter(roles::team_id.eq_any(Self::org_team_ids(org)?));
-        }
-        if let Some(s) = search {
-            let pattern = format!("%{}%", s.trim());
-            let person_ids: Vec<Option<Uuid>> =
-                Self::search_person_ids(s)?.into_iter().map(Some).collect();
-            query = query.filter(
-                roles::title_en.ilike(pattern.clone())
-                    .or(roles::title_fr.ilike(pattern))
-                    .or(roles::person_id.eq_any(person_ids)),
-            );
-        }
-        match status {
-            Some("filled") => query = query.filter(roles::person_id.is_not_null()),
-            Some("vacant") => query = query.filter(roles::person_id.is_null()),
-            _ => {}
-        }
-        query = query.order_by(roles::title_en);
+        let mut query = Self::filtered(search, organization_id, status, include_ended)?.order_by(roles::title_en);
         if let Some(l) = limit {
             query = query.limit(l).offset(offset);
         }
 
+        let mut conn = connection()?;
         Ok(query.load::<Role>(&mut conn)?)
     }
 
-    /// Total active roles matching the same filters as `get_filtered`,
-    /// ignoring limit/offset — for driving pagination controls.
+    /// Total roles matching the same filters as `get_filtered`, ignoring
+    /// limit/offset — for driving pagination controls.
     pub fn count_filtered(
         search: Option<&str>,
         organization_id: Option<Uuid>,
         status: Option<&str>,
+        include_ended: bool,
     ) -> Result<i64> {
+        let query = Self::filtered(search, organization_id, status, include_ended)?;
+
         let mut conn = connection()?;
-
-        let mut query = roles::table.filter(roles::active.eq(true)).into_boxed();
-        if let Some(org) = organization_id {
-            query = query.filter(roles::team_id.eq_any(Self::org_team_ids(org)?));
-        }
-        if let Some(s) = search {
-            let pattern = format!("%{}%", s.trim());
-            let person_ids: Vec<Option<Uuid>> =
-                Self::search_person_ids(s)?.into_iter().map(Some).collect();
-            query = query.filter(
-                roles::title_en.ilike(pattern.clone())
-                    .or(roles::title_fr.ilike(pattern))
-                    .or(roles::person_id.eq_any(person_ids)),
-            );
-        }
-        match status {
-            Some("filled") => query = query.filter(roles::person_id.is_not_null()),
-            Some("vacant") => query = query.filter(roles::person_id.is_null()),
-            _ => {}
-        }
-
         Ok(query.count().get_result(&mut conn)?)
     }
 

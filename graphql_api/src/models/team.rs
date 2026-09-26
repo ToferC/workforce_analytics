@@ -13,9 +13,9 @@ use crate::config_variables::DATE_FORMAT;
 
 use crate::schema::*;
 use crate::database::connection;
-use crate::graphql::loaders::RoleLoader;
+use crate::graphql::loaders::{RoleLoader, TeamStatsLoader};
 
-use super::{Role, RoleAssignment, TeamOwnership, SkillDomain};
+use super::{HierarchyStats, Role, RoleAssignment, TeamOwnership, SkillDomain};
 use super::{Contract, FinancialSummary, PayRate, contracts_summary, salary_summary};
 
 
@@ -106,46 +106,64 @@ impl Team {
         Ok(res)
     }
 
-    /// Server-side filtered + paginated team list. `search` matches
+    /// Boxed query for the team index filters. `search` matches
     /// name_en/name_fr (case-insensitive); retired teams are excluded unless
-    /// `include_retired`. A `None` limit returns every matching row (preserving
-    /// the old "fetch all" behaviour for callers that don't paginate).
-    pub fn get_filtered(search: Option<&str>, include_retired: bool, limit: Option<i64>, offset: i64) -> Result<Vec<Self>> {
-        let mut conn = connection()?;
-
+    /// `include_retired`; `org_tier_id` keeps only that tier's direct teams.
+    fn filtered(
+        search: Option<&str>,
+        include_retired: bool,
+        organization_id: Option<Uuid>,
+        org_tier_id: Option<Uuid>,
+    ) -> teams::BoxedQuery<'static, diesel::pg::Pg> {
         let mut query = teams::table.into_boxed();
         if !include_retired {
             query = query.filter(teams::retired_at.is_null());
+        }
+        if let Some(org) = organization_id {
+            query = query.filter(teams::organization_id.eq(org));
+        }
+        if let Some(tier) = org_tier_id {
+            query = query.filter(teams::org_tier_id.eq(tier));
         }
         if let Some(s) = search {
             let pattern = format!("%{}%", s);
             query = query.filter(teams::name_en.ilike(pattern.clone()).or(teams::name_fr.ilike(pattern)));
         }
-        query = query.order_by(teams::name_en);
+        query
+    }
+
+    /// Server-side filtered + paginated team list (see `filtered`). A `None`
+    /// limit returns every matching row (preserving the old "fetch all"
+    /// behaviour for callers that don't paginate).
+    pub fn get_filtered(
+        search: Option<&str>,
+        include_retired: bool,
+        organization_id: Option<Uuid>,
+        org_tier_id: Option<Uuid>,
+        limit: Option<i64>,
+        offset: i64,
+    ) -> Result<Vec<Self>> {
+        let mut conn = connection()?;
+
+        let mut query = Self::filtered(search, include_retired, organization_id, org_tier_id).order_by(teams::name_en);
         if let Some(l) = limit {
             query = query.limit(l).offset(offset);
         }
 
-        let res = query.load::<Team>(&mut conn)?;
-        Ok(res)
+        Ok(query.load::<Team>(&mut conn)?)
     }
 
     /// Total number of teams matching the same filters as `get_filtered`,
     /// ignoring limit/offset — for driving pagination controls.
-    pub fn count_filtered(search: Option<&str>, include_retired: bool) -> Result<i64> {
+    pub fn count_filtered(
+        search: Option<&str>,
+        include_retired: bool,
+        organization_id: Option<Uuid>,
+        org_tier_id: Option<Uuid>,
+    ) -> Result<i64> {
         let mut conn = connection()?;
 
-        let mut query = teams::table.into_boxed();
-        if !include_retired {
-            query = query.filter(teams::retired_at.is_null());
-        }
-        if let Some(s) = search {
-            let pattern = format!("%{}%", s);
-            query = query.filter(teams::name_en.ilike(pattern.clone()).or(teams::name_fr.ilike(pattern)));
-        }
-
-        let total = query.count().get_result(&mut conn)?;
-        Ok(total)
+        Ok(Self::filtered(search, include_retired, organization_id, org_tier_id).count().get_result(&mut conn)?)
     }
 
     pub fn get_by_org_tier_id(id: &Uuid) -> Result<Vec<Self>> {
@@ -243,11 +261,9 @@ impl Team {
         Ok(self.name_en.to_owned())
     }
 
-    pub async fn retired_at(&self) -> Result<String> {
-        match self.retired_at {
-            Some(d) => Ok(d.format(DATE_FORMAT).to_string()),
-            None => Ok("Still Active".to_string())
-        }
+    /// When the team was retired; null while it is active.
+    pub async fn retired_at(&self) -> Option<NaiveDateTime> {
+        self.retired_at
     }
 
     pub async fn created_at(&self) -> Result<String> {
@@ -368,40 +384,30 @@ impl Team {
     }
 
     /// Number of distinct people holding active roles on this team.
-    #[allow(deprecated)]
-    pub async fn headcount(&self) -> Result<i32> {
-        use crate::schema::roles;
-        use diesel::prelude::*;
-        let mut conn = crate::database::connection()?;
-
-        let count: i64 = roles::table
-            .filter(roles::team_id.eq(self.id))
-            .filter(roles::active.eq(true))
-            .filter(roles::person_id.is_not_null())
-            .select(diesel::dsl::count_distinct(roles::person_id))
-            .first(&mut conn)?;
-
-        Ok(count as i32)
+    pub async fn headcount(&self, ctx: &Context<'_>) -> Result<i32> {
+        Ok(self.stats(ctx).await?.headcount)
     }
 
     /// Sum of active effort across this team's roles.
-    pub async fn total_effort(&self) -> Result<i32> {
-        use crate::schema::{roles, works};
-        use crate::models::WorkStatus;
-        use diesel::prelude::*;
-        let mut conn = connection()?;
-
-        let res = works::table
-            .inner_join(roles::table)
-            .filter(roles::team_id.eq(self.id))
-            .filter(roles::active.eq(true))
-            .filter(works::work_status.ne_all(vec![WorkStatus::Cancelled, WorkStatus::Completed]))
-            .select(works::effort)
-            .load::<i32>(&mut conn)?;
-
-        Ok(res.into_iter().sum())
+    pub async fn total_effort(&self, ctx: &Context<'_>) -> Result<i32> {
+        Ok(self.stats(ctx).await?.total_effort)
     }
 
+    /// Number of active roles on this team with no incumbent.
+    pub async fn vacant_role_count(&self, ctx: &Context<'_>) -> Result<i32> {
+        Ok(self.stats(ctx).await?.vacant_role_count)
+    }
+}
+
+impl Team {
+    /// Roll-ups batched per request across every team in the response.
+    async fn stats(&self, ctx: &Context<'_>) -> Result<HierarchyStats> {
+        Ok(ctx
+            .data_unchecked::<DataLoader<TeamStatsLoader>>()
+            .load_one(self.id)
+            .await?
+            .unwrap_or_default())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Insertable, InputObject)]

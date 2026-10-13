@@ -925,9 +925,18 @@ type OrgTier {
 	"""
 	capabilityHeatmap: [TeamCapabilityRow!]!
 	"""
+	Every tier above this one, ordered from the root down to the direct
+	parent (empty for a top tier) — the breadcrumb trail.
+	"""
+	ancestors: [OrgTier!]!
+	"""
 	Number of distinct people holding active roles under this tier and descendants.
 	"""
 	headcount: Int!
+	"""
+	Number of vacant active roles under this tier and descendants.
+	"""
+	vacantRoleCount: Int!
 	"""
 	Capability counts rolled up across this tier and its descendants.
 	"""
@@ -971,6 +980,18 @@ type Organization {
 	products: [Product!]!
 	orgTiers: [OrgTier!]!
 	topOrgTier: [OrgTier!]!
+	"""
+	Number of distinct people holding active roles across all tiers.
+	"""
+	headcount: Int!
+	"""
+	Sum of active effort across all tiers.
+	"""
+	totalEffort: Int!
+	"""
+	Number of vacant active roles across all tiers.
+	"""
+	vacantRoleCount: Int!
 	capabilityCounts: [CapabilityCount!]!
 }
 
@@ -1079,6 +1100,14 @@ type Person {
 	"""
 	languageData: [LanguageData!]!
 	findMatches: [Role!]!
+	"""
+	Vacant active roles scored against this person's capabilities, best
+	first — the mirror of `Role.fuzzyMatches`, with the same scoring model
+	and `requirementGaps`. The held level is the validated level when
+	present, otherwise the self-identified level. Roles must meet
+	`minCoverage` and have no single gap above `maxGapPerReq`.
+	"""
+	fuzzyMatches(minCoverage: Float! = 0.5, maxGapPerReq: Int! = 1, limit: Int! = 20): [RoleMatchScore!]!
 }
 
 """
@@ -1475,15 +1504,16 @@ type Query {
 	Returns teams, filtered and paginated server-side. All arguments are
 	optional and backward compatible: with none supplied this returns every
 	non-retired team (the previous behaviour). `search` matches the English
-	or French name; pass `limit`/`offset` to page. Pair with `teamsCount`
-	for the total under the same filters.
+	or French name; `organizationId` keeps one organization's teams and
+	`orgTierId` the direct teams of one tier. Pass `limit`/`offset` to
+	page. Pair with `teamsCount` for the total under the same filters.
 	"""
-	allTeams(search: String, includeRetired: Boolean! = false, limit: Int, offset: Int! = 0): [Team!]!
+	allTeams(search: String, includeRetired: Boolean! = false, organizationId: UUID, orgTierId: UUID, limit: Int, offset: Int! = 0): [Team!]!
 	"""
 	Total number of teams matching the given filters (ignoring pagination),
 	for driving `allTeams` page controls.
 	"""
-	teamsCount(search: String, includeRetired: Boolean! = false): Int!
+	teamsCount(search: String, includeRetired: Boolean! = false, organizationId: UUID, orgTierId: UUID): Int!
 	"""
 	Returns a specific travel group by its UUID
 	"""
@@ -1541,13 +1571,13 @@ type Query {
 	"""
 	vacantRoles(count: Int!): [Role!]!
 	"""
-	Active roles, optionally filtered by a search string (titles or incumbent name), organization, and filled/vacant status, with limit/offset pagination. No arguments = all active roles, as before.
+	Active roles, optionally filtered by a search string (titles or incumbent name), organization, and filled/vacant status, with limit/offset pagination. `includeEnded` also returns ended (`active = false`) roles. No arguments = all active roles, as before.
 	"""
-	allRoles(search: String, organizationId: UUID, status: String, limit: Int, offset: Int! = 0): [Role!]!
+	allRoles(search: String, organizationId: UUID, status: String, includeEnded: Boolean! = false, limit: Int, offset: Int! = 0): [Role!]!
 	"""
-	Total active roles matching the same filters as allRoles (ignoring pagination), for driving page controls.
+	Total roles matching the same filters as allRoles (ignoring pagination), for driving page controls.
 	"""
-	rolesCount(search: String, organizationId: UUID, status: String): Int!
+	rolesCount(search: String, organizationId: UUID, status: String, includeEnded: Boolean! = false): Int!
 	roleById(id: UUID!): Role!
 	"""
 	returns a count of the total roles in the system
@@ -1948,6 +1978,29 @@ type RoleMatchResult {
 }
 
 """
+A scored vacant role for a person — the mirror of `PersonMatchScore`, from
+the same scoring model.
+"""
+type RoleMatchScore {
+	role: Role!
+	"""
+	Composite score in [0, 1]: coverage minus gap penalties.
+	"""
+	matchScore: Float!
+	requirementsMet: Int!
+	requirementsTotal: Int!
+	"""
+	requirements_met / requirements_total.
+	"""
+	coverage: Float!
+	"""
+	Sum of positive (shortfall) gaps only.
+	"""
+	totalGap: Int!
+	requirementGaps: [RequirementMatch!]!
+}
+
+"""
 Should get this from an API or have standard data
 Now pre-loaded as prt of context
 """
@@ -2125,7 +2178,10 @@ type Team {
 	nameFrench: String!
 	descriptionEnglish: String!
 	descriptionFrench: String!
-	retiredAt: String!
+	"""
+	When the team was retired; null while it is active.
+	"""
+	retiredAt: NaiveDateTime
 	createdAt: String!
 	updatedAt: String!
 	occupiedRoles: [Role!]!
@@ -2162,6 +2218,10 @@ type Team {
 	plus the FY share of contracts under tasks created by the team's roles.
 	"""
 	finances: FinancialSummary!
+	"""
+	Number of active roles on this team with no incumbent.
+	"""
+	vacantRoleCount: Int!
 }
 
 """

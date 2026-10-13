@@ -9,12 +9,12 @@
 
 use std::collections::HashMap;
 
-use async_graphql::dataloader::Loader;
+use async_graphql::dataloader::{DataLoader, Loader};
 use uuid::Uuid;
 
 use std::sync::Arc;
 
-use crate::models::{PayRate, Person, Product, Requirement, Role, RoleAssignment, Task, Team, Work};
+use crate::models::{HierarchyStats, PayRate, Person, Product, Requirement, Role, RoleAssignment, Task, Team, Work};
 
 /// `Loader::Error` must be `Send + Clone + 'static`. `async_graphql::Error`
 /// already satisfies that, and is what the model getters return, so it passes
@@ -37,6 +37,26 @@ where
     actix_web::rt::task::spawn_blocking(f)
         .await
         .map_err(|e| async_graphql::Error::new(format!("Blocking task failed: {}", e)))?
+}
+
+/// Attach a fresh set of every loader below to a request. Scoped to the
+/// request so batching/caching never leaks rows across requests (which would
+/// go stale after mutations).
+pub fn with_loaders(request: async_graphql::Request) -> async_graphql::Request {
+    request
+        .data(DataLoader::new(PersonLoader, actix_web::rt::spawn))
+        .data(DataLoader::new(TeamLoader, actix_web::rt::spawn))
+        .data(DataLoader::new(RoleLoader, actix_web::rt::spawn))
+        .data(DataLoader::new(TaskLoader, actix_web::rt::spawn))
+        .data(DataLoader::new(ProductLoader, actix_web::rt::spawn))
+        .data(DataLoader::new(WorkByRoleLoader, actix_web::rt::spawn))
+        .data(DataLoader::new(RequirementsByRoleLoader, actix_web::rt::spawn))
+        .data(DataLoader::new(EffortByRoleLoader, actix_web::rt::spawn))
+        .data(DataLoader::new(AssignmentsByRoleLoader, actix_web::rt::spawn))
+        .data(DataLoader::new(PayRatesLoader, actix_web::rt::spawn))
+        .data(DataLoader::new(TeamStatsLoader, actix_web::rt::spawn))
+        .data(DataLoader::new(TierStatsLoader, actix_web::rt::spawn))
+        .data(DataLoader::new(OrganizationStatsLoader, actix_web::rt::spawn))
 }
 
 /// Defines a loader keyed by primary id over a batched `get_by_ids` getter.
@@ -171,3 +191,35 @@ impl Loader<Uuid> for WorkByRoleLoader {
         Ok(grouped)
     }
 }
+
+/// Defines an aggregate loader over a batched `HierarchyStats` roll-up. Every
+/// requested key gets an entry, so resolvers can treat a miss as zero.
+macro_rules! stats_loader {
+    ($(#[$m:meta])* $name:ident, $getter:path) => {
+        $(#[$m])*
+        pub struct $name;
+
+        impl Loader<Uuid> for $name {
+            type Value = HierarchyStats;
+            type Error = LoadError;
+
+            async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, HierarchyStats>, Self::Error> {
+                let keys = keys.to_vec();
+                off_executor(move || $getter(&keys)).await
+            }
+        }
+    };
+}
+
+stats_loader!(
+    /// Batches `Team::{headcount, totalEffort, vacantRoleCount}`.
+    TeamStatsLoader, HierarchyStats::for_teams
+);
+stats_loader!(
+    /// Batches the subtree roll-ups on `OrgTier`.
+    TierStatsLoader, HierarchyStats::for_tiers
+);
+stats_loader!(
+    /// Batches the roll-ups on `Organization`.
+    OrganizationStatsLoader, HierarchyStats::for_organizations
+);

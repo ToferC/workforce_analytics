@@ -21,6 +21,7 @@ mod record_flag;
 mod requirement;
 mod finance;
 mod matching;
+mod hierarchy_stats;
 
 mod analytics;
 mod access_log;
@@ -51,6 +52,7 @@ pub use record_flag::*;
 pub use requirement::*;
 pub use finance::*;
 pub use matching::*;
+pub use hierarchy_stats::*;
 
 pub use analytics::*;
 pub use self::access_log::*;

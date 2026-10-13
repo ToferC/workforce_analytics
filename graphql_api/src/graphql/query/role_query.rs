@@ -29,28 +29,30 @@ impl RoleQuery {
     }
 
     #[graphql(name = "allRoles", guard = "RoleGuard::new(UserRole::User)")]
-    /// Returns a vector of all persons ordered by family name
     /// Active roles, optionally filtered by a search string (titles or
     /// incumbent name), organization, and filled/vacant status, with
-    /// limit/offset pagination. No arguments = all active roles, as before.
+    /// limit/offset pagination. `includeEnded` also returns ended
+    /// (`active = false`) roles. No arguments = all active roles, as before.
+    #[allow(clippy::too_many_arguments)] // one per GraphQL argument
     pub async fn all_roles(
         &self,
         _context: &Context<'_>,
         search: Option<String>,
         organization_id: Option<Uuid>,
         status: Option<String>,
+        #[graphql(default = false)] include_ended: bool,
         limit: Option<i64>,
         #[graphql(default = 0)] offset: i64,
     ) -> Result<Vec<Role>> {
         let search = search.filter(|s| !s.trim().is_empty());
         let status = status.filter(|s| !s.trim().is_empty());
         off_executor(move || {
-            Role::get_filtered(search.as_deref(), organization_id, status.as_deref(), limit, offset)
+            Role::get_filtered(search.as_deref(), organization_id, status.as_deref(), include_ended, limit, offset)
         })
         .await
     }
 
-    /// Total active roles matching the same filters as `allRoles` (ignoring
+    /// Total roles matching the same filters as `allRoles` (ignoring
     /// pagination), for driving page controls.
     #[graphql(name = "rolesCount", guard = "RoleGuard::new(UserRole::User)")]
     pub async fn roles_count(
@@ -59,11 +61,12 @@ impl RoleQuery {
         search: Option<String>,
         organization_id: Option<Uuid>,
         status: Option<String>,
+        #[graphql(default = false)] include_ended: bool,
     ) -> Result<i64> {
         let search = search.filter(|s| !s.trim().is_empty());
         let status = status.filter(|s| !s.trim().is_empty());
         off_executor(move || {
-            Role::count_filtered(search.as_deref(), organization_id, status.as_deref())
+            Role::count_filtered(search.as_deref(), organization_id, status.as_deref(), include_ended)
         })
         .await
     }

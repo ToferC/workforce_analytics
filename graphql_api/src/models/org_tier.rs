@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
 
 use chrono::{prelude::*};
@@ -6,11 +7,13 @@ use diesel::{self, Insertable, Queryable, ExpressionMethods, BoolExpressionMetho
 use diesel::{RunQueryDsl, QueryDsl};
 use uuid::Uuid;
 use async_graphql::*;
+use async_graphql::dataloader::DataLoader;
 
 use crate::database::connection;
+use crate::graphql::loaders::TierStatsLoader;
 use crate::schema::*;
 
-use super::{Organization, Role, OrgOwnership, SkillDomain, Team};
+use super::{HierarchyStats, Organization, Role, OrgOwnership, SkillDomain, Team};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Insertable, AsChangeset, SimpleObject)]
 #[graphql(complex)]
@@ -88,10 +91,24 @@ impl OrgTier {
         crate::graphql::query::compute_team_capability_matrix(Some(self.id), None)
     }
 
+    /// Every tier above this one, ordered from the root down to the direct
+    /// parent (empty for a top tier) — the breadcrumb trail.
+    pub async fn ancestors(&self) -> Result<Vec<OrgTier>> {
+        let tiers = OrgTier::get_by_org_id(&self.organization_id)?
+            .into_iter()
+            .map(|t| (t.id, t))
+            .collect();
+        Ok(ancestor_chain(self.parent_tier, &tiers))
+    }
+
     /// Number of distinct people holding active roles under this tier and descendants.
-    pub async fn headcount(&self) -> Result<i32> {
-        let person_ids = crate::graphql::query::get_person_ids_under_org_tier(&self.id)?;
-        Ok(person_ids.len() as i32)
+    pub async fn headcount(&self, ctx: &Context<'_>) -> Result<i32> {
+        Ok(self.stats(ctx).await?.headcount)
+    }
+
+    /// Number of vacant active roles under this tier and descendants.
+    pub async fn vacant_role_count(&self, ctx: &Context<'_>) -> Result<i32> {
+        Ok(self.stats(ctx).await?.vacant_role_count)
     }
 
     /// Capability counts rolled up across this tier and its descendants.
@@ -144,46 +161,37 @@ impl OrgTier {
     }
 
     /// Sum of active effort across this tier and descendants.
-    pub async fn total_effort(&self) -> Result<i32> {
-        use crate::schema::{org_tiers, teams, roles, works};
-        use crate::models::WorkStatus;
-        use diesel::prelude::*;
-        let mut conn = connection()?;
-
-        let all_tiers_raw: Vec<(Uuid, Option<Uuid>)> = org_tiers::table
-            .select((org_tiers::id, org_tiers::parent_tier))
-            .load(&mut conn)?;
-
-        let mut tier_ids: Vec<Uuid> = Vec::new();
-        let mut queue = vec![self.id];
-        while let Some(current) = queue.pop() {
-            tier_ids.push(current);
-            for (tid, parent) in &all_tiers_raw {
-                if *parent == Some(current) {
-                    queue.push(*tid);
-                }
-            }
-        }
-
-        let team_ids: Vec<Uuid> = teams::table
-            .filter(teams::org_tier_id.eq_any(&tier_ids))
-            .select(teams::id)
-            .load::<Uuid>(&mut conn)?;
-
-        let res = works::table
-            .inner_join(roles::table)
-            .filter(roles::team_id.eq_any(&team_ids))
-            .filter(roles::active.eq(true))
-            .filter(works::work_status.ne_all(vec![WorkStatus::Cancelled, WorkStatus::Completed]))
-            .select(works::effort)
-            .load::<i32>(&mut conn)?;
-
-        Ok(res.into_iter().sum())
+    pub async fn total_effort(&self, ctx: &Context<'_>) -> Result<i32> {
+        Ok(self.stats(ctx).await?.total_effort)
     }
+}
+
+/// Walk `parent` up through `tiers` and return the chain root-first. Stops
+/// at a tier missing from `tiers` or on a cycle rather than looping forever.
+fn ancestor_chain(mut parent: Option<Uuid>, tiers: &HashMap<Uuid, OrgTier>) -> Vec<OrgTier> {
+    let mut chain: Vec<OrgTier> = Vec::new();
+    while let Some(tier) = parent.and_then(|id| tiers.get(&id)) {
+        if chain.iter().any(|t| t.id == tier.id) {
+            break;
+        }
+        chain.push(tier.clone());
+        parent = tier.parent_tier;
+    }
+    chain.reverse();
+    chain
 }
 
 // Non Graphql
 impl OrgTier {
+    /// Subtree roll-ups batched per request across every tier in the response.
+    async fn stats(&self, ctx: &Context<'_>) -> Result<HierarchyStats> {
+        Ok(ctx
+            .data_unchecked::<DataLoader<TierStatsLoader>>()
+            .load_one(self.id)
+            .await?
+            .unwrap_or_default())
+    }
+
     pub fn create(org_tier: &NewOrgTier) -> Result<OrgTier> {
         let mut conn = connection()?;
 
@@ -346,5 +354,48 @@ impl NewOrgTier {
             primary_domain,
             parent_tier,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tier(parent_tier: Option<Uuid>) -> OrgTier {
+        let now = NaiveDateTime::default();
+        OrgTier {
+            id: Uuid::new_v4(),
+            organization_id: Uuid::nil(),
+            tier_level: 0,
+            name_en: String::new(),
+            name_fr: String::new(),
+            primary_domain: SkillDomain::Governance,
+            parent_tier,
+            created_at: now,
+            updated_at: now,
+            retired_at: None,
+        }
+    }
+
+    #[test]
+    fn ancestors_run_from_root_to_parent() {
+        let root = tier(None);
+        let middle = tier(Some(root.id));
+        let leaf = tier(Some(middle.id));
+        let tiers: HashMap<Uuid, OrgTier> = [&root, &middle, &leaf].into_iter().map(|t| (t.id, t.clone())).collect();
+
+        let ids = |chain: Vec<OrgTier>| chain.into_iter().map(|t| t.id).collect::<Vec<_>>();
+        assert_eq!(ids(ancestor_chain(leaf.parent_tier, &tiers)), vec![root.id, middle.id]);
+        assert!(ancestor_chain(root.parent_tier, &tiers).is_empty());
+    }
+
+    #[test]
+    fn ancestors_stop_on_a_cycle() {
+        let mut a = tier(None);
+        let b = tier(Some(a.id));
+        a.parent_tier = Some(b.id);
+        let tiers: HashMap<Uuid, OrgTier> = [&a, &b].into_iter().map(|t| (t.id, t.clone())).collect();
+
+        assert_eq!(ancestor_chain(Some(b.id), &tiers).len(), 2);
     }
 }

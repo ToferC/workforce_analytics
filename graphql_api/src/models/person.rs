@@ -21,7 +21,7 @@ use crate::schema::*;
 use crate::models::{Role, RoleAssignment, TeamOwnership, Team, OrgTier, OrgOwnership, Capability, Affiliation, LanguageData,
     Publication, Work, User, InsertableUser};
 
-use super::{Validation, Requirement};
+use super::{Validation, Requirement, RoleMatchScore, find_role_matches};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, Insertable, AsChangeset, SimpleObject)]
 #[graphql(complex)]
@@ -482,6 +482,24 @@ impl Person {
 
     pub async fn find_matches(&self) -> Result<Vec<Role>> {
         find_roles_by_requirements_met(self)
+    }
+
+    /// Vacant active roles scored against this person's capabilities, best
+    /// first — the mirror of `Role.fuzzyMatches`, with the same scoring model
+    /// and `requirementGaps`. The held level is the validated level when
+    /// present, otherwise the self-identified level. Roles must meet
+    /// `minCoverage` and have no single gap above `maxGapPerReq`.
+    pub async fn fuzzy_matches(
+        &self,
+        #[graphql(default = 0.5)] min_coverage: f64,
+        #[graphql(default = 1)]   max_gap_per_req: i32,
+        #[graphql(default = 20)]  limit: i32,
+    ) -> Result<Vec<RoleMatchScore>> {
+        let person_id = self.id;
+        crate::graphql::loaders::off_executor(move || {
+            find_role_matches(person_id, min_coverage, max_gap_per_req, limit.max(0) as usize)
+        })
+        .await
     }
 }
 

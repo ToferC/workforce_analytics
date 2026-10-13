@@ -115,7 +115,9 @@ fn ensure_admin() {
 /// dyno boot. It lives in the dedicated `seed` binary (src/bin/seed.rs) and is
 /// invoked as a one-off process, e.g. on Heroku:
 ///
-///     heroku run "./target/release/seed" -a <api-app>
+/// ```text
+/// heroku run "./target/release/seed" -a <api-app>
+/// ```
 ///
 /// Guarded so it is a no-op if the database already contains seed data, making
 /// it safe to re-run. To re-seed from scratch, reset the database first.

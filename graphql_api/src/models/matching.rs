@@ -56,6 +56,22 @@ pub struct PersonMatchScore {
     pub manager: Option<ManagerContact>,
 }
 
+/// A scored vacant role for a person — the mirror of `PersonMatchScore`, from
+/// the same scoring model.
+#[derive(SimpleObject)]
+pub struct RoleMatchScore {
+    pub role: Role,
+    /// Composite score in [0, 1]: coverage minus gap penalties.
+    pub match_score: f64,
+    pub requirements_met: i32,
+    pub requirements_total: i32,
+    /// requirements_met / requirements_total.
+    pub coverage: f64,
+    /// Sum of positive (shortfall) gaps only.
+    pub total_gap: i32,
+    pub requirement_gaps: Vec<RequirementMatch>,
+}
+
 /// Tiered match result for a role.
 #[derive(SimpleObject)]
 pub struct RoleMatchResult {
@@ -131,6 +147,27 @@ fn score_requirements(
     }
 
     (gaps, met, total_gap)
+}
+
+/// Group capabilities by skill for O(1) lookup while scoring.
+fn group_by_skill(caps: &[Capability]) -> HashMap<Uuid, Vec<&Capability>> {
+    let mut grouped: HashMap<Uuid, Vec<&Capability>> = HashMap::new();
+    for cap in caps {
+        grouped.entry(cap.skill_id).or_default().push(cap);
+    }
+    grouped
+}
+
+/// Whether a scored match is returned: no single-skill gap above
+/// `max_gap_per_req`, and full coverage or at least `min_coverage`.
+fn qualifies(gaps: &[RequirementMatch], coverage: f64, min_coverage: f64, max_gap_per_req: i32) -> bool {
+    gaps.iter().all(|g| g.gap <= max_gap_per_req) && (coverage >= 1.0 || coverage >= min_coverage)
+}
+
+/// Sort best score first and keep the top `limit`.
+fn rank<T>(matches: &mut Vec<T>, score: impl Fn(&T) -> f64, limit: usize) {
+    matches.sort_by(|a, b| score(b).total_cmp(&score(a)));
+    matches.truncate(limit);
 }
 
 /// Composite score in [0, 1]: coverage minus a penalty per missing level.
@@ -247,11 +284,7 @@ pub fn find_fuzzy_matches(
     // Single batched query — one round-trip for all skills.
     let all_caps = Capability::get_active_by_skill_ids(&skill_ids)?;
 
-    // Group by skill_id for O(1) lookup during per-person scoring.
-    let mut caps_by_skill: HashMap<Uuid, Vec<&Capability>> = HashMap::new();
-    for cap in &all_caps {
-        caps_by_skill.entry(cap.skill_id).or_default().push(cap);
-    }
+    let caps_by_skill = group_by_skill(&all_caps);
 
     // Unique person_ids seen across all returned capabilities, fetched as
     // rows in one batch. A person deleted between the two queries simply
@@ -274,17 +307,11 @@ pub fn find_fuzzy_matches(
 
     for person in candidates {
         let score = score_person(person, &requirements, &caps_by_skill, &managed_person_ids);
-
-        // Drop anyone with a single skill gap exceeding the caller's threshold.
-        if score.requirement_gaps.iter().any(|g| g.gap > max_gap_per_req) {
+        if !qualifies(&score.requirement_gaps, score.coverage, min_coverage, max_gap_per_req) {
             continue;
         }
 
         let is_full = score.coverage >= 1.0;
-        let qualifies = is_full || score.coverage >= min_coverage;
-        if !qualifies {
-            continue;
-        }
 
         match (score.in_managed_scope, is_full) {
             (true, true) => managed_full.push(score),
@@ -294,10 +321,7 @@ pub fn find_fuzzy_matches(
         }
     }
 
-    let sort_and_cap = |v: &mut Vec<PersonMatchScore>| {
-        v.sort_by(|a, b| b.match_score.partial_cmp(&a.match_score).unwrap());
-        v.truncate(limit);
-    };
+    let sort_and_cap = |v: &mut Vec<PersonMatchScore>| rank(v, |s| s.match_score, limit);
     sort_and_cap(&mut managed_full);
     sort_and_cap(&mut managed_partial);
     sort_and_cap(&mut external_full);
@@ -317,6 +341,64 @@ pub fn find_fuzzy_matches(
         external_full_matches: external_full,
         external_partial_matches: external_partial,
     })
+}
+
+/// Scores `roles` against one person's capabilities (the reverse direction of
+/// `find_fuzzy_matches`, same model), keeping those that qualify, best first.
+/// Roles without requirements have nothing to score against and are skipped.
+fn score_roles(
+    person_id: Uuid,
+    caps_by_skill: &HashMap<Uuid, Vec<&Capability>>,
+    roles: Vec<Role>,
+    reqs_by_role: &HashMap<Uuid, Vec<Requirement>>,
+    min_coverage: f64,
+    max_gap_per_req: i32,
+    limit: usize,
+) -> Vec<RoleMatchScore> {
+    let mut matches: Vec<RoleMatchScore> = roles
+        .into_iter()
+        .filter_map(|role| {
+            let requirements = reqs_by_role.get(&role.id).filter(|r| !r.is_empty())?;
+            let (gaps, met, total_gap) = score_requirements(person_id, requirements, caps_by_skill);
+            let n = requirements.len() as i32;
+            let (coverage, match_score) = composite_score(met, n, total_gap);
+            qualifies(&gaps, coverage, min_coverage, max_gap_per_req).then_some(RoleMatchScore {
+                role,
+                match_score,
+                requirements_met: met,
+                requirements_total: n,
+                coverage,
+                total_gap,
+                requirement_gaps: gaps,
+            })
+        })
+        .collect();
+    rank(&mut matches, |m| m.match_score, limit);
+    matches
+}
+
+/// Vacant, active roles scored against a person's active capabilities, best
+/// first. Three queries regardless of how many roles are open: the person's
+/// capabilities, the vacant roles, and their requirements in one batch.
+pub fn find_role_matches(
+    person_id: Uuid,
+    min_coverage: f64,
+    max_gap_per_req: i32,
+    limit: usize,
+) -> Result<Vec<RoleMatchScore>> {
+    let caps: Vec<Capability> = Capability::get_by_person_id(person_id)?
+        .into_iter()
+        .filter(|c| c.retired_at.is_none())
+        .collect();
+
+    let roles = Role::get_vacant(i64::MAX)?;
+    let role_ids: Vec<Uuid> = roles.iter().map(|r| r.id).collect();
+    let mut reqs_by_role: HashMap<Uuid, Vec<Requirement>> = HashMap::new();
+    for req in Requirement::get_by_role_ids(&role_ids)? {
+        reqs_by_role.entry(req.role_id).or_default().push(req);
+    }
+
+    Ok(score_roles(person_id, &group_by_skill(&caps), roles, &reqs_by_role, min_coverage, max_gap_per_req, limit))
 }
 
 #[cfg(test)]
@@ -368,12 +450,30 @@ mod tests {
         }
     }
 
-    fn group<'a>(caps: &'a [Capability]) -> HashMap<Uuid, Vec<&'a Capability>> {
-        let mut m: HashMap<Uuid, Vec<&Capability>> = HashMap::new();
-        for c in caps {
-            m.entry(c.skill_id).or_default().push(c);
+    fn group(caps: &[Capability]) -> HashMap<Uuid, Vec<&Capability>> {
+        group_by_skill(caps)
+    }
+
+    fn vacant_role() -> Role {
+        Role {
+            id: Uuid::new_v4(),
+            person_id: None,
+            team_id: Uuid::new_v4(),
+            title_en: "Analyst".into(),
+            title_fr: "Analyste".into(),
+            effort: 1.0,
+            active: true,
+            military_occupation: None,
+            rank: None,
+            occupational_group: None,
+            occupational_level: None,
+            start_datestamp: now(),
+            end_date: None,
+            created_at: now(),
+            updated_at: now(),
+            reports_to: None,
+            annual_salary_cents: None,
         }
-        m
     }
 
     #[test]
@@ -452,5 +552,37 @@ mod tests {
         // Score floors at zero rather than going negative.
         let (_, floored) = composite_score(0, 4, 12);
         assert_eq!(floored, 0.0);
+    }
+
+    #[test]
+    fn person_matches_rank_roles_by_score_and_prefer_validated_level() {
+        let (person, skill_a, skill_b) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        // Skill A: self-identified Specialist but validated only Experienced —
+        // the validated level must win. Skill B: unvalidated Expert.
+        let caps = vec![
+            capability(person, skill_a, CapabilityLevel::Specialist, Some(CapabilityLevel::Experienced)),
+            capability(person, skill_b, CapabilityLevel::Expert, None),
+        ];
+        let (exact, one_short, too_far, unscored) = (vacant_role(), vacant_role(), vacant_role(), vacant_role());
+        let reqs_by_role = HashMap::from([
+            // Met: validated Experienced + self-identified Expert.
+            (exact.id, vec![requirement(skill_a, CapabilityLevel::Experienced), requirement(skill_b, CapabilityLevel::Expert)]),
+            // One level short on A because the validated level counts, not the self one.
+            (one_short.id, vec![requirement(skill_a, CapabilityLevel::Expert), requirement(skill_b, CapabilityLevel::Novice)]),
+            // Two levels short on A: beyond max_gap_per_req = 1.
+            (too_far.id, vec![requirement(skill_a, CapabilityLevel::Specialist)]),
+        ]);
+        let roles = vec![too_far.clone(), one_short.clone(), unscored.clone(), exact.clone()];
+
+        let matches = score_roles(person, &group(&caps), roles, &reqs_by_role, 0.5, 1, 10);
+
+        let ids: Vec<Uuid> = matches.iter().map(|m| m.role.id).collect();
+        assert_eq!(ids, vec![exact.id, one_short.id]);
+        assert_eq!(matches[0].match_score, 1.0);
+        assert!((matches[1].match_score - 0.4).abs() < 1e-9); // 0.5 coverage - 1 level * 0.10
+        assert_eq!(matches[1].requirement_gaps[0].actual_level, Some(CapabilityLevel::Experienced));
+
+        let capped = score_roles(person, &group(&caps), vec![one_short, exact.clone()], &reqs_by_role, 0.5, 1, 1);
+        assert_eq!(capped.iter().map(|m| m.role.id).collect::<Vec<_>>(), vec![exact.id]);
     }
 }

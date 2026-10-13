@@ -5,15 +5,9 @@ use async_graphql::Schema;
 use async_graphql_actix_web::{GraphQLSubscription,
     GraphQLRequest, GraphQLResponse};
 
-use async_graphql::dataloader::DataLoader;
-
 use crate::models;
 use crate::graphql::{AppSchema};
-use crate::graphql::loaders::{
-    PersonLoader, TeamLoader, RoleLoader, TaskLoader, ProductLoader,
-    WorkByRoleLoader, RequirementsByRoleLoader, EffortByRoleLoader, AssignmentsByRoleLoader,
-    PayRatesLoader,
-};
+use crate::graphql::loaders::with_loaders;
 
 
 pub async fn playground_handler() -> HttpResponse {
@@ -44,21 +38,7 @@ pub async fn graphql(
         }
     };
 
-    // Per-request DataLoaders. Scoped to this request so their batching/cache
-    // never leaks rows across requests (which would go stale after mutations).
-    query = query
-        .data(DataLoader::new(PersonLoader, actix_web::rt::spawn))
-        .data(DataLoader::new(TeamLoader, actix_web::rt::spawn))
-        .data(DataLoader::new(RoleLoader, actix_web::rt::spawn))
-        .data(DataLoader::new(TaskLoader, actix_web::rt::spawn))
-        .data(DataLoader::new(ProductLoader, actix_web::rt::spawn))
-        .data(DataLoader::new(WorkByRoleLoader, actix_web::rt::spawn))
-        .data(DataLoader::new(RequirementsByRoleLoader, actix_web::rt::spawn))
-        .data(DataLoader::new(EffortByRoleLoader, actix_web::rt::spawn))
-        .data(DataLoader::new(AssignmentsByRoleLoader, actix_web::rt::spawn))
-        .data(DataLoader::new(PayRatesLoader, actix_web::rt::spawn));
-
-    schema.execute(query).await.into()
+    schema.execute(with_loaders(query)).await.into()
 }
 
 pub async fn graphql_ws(

@@ -10,11 +10,13 @@ use diesel::{RunQueryDsl, QueryDsl};
 use uuid::Uuid;
 
 use async_graphql::*;
+use async_graphql::dataloader::DataLoader;
 
 use crate::database::connection;
+use crate::graphql::loaders::OrganizationStatsLoader;
 use crate::schema::*;
 
-use crate::models::{CapabilityCount, CapabilityLevel, Affiliation, SkillDomain, Publication, Product};
+use crate::models::{CapabilityCount, CapabilityLevel, Affiliation, HierarchyStats, SkillDomain, Publication, Product};
 
 use super::OrgTier;
 
@@ -58,6 +60,21 @@ impl Organization {
     pub async fn top_org_tier(&self) -> Result<Vec<OrgTier>> {
         OrgTier::get_top_by_org_id(&self.id)
     }
+
+    /// Number of distinct people holding active roles across all tiers.
+    pub async fn headcount(&self, ctx: &Context<'_>) -> Result<i32> {
+        Ok(self.stats(ctx).await?.headcount)
+    }
+
+    /// Sum of active effort across all tiers.
+    pub async fn total_effort(&self, ctx: &Context<'_>) -> Result<i32> {
+        Ok(self.stats(ctx).await?.total_effort)
+    }
+
+    /// Number of vacant active roles across all tiers.
+    pub async fn vacant_role_count(&self, ctx: &Context<'_>) -> Result<i32> {
+        Ok(self.stats(ctx).await?.vacant_role_count)
+    }
     
     async fn capability_counts(&self) -> Result<Vec<CapabilityCount>> {
         let mut conn = connection().unwrap();
@@ -82,6 +99,15 @@ impl Organization {
 }
 
 impl Organization {
+    /// Roll-ups batched per request across every organization in the response.
+    async fn stats(&self, ctx: &Context<'_>) -> Result<HierarchyStats> {
+        Ok(ctx
+            .data_unchecked::<DataLoader<OrganizationStatsLoader>>()
+            .load_one(self.id)
+            .await?
+            .unwrap_or_default())
+    }
+
     pub fn create(organization: &NewOrganization) -> Result<Organization> {
         let mut conn = connection()?;
 

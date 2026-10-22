@@ -245,20 +245,24 @@ impl Team {
         OrgTier::get_by_id(&self.org_tier_id)
     }
 
+    pub async fn primary_domain(&self) -> SkillDomain {
+        self.primary_domain
+    }
+
     pub async fn name_english(&self) -> Result<String> {
         Ok(self.name_en.to_owned())
     }
 
     pub async fn name_french(&self) -> Result<String> {
-        Ok(self.name_en.to_owned())
+        Ok(self.name_fr.to_owned())
     }
 
     pub async fn description_english(&self) -> Result<String> {
-        Ok(self.name_en.to_owned())
+        Ok(self.description_en.to_owned())
     }
 
     pub async fn description_french(&self) -> Result<String> {
-        Ok(self.name_en.to_owned())
+        Ok(self.description_fr.to_owned())
     }
 
     /// When the team was retired; null while it is active.

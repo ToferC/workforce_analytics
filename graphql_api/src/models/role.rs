@@ -507,6 +507,47 @@ impl Role {
     }
 
     /// Positions that report directly to the given role (explicit edges only).
+    /// Write all four classification columns from this role, including the
+    /// NULLs that clear a stream (`update`'s changeset skips `None` fields).
+    pub fn save_classification(&self) -> Result<Role> {
+        let mut conn = connection()?;
+        let res = diesel::update(roles::table.filter(roles::id.eq(self.id)))
+            .set((
+                roles::military_occupation.eq(self.military_occupation),
+                roles::rank.eq(self.rank),
+                roles::occupational_group.eq(self.occupational_group),
+                roles::occupational_level.eq(self.occupational_level),
+            ))
+            .get_result(&mut conn)?;
+        Ok(res)
+    }
+
+    /// After a classification change: the role must still report to a more
+    /// senior position, and every position reporting to it must still be
+    /// junior to it. Same rule (and relaxation switch) as `set_reports_to`.
+    pub fn check_reporting_lines(&self) -> Result<()> {
+        if !seniority_validation_enabled() {
+            return Ok(());
+        }
+        let mut conn = connection()?;
+        if let Some(manager_id) = self.reports_to {
+            let mgr = Role::get_by_id(&manager_id)?;
+            if compare_seniority(&mut conn, self, &mgr) == SeniorityCmp::NotSenior {
+                return Err(Error::new(
+                    "This classification is not junior to the position this role reports to",
+                ));
+            }
+        }
+        for report in Role::get_direct_reports(&self.id)? {
+            if compare_seniority(&mut conn, &report, self) == SeniorityCmp::NotSenior {
+                return Err(Error::new(format!(
+                    "This classification is not senior to “{}”, which reports to this role", report.title_en,
+                )));
+            }
+        }
+        Ok(())
+    }
+
     pub fn get_direct_reports(id: &Uuid) -> Result<Vec<Self>> {
         let mut conn = connection()?;
         let res = roles::table

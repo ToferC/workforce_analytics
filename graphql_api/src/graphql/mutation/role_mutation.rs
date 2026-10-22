@@ -5,11 +5,10 @@ use uuid::Uuid;
 
 use serde_json::json;
 
-use crate::models::{Role, RoleAssignment, NewRole, Person, PersonnelType, AuditEvent};
+use crate::models::{Role, RoleAssignment, NewRole, Person, PersonnelType, AuditEvent, MilitaryOccupation, Rank, OccupationalGroup};
 use crate::common_utils::{UserRole,
     is_operator, RoleGuard};
 use crate::graphql::authz;
-use crate::schema::roles;
 // use rdkafka::producer::FutureProducer;
 // use crate::kafka::send_message;
 
@@ -37,24 +36,15 @@ impl RoleMutation {
         // If the role is assigned to a person, ensure the HR fields
         // provided match the person's personnel type
         if let Some(person_id) = role_data.person_id {
-            let person = Person::get_by_id(&person_id)?;
-
-            match person.personnel_type {
-                PersonnelType::Military => {
-                    if role_data.military_occupation.is_none() || role_data.rank.is_none() {
-                        return Err(Error::new(
-                            "Roles assigned to military personnel require a military_occupation and rank"));
-                    }
+            require_classification_for(
+                &person_id,
+                &RoleClassification {
+                    military_occupation: role_data.military_occupation,
+                    rank: role_data.rank,
+                    occupational_group: role_data.occupational_group,
+                    occupational_level: role_data.occupational_level,
                 },
-                PersonnelType::Civilian => {
-                    if role_data.occupational_group.is_none() || role_data.occupational_level.is_none() {
-                        return Err(Error::new(
-                            "Roles assigned to civilian personnel require an occupational_group and occupational_level"));
-                    }
-                },
-                // Contractors, students and others have no required HR fields
-                _ => (),
-            }
+            )?;
         }
 
         // A new role with an explicit reporting line must report to a more
@@ -128,9 +118,32 @@ impl RoleMutation {
             role.end_date = Some(s);
         };
 
+        if let Some(effort) = role_data.effort {
+            if !effort.is_finite() || effort < 0.0 {
+                return Err(Error::new("Effort cannot be negative"));
+            }
+            role.effort = effort;
+        };
+
+        // A classification change replaces the whole classification, must
+        // still suit the incumbent, and must keep every reporting line
+        // pointing at a more senior position.
+        if let Some(classification) = &role_data.classification {
+            classification.validate()?;
+            if let Some(person_id) = role.person_id {
+                require_classification_for(&person_id, classification)?;
+            }
+            role.military_occupation = classification.military_occupation;
+            role.rank = classification.rank;
+            role.occupational_group = classification.occupational_group;
+            role.occupational_level = classification.occupational_level;
+            role.check_reporting_lines()?;
+        };
+
         // Persist the change. Without this the mutation silently returned the
         // in-memory edit while the database row was left untouched.
-        let role = role.update()?;
+        let saved = role.update()?;
+        let role = if role_data.classification.is_some() { role.save_classification()? } else { saved };
 
         AuditEvent::log(
             context,
@@ -142,6 +155,10 @@ impl RoleMutation {
                 "active": role.active,
                 "start_datestamp": role.start_datestamp,
                 "end_date": role.end_date,
+                "effort": role.effort,
+                "rank": role.rank,
+                "occupational_group": role.occupational_group,
+                "occupational_level": role.occupational_level,
             })),
             None,
         );
@@ -236,13 +253,10 @@ impl RoleMutation {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Queryable, Identifiable, Insertable, AsChangeset, InputObject)]
-#[graphql(complex)]
-#[diesel(table_name = roles)]
-/// InputObject for Role with Option fields - only include the ones you want to update
-/// Note the only changable fields are active, start and end.
-/// It's recommended to create new roles for people vs. edit existing ones to show history
-/// and progression
+#[derive(Debug, Clone, Deserialize, Serialize, InputObject)]
+/// InputObject for Role with Option fields - only include the ones you want to update.
+/// Corrections to the position (titles, effort, classification) belong here;
+/// a different job is a new role, so history and progression stay visible.
 pub struct RoleData {
     pub id: Uuid,
     pub active: Option<bool>,
@@ -254,4 +268,45 @@ pub struct RoleData {
 
     pub start_datestamp: Option<NaiveDateTime>,
     pub end_date: Option<NaiveDateTime>,
+
+    /// Expected workload for the position; full time is around 10.
+    pub effort: Option<f64>,
+
+    /// Replace the role's classification as a whole (see `RoleClassification`).
+    pub classification: Option<RoleClassification>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, InputObject)]
+/// A role's classification, replaced as a whole when given: a military
+/// occupation and rank, or a civilian occupational group and level, or
+/// neither for an unclassified role. Giving one stream clears the other.
+pub struct RoleClassification {
+    pub military_occupation: Option<MilitaryOccupation>,
+    pub rank: Option<Rank>,
+    pub occupational_group: Option<OccupationalGroup>,
+    pub occupational_level: Option<i32>,
+}
+
+impl RoleClassification {
+    fn validate(&self) -> Result<()> {
+        let military = self.military_occupation.is_some() || self.rank.is_some();
+        let civilian = self.occupational_group.is_some() || self.occupational_level.is_some();
+        if military && civilian {
+            return Err(Error::new("A role is classified as military or civilian, not both"));
+        }
+        Ok(())
+    }
+}
+
+/// A person's personnel type requires a matching classification on the role
+/// they hold: occupation and rank for military personnel, group and level for
+/// civilians. Contractors, students and others have no required HR fields.
+fn require_classification_for(person_id: &Uuid, c: &RoleClassification) -> Result<()> {
+    match Person::get_by_id(person_id)?.personnel_type {
+        PersonnelType::Military if c.military_occupation.is_none() || c.rank.is_none() => Err(Error::new(
+            "Roles assigned to military personnel require a military_occupation and rank")),
+        PersonnelType::Civilian if c.occupational_group.is_none() || c.occupational_level.is_none() => Err(Error::new(
+            "Roles assigned to civilian personnel require an occupational_group and occupational_level")),
+        _ => Ok(()),
+    }
 }

@@ -1929,10 +1929,21 @@ type RoleAssignment {
 }
 
 """
-InputObject for Role with Option fields - only include the ones you want to update
-Note the only changable fields are active, start and end.
-It's recommended to create new roles for people vs. edit existing ones to show history
-and progression
+A role's classification, replaced as a whole when given: a military
+occupation and rank, or a civilian occupational group and level, or
+neither for an unclassified role. Giving one stream clears the other.
+"""
+input RoleClassification {
+	militaryOccupation: MilitaryOccupation
+	rank: Rank
+	occupationalGroup: OccupationalGroup
+	occupationalLevel: Int
+}
+
+"""
+InputObject for Role with Option fields - only include the ones you want to update.
+Corrections to the position (titles, effort, classification) belong here;
+a different job is a new role, so history and progression stay visible.
 """
 input RoleData {
 	id: UUID!
@@ -1944,6 +1955,14 @@ input RoleData {
 	titleFr: String
 	startDatestamp: NaiveDateTime
 	endDate: NaiveDateTime
+	"""
+	Expected workload for the position; full time is around 10.
+	"""
+	effort: Float
+	"""
+	Replace the role's classification as a whole (see `RoleClassification`).
+	"""
+	classification: RoleClassification
 }
 
 """
@@ -2174,6 +2193,7 @@ type Team {
 	id: UUID!
 	organization: Organization!
 	organizationLevel: OrgTier!
+	primaryDomain: SkillDomain!
 	nameEnglish: String!
 	nameFrench: String!
 	descriptionEnglish: String!
